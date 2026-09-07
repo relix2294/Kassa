@@ -35,6 +35,17 @@ export async function pullProducts() {
   }
 }
 
+// --- Подписка на события realtime (для кабинета владельца) ---
+type EventListener = (type: string, payload: any) => void;
+const eventListeners = new Set<EventListener>();
+
+export function onRealtimeEvent(l: EventListener) {
+  eventListeners.add(l);
+  return () => {
+    eventListeners.delete(l);
+  };
+}
+
 // --- WebSocket: живые обновления каталога ---
 function connectRealtime() {
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
@@ -46,6 +57,7 @@ function connectRealtime() {
       if (msg.type === 'product_upsert' && msg.payload) {
         db.products.put(msg.payload as Product);
       }
+      eventListeners.forEach((l) => l(msg.type, msg.payload));
     } catch {
       /* ignore */
     }

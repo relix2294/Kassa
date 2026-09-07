@@ -12,6 +12,7 @@ import { receivingRouter } from './routes/receiving.js';
 import { salesRouter } from './routes/sales.js';
 import { returnsRouter } from './routes/returns.js';
 import { shiftsRouter } from './routes/shifts.js';
+import { dashboardRouter } from './routes/dashboard.js';
 import { logsRouter } from './routes/logs.js';
 import { usersRouter } from './routes/users.js';
 
@@ -27,6 +28,7 @@ app.use('/api/receiving', requireAuth, receivingRouter);
 app.use('/api/sales', requireAuth, salesRouter);
 app.use('/api/returns', requireAuth, returnsRouter);
 app.use('/api/shifts', requireAuth, shiftsRouter);
+app.use('/api/dashboard', requireAuth, dashboardRouter);
 app.use('/api/logs', requireAuth, logsRouter);
 app.use('/api/users', usersRouter);
 

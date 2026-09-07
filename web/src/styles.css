@@ -128,9 +128,13 @@ input:focus, .search:focus { outline: none; border-color: var(--primary); }
   display: flex;
   border-top: 1px solid var(--surface-2);
   padding-bottom: env(safe-area-inset-bottom);
+  overflow-x: auto;
+  scrollbar-width: none;
 }
+.tabbar::-webkit-scrollbar { display: none; }
 .tab {
-  flex: 1;
+  flex: 1 0 auto;
+  min-width: 72px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -308,6 +312,54 @@ input:focus, .search:focus { outline: none; border-color: var(--primary); }
   font-size: 13px;
   cursor: pointer;
 }
+
+/* --- Кабинет владельца --- */
+.seg {
+  display: flex;
+  gap: 6px;
+  background: var(--surface);
+  border-radius: 12px;
+  padding: 4px;
+  margin-bottom: 16px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.seg::-webkit-scrollbar { display: none; }
+.seg--tabs { margin-top: 20px; }
+.seg__btn {
+  flex: 1 0 auto;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  padding: 9px 12px;
+  border-radius: 9px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.seg__btn--on { background: var(--surface-2); color: var(--text); }
+
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+.kpi {
+  background: var(--surface);
+  border-radius: var(--radius);
+  padding: 14px;
+}
+.kpi__label { color: var(--muted); font-size: 13px; margin-bottom: 4px; }
+.kpi__value { font-size: 20px; font-weight: 700; }
+.kpi--big .kpi__value { font-size: 26px; }
+.kpi__value--accent { color: var(--ok); }
+.kpi__value--danger { color: var(--danger); }
+
+.sect { font-size: 17px; margin: 20px 0 10px; }
+
+.list-item--alert { border-left: 3px solid var(--danger); }
+.log-details { color: var(--muted); font-size: 13px; margin-top: 4px; }
 
 /* --- Смена --- */
 .shift-row { display: flex; justify-content: space-between; padding: 4px 0; }

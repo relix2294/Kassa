@@ -56,6 +56,19 @@ export const api = {
   closeShift: (counted_cash: number) =>
     req<{ shift: any }>('/shifts/close', { method: 'POST', body: JSON.stringify({ counted_cash }) }),
   listShifts: (limit = 100) => req<any[]>(`/shifts?limit=${limit}`),
+  summary: (period: string) =>
+    req<{
+      period: string; receipts: number; revenue: number; margin: number;
+      cash: number; card: number; refunds_count: number; refunds_total: number;
+    }>(`/dashboard/summary?period=${period}`),
+  topProducts: (period: string) =>
+    req<{ name: string; barcode: string; qty: number; revenue: number; margin: number }[]>(
+      `/dashboard/top-products?period=${period}`,
+    ),
+  recentSales: (limit = 20) =>
+    req<{ id: string; total: number; payment_method: string; created_at: string; username: string | null; full_name: string | null; items: string }[]>(
+      `/dashboard/recent-sales?limit=${limit}`,
+    ),
   logEvent: (type: string, details: any, user_id?: string) =>
     req('/logs/event', { method: 'POST', body: JSON.stringify({ type, details, user_id }) }),
   login: (username: string, pin: string) =>

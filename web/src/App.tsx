@@ -9,6 +9,7 @@ import ReceivingPage from './pages/ReceivingPage';
 import ProductsPage from './pages/ProductsPage';
 import StaffPage from './pages/StaffPage';
 import ShiftPage from './pages/ShiftPage';
+import DashboardPage from './pages/DashboardPage';
 
 function OnlineBadge() {
   const [online, setOnline] = useState(isOnline);
@@ -47,7 +48,8 @@ export default function App() {
 
       <main className="content">
         <Routes>
-          <Route path="/" element={<Navigate to="/sale" replace />} />
+          <Route path="/" element={<Navigate to={owner ? '/dashboard' : '/sale'} replace />} />
+          <Route path="/dashboard" element={owner ? <DashboardPage /> : <Navigate to="/sale" replace />} />
           <Route path="/sale" element={<SalePage />} />
           <Route path="/shift" element={<ShiftPage />} />
           <Route path="/receiving" element={<ReceivingPage />} />
@@ -58,6 +60,12 @@ export default function App() {
       </main>
 
       <nav className="tabbar">
+        {owner && (
+          <NavLink to="/dashboard" className="tab">
+            <span className="tab__icon">📊</span>
+            <span>Кабинет</span>
+          </NavLink>
+        )}
         <NavLink to="/sale" className="tab">
           <span className="tab__icon">🧾</span>
           <span>Продажа</span>
