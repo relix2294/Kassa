@@ -3,6 +3,7 @@ import { query, withTx } from '../db.js';
 import { writeLog } from '../lib/log.js';
 import { broadcast } from '../lib/realtime.js';
 import { requireOwner } from '../lib/auth.js';
+import { getOpenShift } from './shifts.js';
 
 export const salesRouter = Router();
 
@@ -39,6 +40,10 @@ salesRouter.post('/', async (req, res) => {
       return res.status(200).json({ sale: existing[0], duplicate: true });
     }
   }
+
+  // Продавать можно только при открытой смене (п.4 ТЗ).
+  const shift = await getOpenShift(user_id);
+  if (!shift) return res.status(409).json({ error: 'no_shift' });
 
   try {
     const result = await withTx(async (client) => {
@@ -82,8 +87,8 @@ salesRouter.post('/', async (req, res) => {
 
       const saleRow = (
         await client.query(
-          `INSERT INTO sales (client_id, total, cost_total, payment_method, cash_received, change_given, user_id)
-           VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
+          `INSERT INTO sales (client_id, total, cost_total, payment_method, cash_received, change_given, user_id, shift_id)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
           [
             client_id ?? null,
             total,
@@ -92,6 +97,7 @@ salesRouter.post('/', async (req, res) => {
             payment_method === 'cash' ? cash_received ?? null : null,
             change,
             user_id ?? null,
+            shift.id,
           ],
         )
       ).rows[0];

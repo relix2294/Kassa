@@ -50,6 +50,12 @@ export const api = {
     user_id?: string;
   }) => req<{ ret: any; duplicate?: boolean }>('/returns', { method: 'POST', body: JSON.stringify(payload) }),
   listSales: (limit = 100) => req<any[]>(`/sales?limit=${limit}`),
+  currentShift: () => req<{ shift: any | null; expected?: number; stats?: any }>('/shifts/current'),
+  openShift: (opening_cash: number) =>
+    req<{ shift: any }>('/shifts/open', { method: 'POST', body: JSON.stringify({ opening_cash }) }),
+  closeShift: (counted_cash: number) =>
+    req<{ shift: any }>('/shifts/close', { method: 'POST', body: JSON.stringify({ counted_cash }) }),
+  listShifts: (limit = 100) => req<any[]>(`/shifts?limit=${limit}`),
   logEvent: (type: string, details: any, user_id?: string) =>
     req('/logs/event', { method: 'POST', body: JSON.stringify({ type, details, user_id }) }),
   login: (username: string, pin: string) =>

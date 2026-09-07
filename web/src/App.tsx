@@ -1,12 +1,14 @@
 import { NavLink, Navigate, Route, Routes } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { onOnlineChange, isOnline, pullProducts } from './sync';
+import { refreshShift } from './shift';
 import { useAuth, logout } from './auth';
 import LoginPage from './pages/LoginPage';
 import SalePage from './pages/SalePage';
 import ReceivingPage from './pages/ReceivingPage';
 import ProductsPage from './pages/ProductsPage';
 import StaffPage from './pages/StaffPage';
+import ShiftPage from './pages/ShiftPage';
 
 function OnlineBadge() {
   const [online, setOnline] = useState(isOnline);
@@ -19,9 +21,12 @@ function OnlineBadge() {
 export default function App() {
   const user = useAuth();
 
-  // После входа подтягиваем актуальный каталог с сервера.
+  // После входа подтягиваем каталог и текущую смену.
   useEffect(() => {
-    if (user) pullProducts();
+    if (user) {
+      pullProducts();
+      refreshShift();
+    }
   }, [user]);
 
   if (!user) return <LoginPage />;
@@ -44,6 +49,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<Navigate to="/sale" replace />} />
           <Route path="/sale" element={<SalePage />} />
+          <Route path="/shift" element={<ShiftPage />} />
           <Route path="/receiving" element={<ReceivingPage />} />
           <Route path="/products" element={owner ? <ProductsPage /> : <Navigate to="/sale" replace />} />
           <Route path="/staff" element={owner ? <StaffPage /> : <Navigate to="/sale" replace />} />
@@ -55,6 +61,10 @@ export default function App() {
         <NavLink to="/sale" className="tab">
           <span className="tab__icon">🧾</span>
           <span>Продажа</span>
+        </NavLink>
+        <NavLink to="/shift" className="tab">
+          <span className="tab__icon">🕐</span>
+          <span>Смена</span>
         </NavLink>
         <NavLink to="/receiving" className="tab">
           <span className="tab__icon">📦</span>

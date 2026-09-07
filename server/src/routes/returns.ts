@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { query, withTx } from '../db.js';
 import { writeLog } from '../lib/log.js';
 import { broadcast } from '../lib/realtime.js';
+import { getOpenShift } from './shifts.js';
 
 export const returnsRouter = Router();
 
@@ -19,6 +20,10 @@ returnsRouter.post('/', async (req, res) => {
     const existing = await query(`SELECT * FROM returns WHERE client_id = $1`, [client_id]);
     if (existing.length > 0) return res.status(200).json({ ret: existing[0], duplicate: true });
   }
+
+  // Возврат — тоже движение денег в кассе, нужна открытая смена.
+  const shift = await getOpenShift(user_id);
+  if (!shift) return res.status(409).json({ error: 'no_shift' });
 
   try {
     const result = await withTx(async (client) => {
@@ -53,9 +58,9 @@ returnsRouter.post('/', async (req, res) => {
 
       const retRow = (
         await client.query(
-          `INSERT INTO returns (client_id, sale_id, total, reason, user_id)
-           VALUES ($1,$2,$3,$4,$5) RETURNING *`,
-          [client_id ?? null, sale_id ?? null, total, reason ?? null, user_id ?? null],
+          `INSERT INTO returns (client_id, sale_id, total, reason, user_id, shift_id)
+           VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
+          [client_id ?? null, sale_id ?? null, total, reason ?? null, user_id ?? null, shift.id],
         )
       ).rows[0];
 

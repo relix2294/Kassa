@@ -1,14 +1,18 @@
 import { useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, type CartLine } from '../db';
 import { addToCart, cartTotal, clearCart, removeLine, setQty } from '../cart';
 import { completeSale } from '../sync';
 import { useCurrentUser } from '../session';
+import { useShift, refreshShift } from '../shift';
 import Keypad from '../components/Keypad';
 import ReturnPanel from './ReturnPanel';
 
 export default function SalePage() {
   const user = useCurrentUser();
+  const navigate = useNavigate();
+  const { shift, loaded } = useShift();
   const [barcode, setBarcode] = useState('');
   const [toast, setToast] = useState<string | null>(null);
   const [payOpen, setPayOpen] = useState(false);
@@ -20,8 +24,11 @@ export default function SalePage() {
   const total = cartTotal(lines);
 
   useEffect(() => {
-    if (!payOpen && !qtyEdit && !returnOpen) scanRef.current?.focus();
-  }, [payOpen, qtyEdit, returnOpen, lines.length]);
+    refreshShift();
+  }, []);
+  useEffect(() => {
+    if (shift && !payOpen && !qtyEdit && !returnOpen) scanRef.current?.focus();
+  }, [payOpen, qtyEdit, returnOpen, lines.length, shift]);
 
   function flash(msg: string) {
     setToast(msg);
@@ -38,6 +45,21 @@ export default function SalePage() {
       return;
     }
     await addToCart(product);
+  }
+
+  // Без открытой смены продавать нельзя (п.4 ТЗ).
+  if (loaded && !shift) {
+    return (
+      <div className="page">
+        <h1>Продажа</h1>
+        <div className="card">
+          <p className="hint">Смена закрыта. Откройте смену, чтобы продавать.</p>
+          <button className="btn btn--primary btn--big" onClick={() => navigate('/shift')}>
+            Перейти к смене
+          </button>
+        </div>
+      </div>
+    );
   }
 
   return (

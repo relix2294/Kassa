@@ -309,6 +309,20 @@ input:focus, .search:focus { outline: none; border-color: var(--primary); }
   cursor: pointer;
 }
 
+/* --- Смена --- */
+.shift-row { display: flex; justify-content: space-between; padding: 4px 0; }
+.shift-expected {
+  font-size: 18px;
+  text-align: right;
+  padding-top: 8px;
+  border-top: 1px solid var(--surface-2);
+}
+.shift-diff { font-size: 18px; }
+.shift-diff--neg { color: var(--danger); }
+.shift-diff--pos { color: var(--off); }
+.shift-history { margin-top: 24px; }
+.shift-history h2 { font-size: 18px; margin-bottom: 12px; }
+
 /* --- Сотрудники --- */
 .list-item--static { cursor: default; }
 .staff-actions { display: flex; gap: 6px; flex: 0 0 auto; }

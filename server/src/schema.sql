@@ -115,3 +115,25 @@ CREATE TABLE IF NOT EXISTS return_items (
 );
 
 CREATE INDEX IF NOT EXISTS idx_return_items_return ON return_items(return_id);
+
+-- Смены кассира. «Сколько должно быть по чекам» сравнивается с фактически сданным.
+CREATE TABLE IF NOT EXISTS shifts (
+  id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id       uuid NOT NULL REFERENCES users(id),
+  opened_at     timestamptz NOT NULL DEFAULT now(),
+  opening_cash  numeric(12,2) NOT NULL DEFAULT 0,   -- размен на старте
+  closed_at     timestamptz,
+  expected_cash numeric(12,2),                      -- сколько должно быть в кассе по чекам
+  counted_cash  numeric(12,2),                      -- фактически посчитано при закрытии
+  difference    numeric(12,2),                      -- counted - expected (минус = недостача)
+  status        text NOT NULL DEFAULT 'open'        -- 'open' | 'closed'
+);
+
+CREATE INDEX IF NOT EXISTS idx_shifts_user ON shifts(user_id);
+CREATE INDEX IF NOT EXISTS idx_shifts_opened ON shifts(opened_at);
+-- Не более одной открытой смены на пользователя.
+CREATE UNIQUE INDEX IF NOT EXISTS uniq_open_shift_per_user ON shifts(user_id) WHERE status = 'open';
+
+-- Привязка чеков и возвратов к смене (для сверки кассы).
+ALTER TABLE sales ADD COLUMN IF NOT EXISTS shift_id uuid REFERENCES shifts(id);
+ALTER TABLE returns ADD COLUMN IF NOT EXISTS shift_id uuid REFERENCES shifts(id);
