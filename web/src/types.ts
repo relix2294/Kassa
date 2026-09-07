@@ -1,0 +1,33 @@
+export interface Product {
+  id: string;
+  barcode: string;
+  name: string;
+  category: string | null;
+  sale_price: number;
+  cost_price: number;
+  stock: number;
+  min_stock: number;
+  is_archived: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface User {
+  id: string;
+  username: string;
+  full_name: string | null;
+  role: 'owner' | 'cashier';
+  is_blocked: boolean;
+}
+
+export interface LogRow {
+  id: string;
+  type: string;
+  entity: string | null;
+  entity_id: string | null;
+  user_id: string | null;
+  username: string | null;
+  full_name: string | null;
+  details: any;
+  created_at: string;
+}

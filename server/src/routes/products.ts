@@ -1,0 +1,103 @@
+import { Router } from 'express';
+import { query } from '../db.js';
+import { writeLog } from '../lib/log.js';
+import { broadcast } from '../lib/realtime.js';
+import { lookupBarcode } from '../lib/barcode.js';
+
+export const productsRouter = Router();
+
+// Список всех товаров.
+productsRouter.get('/', async (_req, res) => {
+  const rows = await query(
+    `SELECT * FROM products WHERE is_archived = false ORDER BY name`,
+  );
+  res.json(rows);
+});
+
+// Поиск товара по штрихкоду (для сканера).
+productsRouter.get('/barcode/:barcode', async (req, res) => {
+  const rows = await query(`SELECT * FROM products WHERE barcode = $1`, [req.params.barcode]);
+  if (rows.length === 0) return res.status(404).json({ error: 'not_found' });
+  res.json(rows[0]);
+});
+
+// Подсказка названия по штрихкоду из внешней базы (для заведения нового товара).
+productsRouter.get('/lookup/:barcode', async (req, res) => {
+  const info = await lookupBarcode(req.params.barcode);
+  res.json(info);
+});
+
+// Создать товар.
+productsRouter.post('/', async (req, res) => {
+  const { barcode, name, category, sale_price, cost_price, min_stock, user_id } = req.body ?? {};
+  if (!barcode || !name) {
+    return res.status(400).json({ error: 'barcode и name обязательны' });
+  }
+  try {
+    const rows = await query(
+      `INSERT INTO products (barcode, name, category, sale_price, cost_price, min_stock)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING *`,
+      [barcode, name, category ?? null, sale_price ?? 0, cost_price ?? 0, min_stock ?? 0],
+    );
+    const product = rows[0];
+    await writeLog({
+      type: 'product_create',
+      entity: 'product',
+      entityId: product.id,
+      userId: user_id ?? null,
+      details: { barcode, name, sale_price, cost_price },
+    });
+    broadcast('product_upsert', product);
+    res.status(201).json(product);
+  } catch (err: any) {
+    if (err.code === '23505') {
+      return res.status(409).json({ error: 'Товар с таким штрихкодом уже есть' });
+    }
+    throw err;
+  }
+});
+
+// Обновить карточку. Изменения цен фиксируем в журнале отдельно.
+productsRouter.patch('/:id', async (req, res) => {
+  const { id } = req.params;
+  const { name, category, sale_price, cost_price, min_stock, user_id } = req.body ?? {};
+
+  const before = (await query(`SELECT * FROM products WHERE id = $1`, [id]))[0];
+  if (!before) return res.status(404).json({ error: 'not_found' });
+
+  const rows = await query(
+    `UPDATE products SET
+        name       = COALESCE($2, name),
+        category   = COALESCE($3, category),
+        sale_price = COALESCE($4, sale_price),
+        cost_price = COALESCE($5, cost_price),
+        min_stock  = COALESCE($6, min_stock),
+        updated_at = now()
+      WHERE id = $1
+      RETURNING *`,
+    [id, name ?? null, category ?? null, sale_price ?? null, cost_price ?? null, min_stock ?? null],
+  );
+  const after = rows[0];
+
+  // Лог изменения цен (отдельным типом — важно для прозрачности).
+  if (sale_price != null && Number(sale_price) !== Number(before.sale_price)) {
+    await writeLog({
+      type: 'price_change', entity: 'product', entityId: id, userId: user_id ?? null,
+      details: { field: 'sale_price', old: before.sale_price, new: after.sale_price },
+    });
+  }
+  if (cost_price != null && Number(cost_price) !== Number(before.cost_price)) {
+    await writeLog({
+      type: 'price_change', entity: 'product', entityId: id, userId: user_id ?? null,
+      details: { field: 'cost_price', old: before.cost_price, new: after.cost_price },
+    });
+  }
+  await writeLog({
+    type: 'product_update', entity: 'product', entityId: id, userId: user_id ?? null,
+    details: { changed: Object.keys(req.body ?? {}).filter((k) => k !== 'user_id') },
+  });
+
+  broadcast('product_upsert', after);
+  res.json(after);
+});
