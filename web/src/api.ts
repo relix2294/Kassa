@@ -83,4 +83,26 @@ export const api = {
   updateUser: (id: string, payload: { full_name?: string; is_blocked?: boolean; pin?: string }) =>
     req<User>(`/users/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
   listLogs: (limit = 200) => req<LogRow[]>(`/logs?limit=${limit}`),
+  restock: () =>
+    req<{ id: string; barcode: string; name: string; category: string | null; stock: number; min_stock: number; cost_price: number; sold_30d: number; days_left: number | null }[]>(
+      '/analytics/restock',
+    ),
+  stale: (days: number) =>
+    req<{ id: string; barcode: string; name: string; category: string | null; stock: number; cost_price: number; sale_price: number; last_sold_at: string | null; total_sold: number; frozen_money: number; days_since_sale: number | null }[]>(
+      `/analytics/stale?days=${days}`,
+    ),
+  categories: () => req<{ category: string; count: string }[]>('/analytics/categories'),
+  bulkPrice: (payload: {
+    category?: string;
+    product_ids?: string[];
+    mode: 'percent' | 'set';
+    field: 'sale_price' | 'cost_price';
+    value: number;
+  }) => req<{ updated: number; products: Product[] }>('/analytics/bulk-price', { method: 'POST', body: JSON.stringify(payload) }),
+  saveInventory: (payload: { items: { barcode: string; counted_qty: number }[]; note?: string; apply?: boolean }) =>
+    req<{ inventory: any; items: any[]; total_loss: number }>('/analytics/inventory', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  listInventories: (limit = 50) => req<any[]>(`/analytics/inventory?limit=${limit}`),
 };

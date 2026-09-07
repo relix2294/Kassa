@@ -361,6 +361,31 @@ input:focus, .search:focus { outline: none; border-color: var(--primary); }
 .list-item--alert { border-left: 3px solid var(--danger); }
 .log-details { color: var(--muted); font-size: 13px; margin-top: 4px; }
 
+/* --- Аналитика / инвентаризация --- */
+.count-input {
+  width: 80px;
+  flex: 0 0 auto;
+  text-align: right;
+  padding: 8px 10px;
+  font-size: 16px;
+}
+.diff-neg { color: var(--danger); font-weight: 600; }
+.diff-pos { color: var(--off); font-weight: 600; }
+
+.check { display: flex; align-items: center; gap: 10px; font-size: 15px; cursor: pointer; }
+.check input { width: 20px; height: 20px; flex: 0 0 auto; accent-color: var(--primary); }
+
+select {
+  background: var(--bg);
+  border: 1px solid var(--surface-2);
+  color: var(--text);
+  border-radius: 10px;
+  padding: 12px 14px;
+  font-size: 17px;
+  width: 100%;
+}
+select:focus { outline: none; border-color: var(--primary); }
+
 /* --- Смена --- */
 .shift-row { display: flex; justify-content: space-between; padding: 4px 0; }
 .shift-expected {

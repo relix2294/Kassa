@@ -13,6 +13,7 @@ import { salesRouter } from './routes/sales.js';
 import { returnsRouter } from './routes/returns.js';
 import { shiftsRouter } from './routes/shifts.js';
 import { dashboardRouter } from './routes/dashboard.js';
+import { analyticsRouter } from './routes/analytics.js';
 import { logsRouter } from './routes/logs.js';
 import { usersRouter } from './routes/users.js';
 
@@ -29,6 +30,7 @@ app.use('/api/sales', requireAuth, salesRouter);
 app.use('/api/returns', requireAuth, returnsRouter);
 app.use('/api/shifts', requireAuth, shiftsRouter);
 app.use('/api/dashboard', requireAuth, dashboardRouter);
+app.use('/api/analytics', requireAuth, analyticsRouter);
 app.use('/api/logs', requireAuth, logsRouter);
 app.use('/api/users', usersRouter);
 

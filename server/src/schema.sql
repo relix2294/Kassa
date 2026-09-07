@@ -137,3 +137,27 @@ CREATE UNIQUE INDEX IF NOT EXISTS uniq_open_shift_per_user ON shifts(user_id) WH
 -- Привязка чеков и возвратов к смене (для сверки кассы).
 ALTER TABLE sales ADD COLUMN IF NOT EXISTS shift_id uuid REFERENCES shifts(id);
 ALTER TABLE returns ADD COLUMN IF NOT EXISTS shift_id uuid REFERENCES shifts(id);
+
+-- Инвентаризация: владелец считает реальный остаток, система показывает недостачу.
+CREATE TABLE IF NOT EXISTS inventories (
+  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id     uuid REFERENCES users(id),
+  note        text,
+  created_at  timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS inventory_items (
+  id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  inventory_id  uuid NOT NULL REFERENCES inventories(id) ON DELETE CASCADE,
+  product_id    uuid NOT NULL REFERENCES products(id),
+  barcode       text NOT NULL,
+  name          text NOT NULL,
+  expected_qty  numeric(12,3) NOT NULL,   -- остаток по системе на момент пересчёта
+  counted_qty   numeric(12,3) NOT NULL,   -- посчитано вручную
+  difference    numeric(12,3) NOT NULL,   -- counted - expected (минус = недостача)
+  unit_cost     numeric(12,2) NOT NULL,   -- себестоимость для оценки потерь
+  loss_value    numeric(12,2) NOT NULL    -- difference * unit_cost
+);
+
+CREATE INDEX IF NOT EXISTS idx_inv_items_inventory ON inventory_items(inventory_id);
+CREATE INDEX IF NOT EXISTS idx_inventories_created ON inventories(created_at);
