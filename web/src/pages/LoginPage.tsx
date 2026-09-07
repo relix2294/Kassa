@@ -44,10 +44,14 @@ export default function LoginPage() {
 
         <div className="field">
           <span>PIN</span>
+          {/* Показываем ровно столько точек, сколько введено, — чтобы не создавать
+              ложное ощущение обязательной длины PIN. */}
           <div className="pin-dots">
-            {[0, 1, 2, 3, 4, 5].map((i) => (
-              <span key={i} className={`pin-dot ${i < pin.length ? 'pin-dot--on' : ''}`} />
-            ))}
+            {pin.length === 0 ? (
+              <span className="pin-empty">введите PIN</span>
+            ) : (
+              Array.from({ length: pin.length }, (_, i) => <span key={i} className="pin-dot pin-dot--on" />)
+            )}
           </div>
         </div>
 

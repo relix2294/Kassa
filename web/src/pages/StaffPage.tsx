@@ -93,6 +93,19 @@ export default function StaffPage() {
   );
 }
 
+// Точек ровно столько, сколько введено цифр — длина PIN не фиксирована.
+function PinDots({ pin }: { pin: string }) {
+  return (
+    <div className="pin-dots">
+      {pin.length === 0 ? (
+        <span className="pin-empty">введите PIN</span>
+      ) : (
+        Array.from({ length: pin.length }, (_, i) => <span key={i} className="pin-dot pin-dot--on" />)
+      )}
+    </div>
+  );
+}
+
 function AddCashier({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
   const [username, setUsername] = useState('');
   const [fullName, setFullName] = useState('');
@@ -129,12 +142,8 @@ function AddCashier({ onClose, onDone }: { onClose: () => void; onDone: () => vo
           <input value={username} onChange={(e) => setUsername(e.target.value)} placeholder="aziz" autoCapitalize="none" />
         </label>
         <div className="field">
-          <span>PIN</span>
-          <div className="pin-dots">
-            {[0, 1, 2, 3, 4, 5].map((i) => (
-              <span key={i} className={`pin-dot ${i < pin.length ? 'pin-dot--on' : ''}`} />
-            ))}
-          </div>
+          <span>PIN (минимум 4 цифры)</span>
+          <PinDots pin={pin} />
         </div>
         <Keypad value={pin} onChange={setPin} />
         {err && <div className="change change--neg">{err}</div>}
@@ -170,11 +179,8 @@ function ResetPin({ user, onClose, onDone }: { user: Staff; onClose: () => void;
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <h2>PIN для {user.full_name || user.username}</h2>
-        <div className="pin-dots">
-          {[0, 1, 2, 3, 4, 5].map((i) => (
-            <span key={i} className={`pin-dot ${i < pin.length ? 'pin-dot--on' : ''}`} />
-          ))}
-        </div>
+        <p className="muted">Минимум 4 цифры.</p>
+        <PinDots pin={pin} />
         <Keypad value={pin} onChange={setPin} />
         <div className="row">
           <button className="btn" onClick={onClose} disabled={busy}>

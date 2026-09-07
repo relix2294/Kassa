@@ -24,6 +24,8 @@ export default defineConfig({
   server: {
     host: true, // доступ по локальной сети (с телефона)
     port: 5173,
+    // Домены туннеля (cloudflared) — чтобы открывать кассу вне локальной сети.
+    allowedHosts: ['.trycloudflare.com'],
     proxy: {
       '/api': 'http://localhost:4000',
       '/ws': { target: 'ws://localhost:4000', ws: true },
