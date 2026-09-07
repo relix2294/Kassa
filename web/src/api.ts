@@ -28,6 +28,22 @@ export const api = {
     req<Product>(`/products/${id}`, { method: 'PATCH', body: JSON.stringify(p) }),
   receive: (payload: { barcode: string; qty: number; cost_price: number; user_id?: string }) =>
     req<{ product: Product }>('/receiving', { method: 'POST', body: JSON.stringify(payload) }),
+  createSale: (payload: {
+    client_id: string;
+    items: { barcode: string; qty: number }[];
+    payment_method: 'cash' | 'card';
+    cash_received?: number;
+    user_id?: string;
+  }) => req<{ sale: any; duplicate?: boolean }>('/sales', { method: 'POST', body: JSON.stringify(payload) }),
+  createReturn: (payload: {
+    client_id: string;
+    items: { barcode: string; qty: number; unit_price?: number }[];
+    reason?: string;
+    user_id?: string;
+  }) => req<{ ret: any; duplicate?: boolean }>('/returns', { method: 'POST', body: JSON.stringify(payload) }),
+  listSales: (limit = 100) => req<any[]>(`/sales?limit=${limit}`),
+  logEvent: (type: string, details: any, user_id?: string) =>
+    req('/logs/event', { method: 'POST', body: JSON.stringify({ type, details, user_id }) }),
   listUsers: () => req<User[]>('/users'),
   listLogs: (limit = 200) => req<LogRow[]>(`/logs?limit=${limit}`),
 };

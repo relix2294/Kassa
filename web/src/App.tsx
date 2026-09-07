@@ -1,6 +1,7 @@
 import { NavLink, Navigate, Route, Routes } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { onOnlineChange, isOnline } from './sync';
+import SalePage from './pages/SalePage';
 import ReceivingPage from './pages/ReceivingPage';
 import ProductsPage from './pages/ProductsPage';
 
@@ -24,14 +25,19 @@ export default function App() {
 
       <main className="content">
         <Routes>
-          <Route path="/" element={<Navigate to="/receiving" replace />} />
+          <Route path="/" element={<Navigate to="/sale" replace />} />
+          <Route path="/sale" element={<SalePage />} />
           <Route path="/receiving" element={<ReceivingPage />} />
           <Route path="/products" element={<ProductsPage />} />
-          <Route path="*" element={<Navigate to="/receiving" replace />} />
+          <Route path="*" element={<Navigate to="/sale" replace />} />
         </Routes>
       </main>
 
       <nav className="tabbar">
+        <NavLink to="/sale" className="tab">
+          <span className="tab__icon">🧾</span>
+          <span>Продажа</span>
+        </NavLink>
         <NavLink to="/receiving" className="tab">
           <span className="tab__icon">📦</span>
           <span>Приём</span>

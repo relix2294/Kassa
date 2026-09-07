@@ -7,6 +7,8 @@ import 'dotenv/config';
 import { attachRealtime } from './lib/realtime.js';
 import { productsRouter } from './routes/products.js';
 import { receivingRouter } from './routes/receiving.js';
+import { salesRouter } from './routes/sales.js';
+import { returnsRouter } from './routes/returns.js';
 import { logsRouter } from './routes/logs.js';
 import { usersRouter } from './routes/users.js';
 
@@ -18,6 +20,8 @@ app.get('/api/health', (_req, res) => res.json({ ok: true, ts: Date.now() }));
 
 app.use('/api/products', productsRouter);
 app.use('/api/receiving', receivingRouter);
+app.use('/api/sales', salesRouter);
+app.use('/api/returns', returnsRouter);
 app.use('/api/logs', logsRouter);
 app.use('/api/users', usersRouter);
 

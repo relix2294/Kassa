@@ -19,7 +19,9 @@ function setOnline(v: boolean) {
 }
 export function onOnlineChange(l: Listener) {
   onlineListeners.add(l);
-  return () => onlineListeners.delete(l);
+  return () => {
+    onlineListeners.delete(l);
+  };
 }
 
 // --- Первичная загрузка каталога ---
@@ -64,6 +66,15 @@ async function applyOutboxItem(item: OutboxItem): Promise<Product | void> {
       return api.updateProduct(item.payload.id, item.payload);
     case 'receiving':
       return (await api.receive(item.payload)).product;
+    case 'sale':
+      await api.createSale(item.payload);
+      return;
+    case 'return':
+      await api.createReturn(item.payload);
+      return;
+    case 'log_event':
+      await api.logEvent(item.payload.type, item.payload.details, item.payload.user_id);
+      return;
   }
 }
 
@@ -141,6 +152,68 @@ export async function receiveGoods(payload: {
     if (err.status !== undefined) throw err;
     await enqueue('receiving', payload);
     return { queued: true };
+  }
+}
+
+// Оптимистично меняем остаток локально (до подтверждения сервером).
+async function adjustLocalStock(barcode: string, delta: number) {
+  const p = await db.products.where('barcode').equals(barcode).first();
+  if (p) await db.products.update(p.id, { stock: Number(p.stock) + delta });
+}
+
+// Провести продажу. items — строки корзины. Возвращает сдачу.
+export async function completeSale(
+  items: { barcode: string; qty: number }[],
+  paymentMethod: 'cash' | 'card',
+  cashReceived: number | undefined,
+  userId?: string,
+): Promise<{ queued: boolean }> {
+  const client_id = crypto.randomUUID();
+  const payload = { client_id, items, payment_method: paymentMethod, cash_received: cashReceived, user_id: userId };
+  // Оптимистичное списание остатка.
+  for (const it of items) await adjustLocalStock(it.barcode, -Number(it.qty));
+  try {
+    await api.createSale(payload);
+    return { queued: false };
+  } catch (err: any) {
+    if (err.status !== undefined) {
+      // Ошибка сервера — откатываем оптимистичное списание.
+      for (const it of items) await adjustLocalStock(it.barcode, Number(it.qty));
+      throw err;
+    }
+    await enqueue('sale', payload);
+    return { queued: true };
+  }
+}
+
+// Оформить возврат. items — что вернуть (с ценой из чека, если известна).
+export async function completeReturn(
+  items: { barcode: string; qty: number; unit_price?: number }[],
+  reason: string | undefined,
+  userId?: string,
+): Promise<{ queued: boolean }> {
+  const client_id = crypto.randomUUID();
+  const payload = { client_id, items, reason, user_id: userId };
+  for (const it of items) await adjustLocalStock(it.barcode, Number(it.qty));
+  try {
+    await api.createReturn(payload);
+    return { queued: false };
+  } catch (err: any) {
+    if (err.status !== undefined) {
+      for (const it of items) await adjustLocalStock(it.barcode, -Number(it.qty));
+      throw err;
+    }
+    await enqueue('return', payload);
+    return { queued: true };
+  }
+}
+
+// Отмена позиции в чеке — фиксируем в журнале (прозрачность).
+export async function logLineCancel(details: any, userId?: string) {
+  try {
+    await api.logEvent('line_cancel', details, userId);
+  } catch (err: any) {
+    if (err.status === undefined) await enqueue('log_event', { type: 'line_cancel', details, user_id: userId });
   }
 }
 

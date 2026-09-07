@@ -185,3 +185,92 @@ input:focus, .search:focus { outline: none; border-color: var(--primary); }
   .modal { border-radius: 18px; margin-bottom: 40px; }
   .modal-backdrop { align-items: center; }
 }
+
+/* --- Продажа --- */
+.page--sale { display: flex; flex-direction: column; height: 100%; }
+.sale-head { display: flex; align-items: center; justify-content: space-between; }
+.btn--ghost { background: transparent; border: 1px solid var(--surface-2); flex: 0 0 auto; padding: 8px 14px; }
+.btn--pay { flex: 2; }
+.btn--big { padding: 20px; font-size: 18px; }
+
+.scan-row { margin-bottom: 12px; }
+.scan-row input { font-size: 18px; }
+
+.cart { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
+.cart-line {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--surface);
+  border-radius: 12px;
+  padding: 10px 12px;
+}
+.cart-line__main { flex: 1; min-width: 0; }
+.cart-line__name { font-weight: 600; }
+.cart-line__del {
+  background: transparent;
+  border: none;
+  color: var(--danger);
+  font-size: 24px;
+  width: 34px;
+  height: 34px;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+
+.qty-ctrl { display: flex; align-items: center; gap: 4px; }
+.qty-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
+  border: none;
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 22px;
+  cursor: pointer;
+}
+.qty-num {
+  min-width: 40px;
+  height: 36px;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font-size: 18px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.sale-footer { display: flex; gap: 10px; padding-top: 12px; }
+
+.pay-methods { display: flex; flex-direction: column; gap: 12px; }
+
+.keypad {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+.keypad__key {
+  padding: 18px;
+  font-size: 22px;
+  font-weight: 600;
+  background: var(--surface-2);
+  color: var(--text);
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+}
+.keypad__key:active { background: var(--primary); color: var(--primary-ink); }
+
+.keypad-value {
+  background: var(--bg);
+  border: 1px solid var(--surface-2);
+  border-radius: 10px;
+  padding: 14px;
+  font-size: 26px;
+  font-weight: 700;
+  text-align: right;
+  min-height: 30px;
+}
+
+.change { font-size: 18px; text-align: right; }
+.change--neg { color: var(--danger); }

@@ -55,3 +55,59 @@ CREATE TABLE IF NOT EXISTS activity_log (
 
 CREATE INDEX IF NOT EXISTS idx_log_created ON activity_log(created_at);
 CREATE INDEX IF NOT EXISTS idx_log_type ON activity_log(type);
+
+-- Продажи (чеки). Себестоимость снимаем на момент продажи — для маржи.
+CREATE TABLE IF NOT EXISTS sales (
+  id             uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  client_id      text UNIQUE,                       -- id чека с кассы (идемпотентность при повторной отправке)
+  total          numeric(12,2) NOT NULL,            -- сумма к оплате
+  cost_total     numeric(12,2) NOT NULL DEFAULT 0,  -- сумма себестоимости (для маржи)
+  payment_method text NOT NULL,                     -- 'cash' | 'card'
+  cash_received  numeric(12,2),                     -- получено наличными (для сдачи)
+  change_given   numeric(12,2),                     -- сдача
+  user_id        uuid REFERENCES users(id),
+  created_at     timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_sales_created ON sales(created_at);
+
+CREATE TABLE IF NOT EXISTS sale_items (
+  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  sale_id     uuid NOT NULL REFERENCES sales(id) ON DELETE CASCADE,
+  product_id  uuid NOT NULL REFERENCES products(id),
+  barcode     text NOT NULL,
+  name        text NOT NULL,                        -- снимок названия на момент продажи
+  qty         numeric(12,3) NOT NULL,
+  unit_price  numeric(12,2) NOT NULL,               -- цена продажи на момент
+  unit_cost   numeric(12,2) NOT NULL,               -- себестоимость на момент
+  line_total  numeric(12,2) NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_sale_items_sale ON sale_items(sale_id);
+CREATE INDEX IF NOT EXISTS idx_sale_items_product ON sale_items(product_id);
+
+-- Возвраты/обмены: товар возвращается на склад, деньги выходят из кассы.
+CREATE TABLE IF NOT EXISTS returns (
+  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  client_id   text UNIQUE,
+  sale_id     uuid REFERENCES sales(id),            -- опциональная привязка к исходному чеку
+  total       numeric(12,2) NOT NULL,               -- сумма возврата (деньги из кассы)
+  reason      text,
+  user_id     uuid REFERENCES users(id),
+  created_at  timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_returns_created ON returns(created_at);
+
+CREATE TABLE IF NOT EXISTS return_items (
+  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  return_id   uuid NOT NULL REFERENCES returns(id) ON DELETE CASCADE,
+  product_id  uuid NOT NULL REFERENCES products(id),
+  barcode     text NOT NULL,
+  name        text NOT NULL,
+  qty         numeric(12,3) NOT NULL,
+  unit_price  numeric(12,2) NOT NULL,
+  line_total  numeric(12,2) NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_return_items_return ON return_items(return_id);
