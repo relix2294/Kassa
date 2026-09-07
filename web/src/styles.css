@@ -24,12 +24,20 @@ body {
 }
 
 .app {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: 1fr;
+  grid-template-rows: auto 1fr auto;
+  grid-template-areas:
+    'topbar'
+    'content'
+    'nav';
   height: 100%;
   max-width: 640px;
   margin: 0 auto;
 }
+.topbar { grid-area: topbar; }
+.content { grid-area: content; }
+.tabbar { grid-area: nav; }
 
 .topbar {
   display: flex;
@@ -413,3 +421,112 @@ select:focus { outline: none; border-color: var(--primary); }
 .staff-actions { display: flex; gap: 6px; flex: 0 0 auto; }
 .staff-actions .btn { padding: 8px 12px; font-size: 14px; }
 .badge + .badge { margin-left: 6px; }
+
+/* ==========================================================================
+   ДЕСКТОП: касса на ноутбуке/ПК (п.3 ТЗ).
+   Боковое меню вместо нижних вкладок, продажа в две колонки.
+   ========================================================================== */
+@media (min-width: 900px) {
+  .app {
+    max-width: none;
+    grid-template-columns: 220px 1fr;
+    grid-template-rows: auto 1fr;
+    grid-template-areas:
+      'nav topbar'
+      'nav content';
+  }
+
+  /* Нижние вкладки превращаются в боковое меню. */
+  .tabbar {
+    flex-direction: column;
+    justify-content: flex-start;
+    gap: 4px;
+    border-top: none;
+    border-right: 1px solid var(--surface-2);
+    padding: 16px 10px;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+  .tab {
+    flex: 0 0 auto;
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 12px;
+    width: 100%;
+    min-width: 0;
+    padding: 12px 14px;
+    border-radius: 10px;
+    font-size: 15px;
+  }
+  .tab:hover { background: var(--surface); }
+  .tab.active { background: var(--surface-2); color: var(--primary); }
+  .tab__icon { font-size: 20px; }
+
+  .content { padding: 24px 28px; }
+  .page > h1 { font-size: 26px; }
+
+  /* Экраны-списки не растягиваем на всю ширину — читать неудобно. */
+  .page { max-width: 900px; }
+
+  /* --- Продажа: чек слева, оплата справа --- */
+  .page--sale-desk {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 360px;
+    gap: 24px;
+    align-items: start;
+    height: 100%;
+    max-width: none;
+  }
+  .sale-main {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    height: 100%;
+  }
+  .sale-main .cart { overflow-y: auto; }
+  .scan-row input { font-size: 20px; padding: 16px; }
+
+  .sale-side {
+    position: sticky;
+    top: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .btn--clear { margin-top: 12px; flex: 0 0 auto; align-self: flex-start; padding: 10px 18px; }
+
+  .cart-line { padding: 14px 16px; }
+  .cart-line__name { font-size: 17px; }
+  .qty-btn { width: 40px; height: 40px; }
+
+  .kpi-grid { grid-template-columns: repeat(3, 1fr); }
+}
+
+/* Панель оплаты (модалка на телефоне, постоянная колонка на десктопе). */
+.payform { display: flex; flex-direction: column; gap: 14px; }
+.payform__total {
+  background: var(--surface);
+  border-radius: var(--radius);
+  padding: 18px;
+  text-align: right;
+}
+.payform__label { color: var(--muted); font-size: 14px; }
+.payform__sum { font-size: 40px; font-weight: 800; line-height: 1.1; }
+
+.hotkeys {
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+  color: var(--muted);
+  font-size: 13px;
+}
+kbd {
+  background: var(--surface-2);
+  border-radius: 5px;
+  padding: 2px 7px;
+  font-family: inherit;
+  font-size: 12px;
+  color: var(--text);
+}
