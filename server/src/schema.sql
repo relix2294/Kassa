@@ -3,13 +3,17 @@
 
 -- Пользователи. Полноценные роли/логин — этап 3, здесь минимум для логирования.
 CREATE TABLE IF NOT EXISTS users (
-  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  username    text UNIQUE NOT NULL,
-  full_name   text,
-  role        text NOT NULL DEFAULT 'owner',   -- 'owner' | 'cashier'
-  is_blocked  boolean NOT NULL DEFAULT false,
-  created_at  timestamptz NOT NULL DEFAULT now()
+  id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  username      text UNIQUE NOT NULL,
+  full_name     text,
+  role          text NOT NULL DEFAULT 'owner',   -- 'owner' | 'cashier'
+  pin_hash      text,                            -- хеш PIN-кода для входа
+  is_blocked    boolean NOT NULL DEFAULT false,
+  created_at    timestamptz NOT NULL DEFAULT now()
 );
+
+-- На случай апгрейда со старой схемы:
+ALTER TABLE users ADD COLUMN IF NOT EXISTS pin_hash text;
 
 -- Товары. Остаток и себестоимость (средняя скользящая) хранятся прямо в карточке.
 CREATE TABLE IF NOT EXISTS products (

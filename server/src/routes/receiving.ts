@@ -10,7 +10,8 @@ export const receivingRouter = Router();
 // Товар должен уже существовать (новый заводится через POST /api/products).
 // Пересчитываем среднюю скользящую себестоимость и увеличиваем остаток.
 receivingRouter.post('/', async (req, res) => {
-  const { barcode, qty, cost_price, user_id } = req.body ?? {};
+  const { barcode, qty, cost_price } = req.body ?? {};
+  const user_id = req.user!.id;
 
   const qtyNum = Number(qty);
   const costNum = Number(cost_price);

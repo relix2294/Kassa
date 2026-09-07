@@ -1,12 +1,20 @@
 import type { Product, User, LogRow } from './types';
+import { getToken, logout } from './auth';
 
 // Тонкий клиент к серверному API. Базовый путь идёт через прокси Vite (/api).
 async function req<T>(path: string, options?: RequestInit): Promise<T> {
+  const token = getToken();
   const res = await fetch(`/api${path}`, {
-    headers: { 'Content-Type': 'application/json' },
     ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(options?.headers ?? {}),
+    },
   });
   if (!res.ok) {
+    // 401 на защищённых маршрутах — токен протух, разлогиниваем (кроме самого входа).
+    if (res.status === 401 && !path.startsWith('/auth/')) logout();
     const body = await res.json().catch(() => ({}));
     const err = new Error(body.error || res.statusText) as Error & { status?: number; body?: any };
     err.status = res.status;
@@ -44,6 +52,16 @@ export const api = {
   listSales: (limit = 100) => req<any[]>(`/sales?limit=${limit}`),
   logEvent: (type: string, details: any, user_id?: string) =>
     req('/logs/event', { method: 'POST', body: JSON.stringify({ type, details, user_id }) }),
-  listUsers: () => req<User[]>('/users'),
+  login: (username: string, pin: string) =>
+    req<{ token: string; user: User }>('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ username, pin }),
+    }),
+  me: () => req<{ user: User }>('/auth/me'),
+  listUsers: () => req<(User & { has_pin: boolean; created_at: string })[]>('/users'),
+  createUser: (payload: { username: string; full_name?: string; pin: string; role?: 'owner' | 'cashier' }) =>
+    req<User>('/users', { method: 'POST', body: JSON.stringify(payload) }),
+  updateUser: (id: string, payload: { full_name?: string; is_blocked?: boolean; pin?: string }) =>
+    req<User>(`/users/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
   listLogs: (limit = 200) => req<LogRow[]>(`/logs?limit=${limit}`),
 };

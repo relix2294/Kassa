@@ -8,7 +8,8 @@ export const returnsRouter = Router();
 // Возврат/обмен: товар возвращается на склад, деньги выходят из кассы.
 // Тело: { client_id, items:[{barcode, qty}], reason?, sale_id?, user_id }
 returnsRouter.post('/', async (req, res) => {
-  const { client_id, items, reason, sale_id, user_id } = req.body ?? {};
+  const { client_id, items, reason, sale_id } = req.body ?? {};
+  const user_id = req.user!.id;
 
   if (!Array.isArray(items) || items.length === 0) {
     return res.status(400).json({ error: 'Пустой возврат' });

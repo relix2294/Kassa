@@ -5,6 +5,8 @@ import { createServer } from 'node:http';
 import 'dotenv/config';
 
 import { attachRealtime } from './lib/realtime.js';
+import { requireAuth } from './lib/auth.js';
+import { authRouter } from './routes/auth.js';
 import { productsRouter } from './routes/products.js';
 import { receivingRouter } from './routes/receiving.js';
 import { salesRouter } from './routes/sales.js';
@@ -18,11 +20,12 @@ app.use(express.json());
 
 app.get('/api/health', (_req, res) => res.json({ ok: true, ts: Date.now() }));
 
-app.use('/api/products', productsRouter);
-app.use('/api/receiving', receivingRouter);
-app.use('/api/sales', salesRouter);
-app.use('/api/returns', returnsRouter);
-app.use('/api/logs', logsRouter);
+app.use('/api/auth', authRouter);
+app.use('/api/products', requireAuth, productsRouter);
+app.use('/api/receiving', requireAuth, receivingRouter);
+app.use('/api/sales', requireAuth, salesRouter);
+app.use('/api/returns', requireAuth, returnsRouter);
+app.use('/api/logs', requireAuth, logsRouter);
 app.use('/api/users', usersRouter);
 
 // Единый обработчик ошибок, чтобы упавший роут не ронял процесс.

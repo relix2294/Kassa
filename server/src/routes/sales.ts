@@ -2,11 +2,12 @@ import { Router } from 'express';
 import { query, withTx } from '../db.js';
 import { writeLog } from '../lib/log.js';
 import { broadcast } from '../lib/realtime.js';
+import { requireOwner } from '../lib/auth.js';
 
 export const salesRouter = Router();
 
-// Последние продажи (для кабинета владельца/истории).
-salesRouter.get('/', async (req, res) => {
+// Последние продажи (выручка/история) — только владелец.
+salesRouter.get('/', requireOwner, async (req, res) => {
   const limit = Math.min(Number(req.query.limit) || 100, 500);
   const rows = await query(
     `SELECT s.*, u.username, u.full_name
@@ -21,7 +22,8 @@ salesRouter.get('/', async (req, res) => {
 // Провести продажу (чек).
 // Тело: { client_id, items:[{barcode, qty}], payment_method, cash_received?, user_id }
 salesRouter.post('/', async (req, res) => {
-  const { client_id, items, payment_method, cash_received, user_id } = req.body ?? {};
+  const { client_id, items, payment_method, cash_received } = req.body ?? {};
+  const user_id = req.user!.id;
 
   if (!Array.isArray(items) || items.length === 0) {
     return res.status(400).json({ error: 'Пустой чек' });

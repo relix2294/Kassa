@@ -34,6 +34,9 @@ export default function ReceivingPage() {
     if (local) {
       setProduct(local);
       setStage('receive');
+    } else if (user?.role === 'cashier') {
+      // Кассир не заводит товар и не задаёт цены — это делает владелец.
+      flash('Товара нет. Завести новый может только владелец.');
     } else {
       setProduct(null);
       setStage('create');

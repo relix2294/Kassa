@@ -1,26 +1,43 @@
 import { NavLink, Navigate, Route, Routes } from 'react-router-dom';
 import { useEffect, useState } from 'react';
-import { onOnlineChange, isOnline } from './sync';
+import { onOnlineChange, isOnline, pullProducts } from './sync';
+import { useAuth, logout } from './auth';
+import LoginPage from './pages/LoginPage';
 import SalePage from './pages/SalePage';
 import ReceivingPage from './pages/ReceivingPage';
 import ProductsPage from './pages/ProductsPage';
+import StaffPage from './pages/StaffPage';
 
 function OnlineBadge() {
   const [online, setOnline] = useState(isOnline);
   useEffect(() => onOnlineChange(() => setOnline(isOnline)), []);
   return (
-    <span className={`badge ${online ? 'badge--ok' : 'badge--off'}`}>
-      {online ? 'онлайн' : 'нет сети'}
-    </span>
+    <span className={`badge ${online ? 'badge--ok' : 'badge--off'}`}>{online ? 'онлайн' : 'нет сети'}</span>
   );
 }
 
 export default function App() {
+  const user = useAuth();
+
+  // После входа подтягиваем актуальный каталог с сервера.
+  useEffect(() => {
+    if (user) pullProducts();
+  }, [user]);
+
+  if (!user) return <LoginPage />;
+
+  const owner = user.role === 'owner';
+
   return (
     <div className="app">
       <header className="topbar">
         <div className="brand">Kassa</div>
-        <OnlineBadge />
+        <div className="topbar__right">
+          <OnlineBadge />
+          <button className="user-chip" onClick={logout} title="Выйти">
+            {user.full_name || user.username} ⏻
+          </button>
+        </div>
       </header>
 
       <main className="content">
@@ -28,7 +45,8 @@ export default function App() {
           <Route path="/" element={<Navigate to="/sale" replace />} />
           <Route path="/sale" element={<SalePage />} />
           <Route path="/receiving" element={<ReceivingPage />} />
-          <Route path="/products" element={<ProductsPage />} />
+          <Route path="/products" element={owner ? <ProductsPage /> : <Navigate to="/sale" replace />} />
+          <Route path="/staff" element={owner ? <StaffPage /> : <Navigate to="/sale" replace />} />
           <Route path="*" element={<Navigate to="/sale" replace />} />
         </Routes>
       </main>
@@ -42,10 +60,18 @@ export default function App() {
           <span className="tab__icon">📦</span>
           <span>Приём</span>
         </NavLink>
-        <NavLink to="/products" className="tab">
-          <span className="tab__icon">🏷️</span>
-          <span>Товары</span>
-        </NavLink>
+        {owner && (
+          <NavLink to="/products" className="tab">
+            <span className="tab__icon">🏷️</span>
+            <span>Товары</span>
+          </NavLink>
+        )}
+        {owner && (
+          <NavLink to="/staff" className="tab">
+            <span className="tab__icon">👥</span>
+            <span>Сотрудники</span>
+          </NavLink>
+        )}
       </nav>
     </div>
   );

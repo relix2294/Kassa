@@ -3,6 +3,7 @@ import { query } from '../db.js';
 import { writeLog } from '../lib/log.js';
 import { broadcast } from '../lib/realtime.js';
 import { lookupBarcode } from '../lib/barcode.js';
+import { requireOwner } from '../lib/auth.js';
 
 export const productsRouter = Router();
 
@@ -27,9 +28,10 @@ productsRouter.get('/lookup/:barcode', async (req, res) => {
   res.json(info);
 });
 
-// Создать товар.
-productsRouter.post('/', async (req, res) => {
-  const { barcode, name, category, sale_price, cost_price, min_stock, user_id } = req.body ?? {};
+// Создать товар — только владелец (кассир не задаёт цены).
+productsRouter.post('/', requireOwner, async (req, res) => {
+  const { barcode, name, category, sale_price, cost_price, min_stock } = req.body ?? {};
+  const user_id = req.user!.id;
   if (!barcode || !name) {
     return res.status(400).json({ error: 'barcode и name обязательны' });
   }
@@ -58,10 +60,11 @@ productsRouter.post('/', async (req, res) => {
   }
 });
 
-// Обновить карточку. Изменения цен фиксируем в журнале отдельно.
-productsRouter.patch('/:id', async (req, res) => {
+// Обновить карточку — только владелец. Изменения цен фиксируем в журнале отдельно.
+productsRouter.patch('/:id', requireOwner, async (req, res) => {
   const { id } = req.params;
-  const { name, category, sale_price, cost_price, min_stock, user_id } = req.body ?? {};
+  const { name, category, sale_price, cost_price, min_stock } = req.body ?? {};
+  const user_id = req.user!.id;
 
   const before = (await query(`SELECT * FROM products WHERE id = $1`, [id]))[0];
   if (!before) return res.status(404).json({ error: 'not_found' });
