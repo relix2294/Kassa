@@ -34,7 +34,7 @@ export const api = {
     req<Product>('/products', { method: 'POST', body: JSON.stringify(p) }),
   updateProduct: (id: string, p: Partial<Product> & { user_id?: string }) =>
     req<Product>(`/products/${id}`, { method: 'PATCH', body: JSON.stringify(p) }),
-  receive: (payload: { barcode: string; qty: number; cost_price: number; user_id?: string }) =>
+  receive: (payload: { barcode: string; qty: number; cost_price?: number }) =>
     req<{ product: Product }>('/receiving', { method: 'POST', body: JSON.stringify(payload) }),
   createSale: (payload: {
     client_id: string;

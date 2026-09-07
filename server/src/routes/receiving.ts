@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { withTx } from '../db.js';
 import { writeLog } from '../lib/log.js';
 import { broadcast } from '../lib/realtime.js';
+import { productFor } from '../lib/sanitize.js';
 
 export const receivingRouter = Router();
 
@@ -12,11 +13,17 @@ export const receivingRouter = Router();
 receivingRouter.post('/', async (req, res) => {
   const { barcode, qty, cost_price } = req.body ?? {};
   const user_id = req.user!.id;
+  const isOwner = req.user!.role === 'owner';
 
   const qtyNum = Number(qty);
-  const costNum = Number(cost_price);
-  if (!barcode || !(qtyNum > 0) || !(costNum >= 0)) {
-    return res.status(400).json({ error: 'Нужны barcode, qty > 0 и cost_price >= 0' });
+  if (!barcode || !(qtyNum > 0)) {
+    return res.status(400).json({ error: 'Нужны barcode и qty > 0' });
+  }
+  // Закупочную цену задаёт только владелец (п.4 ТЗ). У кассира приём идёт
+  // по текущей средней себестоимости — она при этом не меняется.
+  const costNum = isOwner ? Number(cost_price) : null;
+  if (isOwner && !(costNum! >= 0)) {
+    return res.status(400).json({ error: 'cost_price >= 0' });
   }
 
   try {
@@ -35,11 +42,15 @@ receivingRouter.post('/', async (req, res) => {
       const oldCost = Number(product.cost_price);
       const newStock = oldStock + qtyNum;
 
+      // Цена партии: владелец задаёт свою, у кассира — текущая средняя
+      // (тогда средняя не меняется, а закупочные цены ему не показываются).
+      const batchCost = costNum ?? oldCost;
+
       // Средняя скользящая: взвешенное среднее старого остатка и новой партии.
       const newCost =
         newStock > 0
-          ? (oldStock * oldCost + qtyNum * costNum) / newStock
-          : costNum;
+          ? (oldStock * oldCost + qtyNum * batchCost) / newStock
+          : batchCost;
 
       const upd = await client.query(
         `UPDATE products
@@ -53,7 +64,7 @@ receivingRouter.post('/', async (req, res) => {
         `INSERT INTO stock_receipts (product_id, qty, cost_price, user_id)
          VALUES ($1, $2, $3, $4)
          RETURNING *`,
-        [product.id, qtyNum, costNum, user_id ?? null],
+        [product.id, qtyNum, batchCost, user_id ?? null],
       );
 
       await writeLog(
@@ -64,7 +75,8 @@ receivingRouter.post('/', async (req, res) => {
           userId: user_id ?? null,
           details: {
             qty: qtyNum,
-            cost_price: costNum,
+            cost_price: batchCost,
+            cost_set_by_owner: isOwner,
             old_stock: oldStock,
             new_stock: newStock,
             new_cost_avg: Number(newCost.toFixed(2)),
@@ -80,8 +92,8 @@ receivingRouter.post('/', async (req, res) => {
       return res.status(404).json({ error: 'not_found', message: 'Сначала заведите товар' });
     }
 
-    broadcast('product_upsert', result.product);
-    res.status(201).json(result);
+    broadcast('product_upsert', result.product, 'all');
+    res.status(201).json({ product: productFor(req, result.product), receipt: isOwner ? result.receipt : undefined });
   } catch (err) {
     console.error('Ошибка приёма:', err);
     res.status(500).json({ error: 'internal' });

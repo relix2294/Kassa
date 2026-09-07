@@ -116,7 +116,7 @@ analyticsRouter.post('/bulk-price', async (req, res) => {
     return rows;
   });
 
-  updated.forEach((p: any) => broadcast('product_upsert', p));
+  updated.forEach((p: any) => broadcast('product_upsert', p, 'all'));
   res.json({ updated: updated.length, products: updated });
 });
 
@@ -195,7 +195,7 @@ analyticsRouter.post('/inventory', async (req, res) => {
       return { inventory: inv, items: lines, total_loss: totalLoss, changed };
     });
 
-    result.changed.forEach((p: any) => broadcast('product_upsert', p));
+    result.changed.forEach((p: any) => broadcast('product_upsert', p, 'all'));
     res.status(201).json(result);
   } catch (err: any) {
     if (err?.status === 400) return res.status(400).json({ error: err.message });

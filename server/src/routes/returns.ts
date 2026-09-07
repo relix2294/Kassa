@@ -86,7 +86,7 @@ returnsRouter.post('/', async (req, res) => {
       return { ret: retRow, changedProducts };
     });
 
-    result.changedProducts.forEach((p) => broadcast('product_upsert', p));
+    result.changedProducts.forEach((p) => broadcast('product_upsert', p, 'all'));
     broadcast('return', result.ret);
     res.status(201).json({ ret: result.ret });
   } catch (err: any) {

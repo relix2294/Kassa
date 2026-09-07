@@ -3,6 +3,7 @@ import { query, withTx } from '../db.js';
 import { writeLog } from '../lib/log.js';
 import { broadcast } from '../lib/realtime.js';
 import { requireOwner } from '../lib/auth.js';
+import { saleFor } from '../lib/sanitize.js';
 import { getOpenShift } from './shifts.js';
 
 export const salesRouter = Router();
@@ -37,7 +38,7 @@ salesRouter.post('/', async (req, res) => {
   if (client_id) {
     const existing = await query(`SELECT * FROM sales WHERE client_id = $1`, [client_id]);
     if (existing.length > 0) {
-      return res.status(200).json({ sale: existing[0], duplicate: true });
+      return res.status(200).json({ sale: saleFor(req, existing[0]), duplicate: true });
     }
   }
 
@@ -63,6 +64,16 @@ salesRouter.post('/', async (req, res) => {
           throw { status: 400, message: `Товар не найден: ${item.barcode}` };
         }
         const p = found.rows[0];
+
+        // Нельзя продать больше, чем есть на складе: минусовой остаток
+        // ломает инвентаризацию, «пора закупить» и оценку потерь.
+        if (Number(p.stock) < qty) {
+          throw {
+            status: 400,
+            message: `«${p.name}»: на складе ${Number(p.stock)}, продаёте ${qty}. Проверьте остаток или примите товар.`,
+          };
+        }
+
         const unitPrice = Number(p.sale_price);
         const unitCost = Number(p.cost_price);
         const lineTotal = Number((unitPrice * qty).toFixed(2));
@@ -129,9 +140,9 @@ salesRouter.post('/', async (req, res) => {
       return { sale: saleRow, changedProducts };
     });
 
-    result.changedProducts.forEach((p) => broadcast('product_upsert', p));
+    result.changedProducts.forEach((p) => broadcast('product_upsert', p, 'all'));
     broadcast('sale', result.sale);
-    res.status(201).json({ sale: result.sale });
+    res.status(201).json({ sale: saleFor(req, result.sale) });
   } catch (err: any) {
     if (err?.status === 400) return res.status(400).json({ error: err.message });
     console.error('Ошибка продажи:', err);

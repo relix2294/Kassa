@@ -1,6 +1,6 @@
 import { NavLink, Navigate, Route, Routes } from 'react-router-dom';
 import { useEffect, useState } from 'react';
-import { onOnlineChange, isOnline, pullProducts } from './sync';
+import { onOnlineChange, isOnline, pullProducts, reconnectRealtime } from './sync';
 import { refreshShift } from './shift';
 import { useAuth, logout } from './auth';
 import LoginPage from './pages/LoginPage';
@@ -23,13 +23,15 @@ function OnlineBadge() {
 export default function App() {
   const user = useAuth();
 
-  // После входа подтягиваем каталог и текущую смену.
+  // После входа подтягиваем каталог, смену и переподключаем realtime
+  // под новой ролью (сервер шлёт кассиру не то же, что владельцу).
   useEffect(() => {
     if (user) {
       pullProducts();
       refreshShift();
+      reconnectRealtime();
     }
-  }, [user]);
+  }, [user?.id]);
 
   if (!user) return <LoginPage />;
 

@@ -4,22 +4,23 @@ import { writeLog } from '../lib/log.js';
 import { broadcast } from '../lib/realtime.js';
 import { lookupBarcode } from '../lib/barcode.js';
 import { requireOwner } from '../lib/auth.js';
+import { productFor, productsFor } from '../lib/sanitize.js';
 
 export const productsRouter = Router();
 
-// Список всех товаров.
-productsRouter.get('/', async (_req, res) => {
+// Список всех товаров. Кассиру отдаём без закупочных цен.
+productsRouter.get('/', async (req, res) => {
   const rows = await query(
     `SELECT * FROM products WHERE is_archived = false ORDER BY name`,
   );
-  res.json(rows);
+  res.json(productsFor(req, rows));
 });
 
 // Поиск товара по штрихкоду (для сканера).
 productsRouter.get('/barcode/:barcode', async (req, res) => {
   const rows = await query(`SELECT * FROM products WHERE barcode = $1`, [req.params.barcode]);
   if (rows.length === 0) return res.status(404).json({ error: 'not_found' });
-  res.json(rows[0]);
+  res.json(productFor(req, rows[0]));
 });
 
 // Подсказка названия по штрихкоду из внешней базы (для заведения нового товара).
@@ -50,7 +51,7 @@ productsRouter.post('/', requireOwner, async (req, res) => {
       userId: user_id ?? null,
       details: { barcode, name, sale_price, cost_price },
     });
-    broadcast('product_upsert', product);
+    broadcast('product_upsert', product, 'all');
     res.status(201).json(product);
   } catch (err: any) {
     if (err.code === '23505') {
@@ -101,6 +102,6 @@ productsRouter.patch('/:id', requireOwner, async (req, res) => {
     details: { changed: Object.keys(req.body ?? {}).filter((k) => k !== 'user_id') },
   });
 
-  broadcast('product_upsert', after);
+  broadcast('product_upsert', after, 'all');
   res.json(after);
 });

@@ -1,5 +1,6 @@
 import { db, type OutboxItem } from './db';
 import { api } from './api';
+import { getToken } from './auth';
 import type { Product } from './types';
 
 // Слой синхронизации между локальной кассой и сервером.
@@ -47,10 +48,23 @@ export function onRealtimeEvent(l: EventListener) {
 }
 
 // --- WebSocket: живые обновления каталога ---
+let ws: WebSocket | null = null;
+
 function connectRealtime() {
+  const token = getToken();
+  // Без токена подключаться нет смысла: сервер закроет соединение.
+  if (!token) {
+    setTimeout(connectRealtime, 2000);
+    return;
+  }
+
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-  const ws = new WebSocket(`${proto}://${location.host}/ws`);
-  ws.onopen = () => setOnline(true);
+  ws = new WebSocket(`${proto}://${location.host}/ws`);
+  ws.onopen = () => {
+    setOnline(true);
+    // Первым сообщением представляемся — сервер узнаёт роль.
+    ws?.send(JSON.stringify({ type: 'auth', token }));
+  };
   ws.onmessage = (ev) => {
     try {
       const msg = JSON.parse(ev.data);
@@ -64,9 +78,16 @@ function connectRealtime() {
   };
   ws.onclose = () => {
     setOnline(false);
+    ws = null;
     setTimeout(connectRealtime, 2000); // переподключение
   };
-  ws.onerror = () => ws.close();
+  ws.onerror = () => ws?.close();
+}
+
+// Смена пользователя — переподключаемся, чтобы сервер увидел новую роль.
+export function reconnectRealtime() {
+  if (ws) ws.close(); // onclose сам поставит переподключение
+  else connectRealtime();
 }
 
 // --- Outbox: очередь операций при обрыве сети ---
@@ -153,8 +174,7 @@ export async function updateProductRemote(
 export async function receiveGoods(payload: {
   barcode: string;
   qty: number;
-  cost_price: number;
-  user_id?: string;
+  cost_price?: number;
 }): Promise<{ queued: boolean; product?: Product }> {
   try {
     const { product } = await api.receive(payload);

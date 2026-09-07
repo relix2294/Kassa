@@ -82,6 +82,7 @@ export default function ReceivingPage() {
       {stage === 'receive' && product && (
         <ReceiveExisting
           product={product}
+          isOwner={user?.role === 'owner'}
           busy={busy}
           onCancel={reset}
           onSubmit={async (qty, cost) => {
@@ -90,8 +91,8 @@ export default function ReceivingPage() {
               const r = await receiveGoods({
                 barcode: product.barcode,
                 qty,
-                cost_price: cost,
-                user_id: user?.id,
+                // Закупочную цену задаёт только владелец.
+                cost_price: user?.role === 'owner' ? cost : undefined,
               });
               flash(r.queued ? 'Нет сети — приём в очереди' : `Принято: ${product.name} +${qty}`);
               reset();
@@ -120,7 +121,7 @@ export default function ReceivingPage() {
               }
               // Сразу приходуем стартовое количество, если задано.
               if (qty > 0) {
-                await receiveGoods({ barcode, qty, cost_price: cost, user_id: user?.id });
+                await receiveGoods({ barcode, qty, cost_price: cost });
               }
               flash(`Заведён: ${fields.name}${qty > 0 ? ` (+${qty})` : ''}`);
               reset();
@@ -140,11 +141,13 @@ export default function ReceivingPage() {
 
 function ReceiveExisting({
   product,
+  isOwner,
   busy,
   onSubmit,
   onCancel,
 }: {
   product: Product;
+  isOwner: boolean;
   busy: boolean;
   onSubmit: (qty: number, cost: number) => void;
   onCancel: () => void;
@@ -172,10 +175,16 @@ function ReceiveExisting({
         <span>Сколько принято</span>
         <input inputMode="decimal" value={qty} onChange={(e) => setQty(e.target.value)} autoFocus />
       </label>
-      <label className="field">
-        <span>Закупочная цена за единицу</span>
-        <input inputMode="decimal" value={cost} onChange={(e) => setCost(e.target.value)} />
-      </label>
+
+      {/* Закупочную цену видит и задаёт только владелец (п.4 ТЗ). */}
+      {isOwner ? (
+        <label className="field">
+          <span>Закупочная цена за единицу</span>
+          <input inputMode="decimal" value={cost} onChange={(e) => setCost(e.target.value)} />
+        </label>
+      ) : (
+        <p className="hint">Закупочную цену задаёт владелец.</p>
+      )}
 
       <div className="row">
         <button type="button" className="btn" onClick={onCancel} disabled={busy}>
