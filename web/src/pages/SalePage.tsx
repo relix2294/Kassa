@@ -21,6 +21,7 @@ export default function SalePage() {
   const [payOpen, setPayOpen] = useState(false);
   const [qtyEdit, setQtyEdit] = useState<CartLine | null>(null);
   const [returnOpen, setReturnOpen] = useState(false);
+  const [changeDue, setChangeDue] = useState<number | null>(null);
   const scanRef = useRef<HTMLInputElement>(null);
 
   const lines = useLiveQuery(() => db.cart.toArray(), [], [] as CartLine[]);
@@ -70,12 +71,15 @@ export default function SalePage() {
   }
 
   async function pay(method: 'cash' | 'card', received?: number) {
+    const due = method === 'cash' && received != null ? Number((received - total).toFixed(2)) : 0;
     try {
       const items = lines.map((l) => ({ barcode: l.barcode, qty: l.qty }));
       const r = await completeSale(items, method, received, user?.id);
       await clearCart();
       setPayOpen(false);
-      flash(r.queued ? 'Нет сети — чек в очереди' : 'Оплачено ✓');
+      // Сдачу показываем крупно и держим на экране, пока кассир её отсчитывает.
+      if (due > 0) setChangeDue(due);
+      else flash(r.queued ? 'Нет сети — чек в очереди' : 'Оплачено ✓');
     } catch (e: any) {
       flash(`Ошибка: ${e.message}`);
     }
@@ -213,6 +217,15 @@ export default function SalePage() {
       )}
 
       {returnOpen && <ReturnPanel onClose={() => setReturnOpen(false)} onDone={(m) => flash(m)} />}
+
+      {/* Сдача во весь экран: кассир отсчитывает деньги, глядя на цифру. */}
+      {changeDue !== null && (
+        <div className="change-screen" onClick={() => setChangeDue(null)}>
+          <div className="change-screen__label">Сдача покупателю</div>
+          <div className="change-screen__sum">{changeDue.toFixed(2)}</div>
+          <button className="btn btn--primary btn--big change-screen__btn">Отдал, дальше</button>
+        </div>
+      )}
 
       {toast && <div className="toast">{toast}</div>}
     </div>
