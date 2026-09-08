@@ -71,6 +71,11 @@ function connectRealtime() {
       if (msg.type === 'product_upsert' && msg.payload) {
         db.products.put(msg.payload as Product);
       }
+      // Товар убрали из работы — он не должен оставаться в кассе.
+      if (msg.type === 'product_archive' && msg.payload?.id) {
+        if (msg.payload.is_archived) db.products.delete(msg.payload.id);
+        else pullProducts();
+      }
       eventListeners.forEach((l) => l(msg.type, msg.payload));
     } catch {
       /* ignore */

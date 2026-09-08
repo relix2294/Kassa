@@ -105,3 +105,33 @@ productsRouter.patch('/:id', requireOwner, async (req, res) => {
   broadcast('product_upsert', after, 'all');
   res.json(after);
 });
+
+// Убрать товар из работы. Не удаляем: на него ссылаются проданные чеки
+// и приёмки, история должна остаться целой.
+productsRouter.post('/:id/archive', requireOwner, async (req, res) => {
+  const { id } = req.params;
+  const archive = req.body?.archive !== false;
+
+  const rows = await query(
+    `UPDATE products SET is_archived = $2, updated_at = now() WHERE id = $1 RETURNING *`,
+    [id, archive],
+  );
+  if (rows.length === 0) return res.status(404).json({ error: 'not_found' });
+
+  await writeLog({
+    type: archive ? 'product_archive' : 'product_restore',
+    entity: 'product',
+    entityId: id,
+    userId: req.user!.id,
+    details: { name: rows[0].name, barcode: rows[0].barcode },
+  });
+
+  broadcast('product_archive', { id, is_archived: archive }, 'all');
+  res.json(rows[0]);
+});
+
+// Архив — чтобы владелец мог вернуть случайно убранный товар.
+productsRouter.get('/archived', requireOwner, async (req, res) => {
+  const rows = await query(`SELECT * FROM products WHERE is_archived = true ORDER BY name`);
+  res.json(productsFor(req, rows));
+});
