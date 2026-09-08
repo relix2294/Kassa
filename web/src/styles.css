@@ -423,10 +423,12 @@ select:focus { outline: none; border-color: var(--primary); }
 .badge + .badge { margin-left: 6px; }
 
 /* ==========================================================================
-   ДЕСКТОП: касса на ноутбуке/ПК (п.3 ТЗ).
-   Боковое меню вместо нижних вкладок, продажа в две колонки.
+   ШИРОКИЙ ЭКРАН: касса на ноутбуке/ПК (п.3 ТЗ).
+   Два порога, потому что меню помещается заметно раньше, чем две колонки:
+     768px  — боковое меню вместо нижних вкладок;
+     1000px — продажа в две колонки (чек + панель оплаты).
    ========================================================================== */
-@media (min-width: 900px) {
+@media (min-width: 768px) {
   .app {
     max-width: none;
     grid-template-columns: 220px 1fr;
@@ -469,6 +471,13 @@ select:focus { outline: none; border-color: var(--primary); }
   /* Экраны-списки не растягиваем на всю ширину — читать неудобно. */
   .page { max-width: 900px; }
 
+  .cart-line { padding: 14px 16px; }
+  .cart-line__name { font-size: 17px; }
+  .qty-btn { width: 40px; height: 40px; }
+}
+
+/* Две колонки на экране продажи — только когда они реально помещаются. */
+@media (min-width: 1000px) {
   /* --- Продажа: чек слева, оплата справа --- */
   .page--sale-desk {
     display: grid;
@@ -496,10 +505,6 @@ select:focus { outline: none; border-color: var(--primary); }
   }
 
   .btn--clear { margin-top: 12px; flex: 0 0 auto; align-self: flex-start; padding: 10px 18px; }
-
-  .cart-line { padding: 14px 16px; }
-  .cart-line__name { font-size: 17px; }
-  .qty-btn { width: 40px; height: 40px; }
 
   .kpi-grid { grid-template-columns: repeat(3, 1fr); }
 }
