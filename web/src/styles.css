@@ -548,3 +548,14 @@ kbd {
   cursor: pointer;
 }
 .chip--on { background: var(--primary); color: var(--primary-ink); font-weight: 600; }
+
+/* Открытие смены прямо на экране продажи. */
+.start-shift { max-width: 420px; }
+.btn--link {
+  background: transparent;
+  color: var(--muted);
+  font-weight: 500;
+  font-size: 15px;
+  padding: 8px;
+}
+.btn--link:hover { color: var(--text); }

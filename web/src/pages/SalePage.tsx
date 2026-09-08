@@ -5,7 +5,7 @@ import { db, type CartLine } from '../db';
 import { addToCart, cartTotal, clearCart, removeLine, setQty } from '../cart';
 import { completeSale } from '../sync';
 import { useCurrentUser } from '../session';
-import { useShift, refreshShift } from '../shift';
+import { useShift, refreshShift, openShift } from '../shift';
 import { useIsDesktop } from '../useMedia';
 import Keypad from '../components/Keypad';
 import PaymentForm from '../components/PaymentForm';
@@ -81,19 +81,10 @@ export default function SalePage() {
     }
   }
 
-  // Без открытой смены продавать нельзя (п.4 ТЗ).
+  // Без открытой смены продавать нельзя (п.4 ТЗ — иначе не с чем сверять кассу).
+  // Но и гонять кассира на другой экран незачем: открываем смену прямо здесь.
   if (loaded && !shift) {
-    return (
-      <div className="page">
-        <h1>Продажа</h1>
-        <div className="card">
-          <p className="hint">Смена закрыта. Откройте смену, чтобы продавать.</p>
-          <button className="btn btn--primary btn--big" onClick={() => navigate('/shift')}>
-            Перейти к смене
-          </button>
-        </div>
-      </div>
-    );
+    return <StartShift onDone={flash} />;
   }
 
   const cart = (
@@ -224,6 +215,56 @@ export default function SalePage() {
       {returnOpen && <ReturnPanel onClose={() => setReturnOpen(false)} onDone={(m) => flash(m)} />}
 
       {toast && <div className="toast">{toast}</div>}
+    </div>
+  );
+}
+
+// Начало работы: размен вводится прямо на экране продажи, без перехода на «Смену».
+// Размен нужен для сверки кассы в конце дня (п.4 ТЗ) — без него непонятно,
+// сколько денег должно остаться.
+function StartShift({ onDone }: { onDone: (msg: string) => void }) {
+  const [amount, setAmount] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function start(opening: number) {
+    setBusy(true);
+    setErr(null);
+    try {
+      await openShift(opening);
+      onDone('Смена открыта — можно продавать');
+    } catch (e: any) {
+      setErr(e.message || 'Не удалось открыть смену');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="page">
+      <h1>Начало работы</h1>
+      <div className="card start-shift">
+        <p className="hint">
+          Пересчитайте деньги в кассе и введите сумму. В конце дня система сверит,
+          сколько должно остаться.
+        </p>
+
+        <label className="field">
+          <span>Размен в кассе</span>
+          <div className="keypad-value">{amount || '0'}</div>
+        </label>
+
+        <Keypad value={amount} onChange={setAmount} allowDecimal />
+
+        {err && <div className="change change--neg">{err}</div>}
+
+        <button className="btn btn--primary btn--big" disabled={busy} onClick={() => start(Number(amount) || 0)}>
+          Начать работу
+        </button>
+        <button className="btn btn--link" disabled={busy} onClick={() => start(0)}>
+          Размена нет, начать с нуля
+        </button>
+      </div>
     </div>
   );
 }
