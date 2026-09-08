@@ -1,5 +1,5 @@
-import { NavLink, Navigate, Route, Routes } from 'react-router-dom';
-import { useEffect, useState } from 'react';
+import { NavLink, Navigate, Route, Routes, useNavigate } from 'react-router-dom';
+import { useEffect, useRef, useState } from 'react';
 import { onOnlineChange, isOnline, pullProducts, reconnectRealtime } from './sync';
 import { refreshShift } from './shift';
 import { useAuth, logout } from './auth';
@@ -22,6 +22,7 @@ function OnlineBadge() {
 
 export default function App() {
   const user = useAuth();
+  const navigate = useNavigate();
 
   // После входа подтягиваем каталог, смену и переподключаем realtime
   // под новой ролью (сервер шлёт кассиру не то же, что владельцу).
@@ -31,6 +32,16 @@ export default function App() {
       refreshShift();
       reconnectRealtime();
     }
+  }, [user?.id]);
+
+  // Вход всегда открывает экран продажи — и владельцу, и кассиру.
+  // Отслеживаем именно переход «не был залогинен → вошёл», иначе перезагрузка
+  // страницы сбрасывала бы пользователя с того экрана, где он был.
+  const prevUserId = useRef<string | null>(user?.id ?? null);
+  useEffect(() => {
+    const wasLoggedIn = prevUserId.current;
+    prevUserId.current = user?.id ?? null;
+    if (user && !wasLoggedIn) navigate('/sale', { replace: true });
   }, [user?.id]);
 
   if (!user) return <LoginPage />;
@@ -51,7 +62,7 @@ export default function App() {
 
       <main className="content">
         <Routes>
-          <Route path="/" element={<Navigate to={owner ? '/dashboard' : '/sale'} replace />} />
+          <Route path="/" element={<Navigate to="/sale" replace />} />
           <Route path="/dashboard" element={owner ? <DashboardPage /> : <Navigate to="/sale" replace />} />
           <Route path="/sale" element={<SalePage />} />
           <Route path="/shift" element={<ShiftPage />} />
