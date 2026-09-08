@@ -667,3 +667,65 @@ kbd {
   font-size: 14px;
   color: var(--off);
 }
+
+/* ==========================================================================
+   Принудительная раскладка через ?layout=desktop / ?layout=mobile.
+   Нужна, чтобы посмотреть экран кассы с телефона и наоборот.
+   ========================================================================== */
+.force-desktop .app {
+  max-width: none;
+  grid-template-columns: 200px 1fr;
+  grid-template-rows: auto 1fr;
+  grid-template-areas: 'nav topbar' 'nav content';
+}
+.force-desktop .tabbar {
+  flex-direction: column;
+  justify-content: flex-start;
+  gap: 4px;
+  border-top: none;
+  border-right: 1px solid var(--surface-2);
+  padding: 16px 10px;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+.force-desktop .tab {
+  flex: 0 0 auto;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 10px;
+  font-size: 15px;
+}
+.force-desktop .tab.active { background: var(--surface-2); color: var(--primary); }
+.force-desktop .page--sale-desk {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 340px);
+  gap: 16px;
+  align-items: start;
+  height: 100%;
+  max-width: none;
+}
+.force-desktop .sale-main { display: flex; flex-direction: column; min-height: 0; height: 100%; }
+.force-desktop .sale-side {
+  position: sticky; top: 0; display: flex; flex-direction: column; gap: 12px;
+  max-height: calc(100vh - 110px); overflow-y: auto;
+}
+.force-desktop .btn--clear { margin-top: 12px; flex: 0 0 auto; align-self: flex-start; padding: 10px 18px; }
+
+/* Обратный режим: смотрим мобильную раскладку на широком экране. */
+.force-mobile .app {
+  max-width: 640px;
+  grid-template-columns: 1fr;
+  grid-template-rows: auto 1fr auto;
+  grid-template-areas: 'topbar' 'content' 'nav';
+}
+.force-mobile .tabbar {
+  flex-direction: row;
+  border-top: 1px solid var(--surface-2);
+  border-right: none;
+  padding: 0;
+}
+.force-mobile .tab { flex-direction: column; gap: 3px; padding: 10px; font-size: 12px; }
