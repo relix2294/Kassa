@@ -1,6 +1,6 @@
 import { db, type CartLine } from './db';
 import type { Product } from './types';
-import { logLineCancel } from './sync';
+import { logLineCancel, logCartClear } from './sync';
 
 // Операции с открытым чеком (корзиной). Всё пишется в Dexie, поэтому
 // чек не теряется при перезагрузке или обрыве сети (п.8 ТЗ).
@@ -30,15 +30,26 @@ export async function setQty(barcode: string, qty: number) {
 }
 
 // Удаление позиции из чека — фиксируем в журнале.
-export async function removeLine(barcode: string, userId?: string) {
+export async function removeLine(barcode: string) {
   const line = await db.cart.get(barcode);
   await db.cart.delete(barcode);
   if (line) {
-    logLineCancel({ barcode: line.barcode, name: line.name, qty: line.qty }, userId);
+    logLineCancel({ barcode: line.barcode, name: line.name, qty: line.qty });
   }
 }
 
-export async function clearCart() {
+// Очистка чека — это удаление уже набранных позиций. По ТЗ чек нельзя
+// удалить бесследно, поэтому пишем в журнал состав и сумму.
+export async function clearCart(logIt = false) {
+  if (logIt) {
+    const lines = await db.cart.toArray();
+    if (lines.length > 0) {
+      logCartClear({
+        items: lines.map((l) => ({ name: l.name, qty: l.qty })),
+        total: cartTotal(lines),
+      });
+    }
+  }
   await db.cart.clear();
 }
 

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { db } from '../db';
 import { api } from '../api';
+import { useGuardedClose } from '../components/Confirm';
 
 interface CountLine {
   barcode: string;
@@ -20,6 +21,7 @@ export default function InventoryPanel({ onClose, onDone }: { onClose: () => voi
   const [result, setResult] = useState<any | null>(null);
   const [busy, setBusy] = useState(false);
   const scanRef = useRef<HTMLInputElement>(null);
+  const { requestClose, guard } = useGuardedClose(lines.length > 0, onClose);
 
   useEffect(() => {
     scanRef.current?.focus();
@@ -95,7 +97,7 @@ export default function InventoryPanel({ onClose, onDone }: { onClose: () => voi
   }
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
+    <div className="modal-backdrop" onClick={requestClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <h2>Инвентаризация</h2>
         <p className="muted">Сканируйте товар и вводите фактическое количество.</p>
@@ -165,7 +167,7 @@ export default function InventoryPanel({ onClose, onDone }: { onClose: () => voi
         </label>
 
         <div className="row">
-          <button className="btn" onClick={onClose} disabled={busy}>
+          <button className="btn" onClick={requestClose} disabled={busy}>
             Отмена
           </button>
           <button className="btn btn--primary" onClick={save} disabled={busy || lines.length === 0}>
@@ -173,6 +175,7 @@ export default function InventoryPanel({ onClose, onDone }: { onClose: () => voi
           </button>
         </div>
       </div>
+      {guard}
     </div>
   );
 }

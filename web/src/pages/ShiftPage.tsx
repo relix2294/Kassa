@@ -12,6 +12,7 @@ export default function ShiftPage() {
   const [amount, setAmount] = useState('');
   const [closed, setClosed] = useState<any | null>(null);
   const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
 
   // Промежуточный расчёт по открытой смене.
   async function loadStats() {
@@ -32,10 +33,14 @@ export default function ShiftPage() {
 
   async function doOpen() {
     setBusy(true);
+    setErr(null);
     try {
       await openShift(Number(amount) || 0);
       setMode('view');
       setAmount('');
+    } catch (e: any) {
+      // Раньше ошибка гасилась молча: кассир жал кнопку, и ничего не происходило.
+      setErr(e?.message || 'Не удалось открыть смену');
     } finally {
       setBusy(false);
     }
@@ -43,11 +48,14 @@ export default function ShiftPage() {
 
   async function doClose() {
     setBusy(true);
+    setErr(null);
     try {
       const c = await closeShift(Number(amount) || 0);
       setClosed(c);
       setMode('view');
       setAmount('');
+    } catch (e: any) {
+      setErr(e?.message || 'Не удалось закрыть смену');
     } finally {
       setBusy(false);
     }
@@ -56,6 +64,8 @@ export default function ShiftPage() {
   return (
     <div className="page">
       <h1>Смена</h1>
+
+      {err && <div className="change change--neg">{err}</div>}
 
       {/* Итог только что закрытой смены */}
       {closed && (

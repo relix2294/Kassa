@@ -3,6 +3,7 @@ import { db } from '../db';
 import { completeReturn } from '../sync';
 import { useCurrentUser } from '../session';
 import { useShift } from '../shift';
+import { useGuardedClose } from '../components/Confirm';
 
 // Частые причины — чтобы кассир не писал руками и владельцу было что группировать.
 const REASONS = ['Брак', 'Не подошёл', 'Передумал', 'Ошибка кассира', 'Просрочен'];
@@ -23,6 +24,7 @@ export default function ReturnPanel({ onClose, onDone }: { onClose: () => void; 
   const [reason, setReason] = useState('');
   const [err, setErr] = useState<string | null>(null);
   const scanRef = useRef<HTMLInputElement>(null);
+  const { requestClose, guard } = useGuardedClose(lines.length > 0 || reason.trim() !== '', onClose);
 
   useEffect(() => {
     scanRef.current?.focus();
@@ -64,7 +66,7 @@ export default function ReturnPanel({ onClose, onDone }: { onClose: () => void; 
   }
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
+    <div className="modal-backdrop" onClick={requestClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <h2>Возврат товара</h2>
         <p className="muted">Товар вернётся на склад, деньги выйдут из кассы.</p>
@@ -121,7 +123,7 @@ export default function ReturnPanel({ onClose, onDone }: { onClose: () => void; 
         </div>
 
         <div className="row">
-          <button className="btn" onClick={onClose}>
+          <button className="btn" onClick={requestClose}>
             Отмена
           </button>
           <button
@@ -133,6 +135,7 @@ export default function ReturnPanel({ onClose, onDone }: { onClose: () => void; 
           </button>
         </div>
       </div>
+      {guard}
     </div>
   );
 }

@@ -10,6 +10,7 @@ import { useIsDesktop } from '../useMedia';
 import Keypad from '../components/Keypad';
 import PaymentForm from '../components/PaymentForm';
 import ReturnPanel from './ReturnPanel';
+import Confirm from '../components/Confirm';
 
 export default function SalePage() {
   const user = useCurrentUser();
@@ -22,6 +23,7 @@ export default function SalePage() {
   const [qtyEdit, setQtyEdit] = useState<CartLine | null>(null);
   const [returnOpen, setReturnOpen] = useState(false);
   const [changeDue, setChangeDue] = useState<number | null>(null);
+  const [askClear, setAskClear] = useState(false);
   const scanRef = useRef<HTMLInputElement>(null);
 
   const lines = useLiveQuery(() => db.cart.toArray(), [], [] as CartLine[]);
@@ -73,7 +75,7 @@ export default function SalePage() {
   async function pay(method: 'cash' | 'card', received?: number) {
     const due = method === 'cash' && received != null ? Number((received - total).toFixed(2)) : 0;
     try {
-      const items = lines.map((l) => ({ barcode: l.barcode, qty: l.qty }));
+      const items = lines.map((l) => ({ barcode: l.barcode, qty: l.qty, expected_price: l.unit_price }));
       const r = await completeSale(items, method, received, shift?.id);
       await clearCart();
       setPayOpen(false);
@@ -113,7 +115,7 @@ export default function SalePage() {
               +
             </button>
           </div>
-          <button className="cart-line__del" onClick={() => removeLine(l.barcode, user?.id)} title="Отменить позицию">
+          <button className="cart-line__del" onClick={() => removeLine(l.barcode)} title="Отменить позицию">
             ×
           </button>
         </div>
@@ -155,7 +157,7 @@ export default function SalePage() {
             {scanForm}
             {cart}
             {lines.length > 0 && (
-              <button className="btn btn--clear" onClick={() => clearCart()}>
+              <button className="btn btn--clear" onClick={() => setAskClear(true)}>
                 Очистить чек
               </button>
             )}
@@ -186,7 +188,7 @@ export default function SalePage() {
           {cart}
           {lines.length > 0 && (
             <div className="sale-footer">
-              <button className="btn" onClick={() => clearCart()}>
+              <button className="btn" onClick={() => setAskClear(true)}>
                 Очистить
               </button>
               <button className="btn btn--primary btn--pay" onClick={() => setPayOpen(true)}>
@@ -225,6 +227,20 @@ export default function SalePage() {
           <div className="change-screen__sum">{changeDue.toFixed(2)}</div>
           <button className="btn btn--primary btn--big change-screen__btn">Отдал, дальше</button>
         </div>
+      )}
+
+      {askClear && (
+        <Confirm
+          title="Очистить чек?"
+          text={`${lines.length} поз. на сумму ${total}. Действие попадёт в журнал.`}
+          confirmLabel="Очистить"
+          danger
+          onConfirm={async () => {
+            setAskClear(false);
+            await clearCart(true); // с записью в журнал
+          }}
+          onCancel={() => setAskClear(false)}
+        />
       )}
 
       {toast && <div className="toast">{toast}</div>}

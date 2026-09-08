@@ -44,6 +44,10 @@ export function logout() {
   user = null;
   localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(USER_KEY);
+  // Незакрытый чек и смена не должны достаться следующему кассиру.
+  // Импорт внутри функции — иначе получается цикл auth ↔ sync ↔ db.
+  import('./db').then(({ db }) => db.cart.clear()).catch(() => {});
+  import('./shift').then((m) => m.resetShift()).catch(() => {});
   notify();
 }
 

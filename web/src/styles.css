@@ -648,3 +648,6 @@ kbd {
   cursor: pointer;
   font-weight: 700;
 }
+
+.btn--danger { background: var(--danger); color: #fff; }
+.modal--confirm { max-width: 420px; }

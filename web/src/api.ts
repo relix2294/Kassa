@@ -38,7 +38,7 @@ export const api = {
     req<{ product: Product }>('/receiving', { method: 'POST', body: JSON.stringify(payload) }),
   createSale: (payload: {
     client_id: string;
-    items: { barcode: string; qty: number }[];
+    items: { barcode: string; qty: number; expected_price?: number }[];
     payment_method: 'cash' | 'card';
     cash_received?: number;
     shift_id?: string;
@@ -75,8 +75,8 @@ export const api = {
     req<{ id: string; total: number; payment_method: string; created_at: string; username: string | null; full_name: string | null; items: string }[]>(
       `/dashboard/recent-sales?limit=${limit}`,
     ),
-  logEvent: (type: string, details: any, user_id?: string) =>
-    req('/logs/event', { method: 'POST', body: JSON.stringify({ type, details, user_id }) }),
+  logEvent: (type: string, details: any) =>
+    req('/logs/event', { method: 'POST', body: JSON.stringify({ type, details }) }),
   login: (username: string, pin: string) =>
     req<{ token: string; user: User }>('/auth/login', {
       method: 'POST',

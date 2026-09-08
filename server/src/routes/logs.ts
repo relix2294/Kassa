@@ -6,7 +6,7 @@ import { requireOwner } from '../lib/auth.js';
 export const logsRouter = Router();
 
 // Разрешённые типы клиентских событий (прозрачность: отмена позиции и т.п.).
-const CLIENT_EVENTS = new Set(['line_cancel']);
+const CLIENT_EVENTS = new Set(['line_cancel', 'cart_clear']);
 
 // Записать событие с кассы в журнал (доступно любому авторизованному).
 logsRouter.post('/event', async (req, res) => {

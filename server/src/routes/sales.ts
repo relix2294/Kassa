@@ -86,7 +86,16 @@ salesRouter.post('/', async (req, res) => {
           };
         }
 
+        // Цену считаем свою (клиенту доверять нельзя — иначе можно прислать 0),
+        // но сверяем с той, что видел кассир. Если владелец поменял цену, пока
+        // чек набирали, — не пробиваем молча другую сумму.
         const unitPrice = Number(p.sale_price);
+        if (item.expected_price != null && Number(item.expected_price) !== unitPrice) {
+          throw {
+            status: 409,
+            message: `Цена «${p.name}» изменилась: было ${item.expected_price}, стало ${unitPrice}. Пересоберите чек.`,
+          };
+        }
         const unitCost = Number(p.cost_price);
         const lineTotal = Number((unitPrice * qty).toFixed(2));
         total += lineTotal;
@@ -171,6 +180,7 @@ salesRouter.post('/', async (req, res) => {
     res.status(201).json({ sale: saleFor(req, result.sale) });
   } catch (err: any) {
     if (err?.status === 400) return res.status(400).json({ error: err.message });
+    if (err?.status === 409) return res.status(409).json({ error: err.message });
     console.error('Ошибка продажи:', err);
     res.status(500).json({ error: 'internal' });
   }

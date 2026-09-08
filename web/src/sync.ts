@@ -106,7 +106,7 @@ async function applyOutboxItem(item: OutboxItem): Promise<Product | void> {
       await api.createReturn(item.payload);
       return;
     case 'log_event':
-      await api.logEvent(item.payload.type, item.payload.details, item.payload.user_id);
+      await api.logEvent(item.payload.type, item.payload.details);
       return;
   }
 }
@@ -252,7 +252,7 @@ async function adjustLocalStock(barcode: string, delta: number) {
 
 // Провести продажу. items — строки корзины. Возвращает сдачу.
 export async function completeSale(
-  items: { barcode: string; qty: number }[],
+  items: { barcode: string; qty: number; expected_price?: number }[],
   paymentMethod: 'cash' | 'card',
   cashReceived: number | undefined,
   shiftId?: string,
@@ -305,14 +305,18 @@ export async function completeReturn(
   }
 }
 
-// Отмена позиции в чеке — фиксируем в журнале (прозрачность).
-export async function logLineCancel(details: any, userId?: string) {
+// События прозрачности: отмена позиции и очистка чека. Никогда не теряем —
+// при любой ошибке кладём в очередь, иначе след пропадает (п.22 аудита).
+async function logEvent(type: string, details: any) {
   try {
-    await api.logEvent('line_cancel', details, userId);
-  } catch (err: any) {
-    if (err.status === undefined) await enqueue('log_event', { type: 'line_cancel', details, user_id: userId });
+    await api.logEvent(type, details);
+  } catch {
+    await enqueue('log_event', { type, details });
   }
 }
+
+export const logLineCancel = (details: any) => logEvent('line_cancel', details);
+export const logCartClear = (details: any) => logEvent('cart_clear', details);
 
 // --- Запуск ---
 export function initSync() {
