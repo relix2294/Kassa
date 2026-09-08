@@ -3,8 +3,34 @@ import { query, withTx } from '../db.js';
 import { writeLog } from '../lib/log.js';
 import { broadcast } from '../lib/realtime.js';
 import { getOpenShift } from './shifts.js';
+import { requireOwner } from '../lib/auth.js';
 
 export const returnsRouter = Router();
+
+// Список возвратов с позициями — только владелец.
+// Возврат идёт без чека, поэтому это главный контроль: владелец должен
+// видеть каждый возврат целиком (кто, что, сколько, почему).
+returnsRouter.get('/', requireOwner, async (req, res) => {
+  const limit = Math.min(Number(req.query.limit) || 100, 500);
+  const rows = await query(
+    `SELECT r.id, r.total, r.reason, r.created_at,
+            u.username, u.full_name,
+            COALESCE(
+              json_agg(
+                json_build_object('name', ri.name, 'qty', ri.qty, 'line_total', ri.line_total)
+                ORDER BY ri.name
+              ) FILTER (WHERE ri.id IS NOT NULL), '[]'
+            ) AS items
+       FROM returns r
+       LEFT JOIN users u ON u.id = r.user_id
+       LEFT JOIN return_items ri ON ri.return_id = r.id
+      GROUP BY r.id, u.username, u.full_name
+      ORDER BY r.created_at DESC
+      LIMIT $1`,
+    [limit],
+  );
+  res.json(rows);
+});
 
 // Возврат/обмен: товар возвращается на склад, деньги выходят из кассы.
 // Тело: { client_id, items:[{barcode, qty}], reason?, sale_id?, user_id }
@@ -14,6 +40,12 @@ returnsRouter.post('/', async (req, res) => {
 
   if (!Array.isArray(items) || items.length === 0) {
     return res.status(400).json({ error: 'Пустой возврат' });
+  }
+
+  // Возврат идёт без чека, поэтому причина обязательна: это единственный
+  // след, по которому владелец потом разберёт, что произошло.
+  if (!reason || String(reason).trim().length < 3) {
+    return res.status(400).json({ error: 'Укажите причину возврата' });
   }
 
   if (client_id) {

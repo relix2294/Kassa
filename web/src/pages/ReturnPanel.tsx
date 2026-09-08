@@ -3,6 +3,9 @@ import { db } from '../db';
 import { completeReturn } from '../sync';
 import { useCurrentUser } from '../session';
 
+// Частые причины — чтобы кассир не писал руками и владельцу было что группировать.
+const REASONS = ['Брак', 'Не подошёл', 'Передумал', 'Ошибка кассира', 'Просрочен'];
+
 interface RetLine {
   barcode: string;
   name: string;
@@ -43,9 +46,14 @@ export default function ReturnPanel({ onClose, onDone }: { onClose: () => void; 
   }
 
   async function confirm() {
+    // Возврат идёт без чека — причина обязательна, это единственный след.
+    if (reason.trim().length < 3) {
+      setErr('Укажите причину возврата');
+      return;
+    }
     try {
       const items = lines.map((l) => ({ barcode: l.barcode, qty: l.qty, unit_price: l.unit_price }));
-      const r = await completeReturn(items, reason || undefined, user?.id);
+      const r = await completeReturn(items, reason.trim(), user?.id);
       onDone(r.queued ? 'Нет сети — возврат в очереди' : `Возврат оформлен: −${total}`);
       onClose();
     } catch (e: any) {
@@ -89,16 +97,36 @@ export default function ReturnPanel({ onClose, onDone }: { onClose: () => void; 
           ))}
         </div>
 
-        <label className="field">
-          <span>Причина (необязательно)</span>
-          <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="напр. брак" />
-        </label>
+        <div className="field">
+          <span>Причина возврата — обязательно</span>
+          <div className="reasons">
+            {REASONS.map((r) => (
+              <button
+                key={r}
+                type="button"
+                className={`chip ${reason === r ? 'chip--on' : ''}`}
+                onClick={() => setReason(r)}
+              >
+                {r}
+              </button>
+            ))}
+          </div>
+          <input
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            placeholder="или напишите свою"
+          />
+        </div>
 
         <div className="row">
           <button className="btn" onClick={onClose}>
             Отмена
           </button>
-          <button className="btn btn--primary" disabled={lines.length === 0} onClick={confirm}>
+          <button
+            className="btn btn--primary"
+            disabled={lines.length === 0 || reason.trim().length < 3}
+            onClick={confirm}
+          >
             Вернуть {total > 0 ? `−${total}` : ''}
           </button>
         </div>

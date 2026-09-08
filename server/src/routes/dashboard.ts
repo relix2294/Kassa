@@ -44,16 +44,18 @@ dashboardRouter.get('/summary', async (req, res) => {
 
   const revenue = Number(sales.revenue);
   const cost = Number(sales.cost);
+  const refundsTotal = Number(refunds.total);
 
   res.json({
     period,
     receipts: Number(sales.receipts),
-    revenue,
+    revenue,                                              // пробито по чекам
+    net_revenue: Number((revenue - refundsTotal).toFixed(2)), // за вычетом возвратов
     margin: Number((revenue - cost).toFixed(2)),
     cash: Number(sales.cash),
     card: Number(sales.card),
     refunds_count: Number(refunds.count),
-    refunds_total: Number(refunds.total),
+    refunds_total: refundsTotal,
   });
 });
 

@@ -6,7 +6,7 @@ import { onRealtimeEvent } from '../sync';
 import type { LogRow, Product } from '../types';
 
 type Period = 'today' | 'week' | 'month' | 'all';
-type Tab = 'sales' | 'stock' | 'log';
+type Tab = 'sales' | 'returns' | 'stock' | 'log';
 
 const PERIOD_LABEL: Record<Period, string> = {
   today: 'Сегодня',
@@ -64,7 +64,11 @@ export default function DashboardPage() {
 
       {summary && (
         <div className="kpi-grid">
-          <Kpi label="Выручка" value={summary.revenue} big />
+          <Kpi
+            label={summary.refunds_total > 0 ? 'Выручка за вычетом возвратов' : 'Выручка'}
+            value={summary.net_revenue ?? summary.revenue}
+            big
+          />
           <Kpi label="Маржа" value={summary.margin} big accent />
           <Kpi label="Чеков" value={summary.receipts} />
           <Kpi label="Наличными" value={summary.cash} />
@@ -77,6 +81,9 @@ export default function DashboardPage() {
         <button className={`seg__btn ${tab === 'sales' ? 'seg__btn--on' : ''}`} onClick={() => setTab('sales')}>
           Продажи
         </button>
+        <button className={`seg__btn ${tab === 'returns' ? 'seg__btn--on' : ''}`} onClick={() => setTab('returns')}>
+          Возвраты
+        </button>
         <button className={`seg__btn ${tab === 'stock' ? 'seg__btn--on' : ''}`} onClick={() => setTab('stock')}>
           Остатки
         </button>
@@ -86,6 +93,7 @@ export default function DashboardPage() {
       </div>
 
       {tab === 'sales' && <SalesTab top={top} recent={recent} />}
+      {tab === 'returns' && <ReturnsTab />}
       {tab === 'stock' && <StockTab />}
       {tab === 'log' && <LogTab />}
     </div>
@@ -144,6 +152,72 @@ function SalesTab({ top, recent }: { top: any[]; recent: any[] }) {
               <div className="muted">
                 {new Date(s.created_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })} ·{' '}
                 {s.full_name || s.username} · {s.items} поз.
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </>
+  );
+}
+
+// Возвраты идут без чека, поэтому владелец должен видеть каждый целиком:
+// кто оформил, что вернули, на сколько и по какой причине.
+function ReturnsTab() {
+  const [rows, setRows] = useState<any[]>([]);
+
+  const load = useCallback(() => {
+    api.listReturns(100).then(setRows).catch(() => {});
+  }, []);
+  useEffect(() => {
+    load();
+  }, [load]);
+  useEffect(() => onRealtimeEvent((t) => t === 'return' && load()), [load]);
+
+  if (rows.length === 0) return <p className="hint">Возвратов пока не было.</p>;
+
+  // Сводка по кассирам — сразу видно, у кого возвратов заметно больше.
+  const byUser = new Map<string, { count: number; total: number }>();
+  for (const r of rows) {
+    const who = r.full_name || r.username || '—';
+    const cur = byUser.get(who) ?? { count: 0, total: 0 };
+    byUser.set(who, { count: cur.count + 1, total: cur.total + Number(r.total) });
+  }
+
+  return (
+    <>
+      <h2 className="sect">Кто оформлял</h2>
+      <div className="list">
+        {[...byUser.entries()]
+          .sort((a, b) => b[1].total - a[1].total)
+          .map(([who, s]) => (
+            <div key={who} className="list-item list-item--static">
+              <div className="list-item__main">
+                <div className="list-item__name">{who}</div>
+                <div className="muted">{s.count} возвратов</div>
+              </div>
+              <div className="stock stock--low">−{s.total.toFixed(2)}</div>
+            </div>
+          ))}
+      </div>
+
+      <h2 className="sect">Все возвраты</h2>
+      <div className="list">
+        {rows.map((r) => (
+          <div key={r.id} className="list-item list-item--static list-item--alert">
+            <div className="list-item__main">
+              <div className="list-item__name">
+                −{Number(r.total).toFixed(2)} · {r.reason || 'без причины'}
+              </div>
+              <div className="muted">
+                {new Date(r.created_at).toLocaleString('ru-RU', {
+                  day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit',
+                })}
+                {' · '}
+                {r.full_name || r.username}
+              </div>
+              <div className="log-details">
+                {r.items.map((i: any) => `${i.name} × ${i.qty}`).join(', ')}
               </div>
             </div>
           </div>
