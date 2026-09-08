@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { db } from '../db';
 import { api } from '../api';
 import { useGuardedClose } from '../components/Confirm';
+import { useShift } from '../shift';
 
 interface CountLine {
   barcode: string;
@@ -22,6 +23,7 @@ export default function InventoryPanel({ onClose, onDone }: { onClose: () => voi
   const [busy, setBusy] = useState(false);
   const scanRef = useRef<HTMLInputElement>(null);
   const { requestClose, guard } = useGuardedClose(lines.length > 0, onClose);
+  const { shift } = useShift();
 
   useEffect(() => {
     scanRef.current?.focus();
@@ -101,6 +103,13 @@ export default function InventoryPanel({ onClose, onDone }: { onClose: () => voi
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <h2>Инвентаризация</h2>
         <p className="muted">Сканируйте товар и вводите фактическое количество.</p>
+
+        {shift && (
+          <div className="warn">
+            Смена открыта — если сейчас пробивают чеки, остаток меняется прямо
+            во время пересчёта и недостача посчитается неверно.
+          </div>
+        )}
 
         <form
           onSubmit={(e) => {

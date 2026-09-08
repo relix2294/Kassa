@@ -3,6 +3,7 @@ import { withTx } from '../db.js';
 import { writeLog } from '../lib/log.js';
 import { broadcast } from '../lib/realtime.js';
 import { productFor } from '../lib/sanitize.js';
+import { getOpenShift } from './shifts.js';
 
 export const receivingRouter = Router();
 
@@ -25,6 +26,11 @@ receivingRouter.post('/', async (req, res) => {
   if (isOwner && !(costNum! >= 0)) {
     return res.status(400).json({ error: 'cost_price >= 0' });
   }
+
+  // Приём привязываем к смене, чтобы можно было спросить «что принимали
+  // в смену Азиза» (п.16 аудита). Смена не обязательна: товар могут принять
+  // и вне смены, тогда shift_id останется пустым.
+  const openShift = await getOpenShift(user_id);
 
   try {
     const result = await withTx(async (client) => {
@@ -61,10 +67,10 @@ receivingRouter.post('/', async (req, res) => {
       );
 
       const receipt = await client.query(
-        `INSERT INTO stock_receipts (product_id, qty, cost_price, user_id)
-         VALUES ($1, $2, $3, $4)
+        `INSERT INTO stock_receipts (product_id, qty, cost_price, user_id, shift_id)
+         VALUES ($1, $2, $3, $4, $5)
          RETURNING *`,
-        [product.id, qtyNum, batchCost, user_id ?? null],
+        [product.id, qtyNum, batchCost, user_id ?? null, openShift?.id ?? null],
       );
 
       await writeLog(

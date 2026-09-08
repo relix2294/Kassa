@@ -145,7 +145,8 @@ export default function ShiftPage() {
         </div>
       )}
 
-      {/* Владелец: история смен всех кассиров */}
+      {/* Владелец: чужие незакрытые смены и история */}
+      {user?.role === 'owner' && <OpenShifts meId={user.id} onDone={() => setErr(null)} />}
       {user?.role === 'owner' && <OwnerShifts />}
     </div>
   );
@@ -156,6 +157,72 @@ function Row({ label, value }: { label: string; value: number }) {
     <div className="shift-row">
       <span className="muted">{label}</span>
       <b>{value}</b>
+    </div>
+  );
+}
+
+// Кассир мог уйти домой, не закрыв смену. Владелец закрывает за него,
+// и в журнале видно, что закрыл именно владелец (п.26 аудита).
+function OpenShifts({ meId, onDone }: { meId: string; onDone: () => void }) {
+  const [rows, setRows] = useState<any[]>([]);
+  const [closing, setClosing] = useState<any | null>(null);
+  const [amount, setAmount] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const load = () => api.openShifts().then((r) => setRows(r.filter((s: any) => s.user_id !== meId))).catch(() => {});
+  useEffect(() => { load(); }, []);
+
+  if (rows.length === 0) return null;
+
+  return (
+    <div className="shift-history">
+      <h2>Незакрытые смены сотрудников</h2>
+      <div className="list">
+        {rows.map((s) => (
+          <div key={s.id} className="list-item list-item--static list-item--alert">
+            <div className="list-item__main">
+              <div className="list-item__name">{s.full_name || s.username}</div>
+              <div className="muted">открыта {new Date(s.opened_at).toLocaleString('ru-RU')}</div>
+            </div>
+            <button className="btn btn--ghost" onClick={() => { setClosing(s); setAmount(''); }}>
+              Закрыть
+            </button>
+          </div>
+        ))}
+      </div>
+
+      {closing && (
+        <div className="modal-backdrop" onClick={() => setClosing(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <h2>Закрыть смену: {closing.full_name || closing.username}</h2>
+            <label className="field">
+              <span>Сколько денег в кассе фактически</span>
+              <div className="keypad-value">{amount || '0'}</div>
+            </label>
+            <Keypad value={amount} onChange={setAmount} allowDecimal />
+            <div className="row">
+              <button className="btn" onClick={() => setClosing(null)} disabled={busy}>Отмена</button>
+              <button
+                className="btn btn--primary"
+                disabled={busy}
+                onClick={async () => {
+                  setBusy(true);
+                  try {
+                    await closeShift(Number(amount) || 0, closing.user_id);
+                    setClosing(null);
+                    load();
+                    onDone();
+                  } finally {
+                    setBusy(false);
+                  }
+                }}
+              >
+                Закрыть смену
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

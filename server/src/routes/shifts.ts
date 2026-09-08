@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { query } from '../db.js';
 import { writeLog } from '../lib/log.js';
 import { broadcast } from '../lib/realtime.js';
+import { requireOwner } from '../lib/auth.js';
 
 export const shiftsRouter = Router();
 
@@ -83,9 +84,18 @@ shiftsRouter.post('/open', async (req, res) => {
 });
 
 // Закрыть смену: считаем ожидаемое, сравниваем с фактически сданным.
+// Владелец может закрыть чужую смену: кассир мог уйти домой, не закрыв её (п.26).
 shiftsRouter.post('/close', async (req, res) => {
   const counted = Number(req.body?.counted_cash ?? 0);
-  const shift = await getOpenShift(req.user!.id);
+  const targetUserId = req.body?.user_id;
+
+  let shift: any;
+  if (targetUserId && targetUserId !== req.user!.id) {
+    if (req.user!.role !== 'owner') return res.status(403).json({ error: 'owner_only' });
+    shift = await getOpenShift(targetUserId);
+  } else {
+    shift = await getOpenShift(req.user!.id);
+  }
   if (!shift) return res.status(409).json({ error: 'no_open_shift' });
 
   const expected = await computeExpected(shift);
@@ -103,7 +113,11 @@ shiftsRouter.post('/close', async (req, res) => {
 
   await writeLog({
     type: 'shift_close', entity: 'shift', entityId: shift.id, userId: req.user!.id,
-    details: { expected, counted, difference },
+    details: {
+      expected, counted, difference,
+      // Видно, если смену закрыл не тот, кто её открывал.
+      closed_by_owner: shift.user_id !== req.user!.id || undefined,
+    },
   });
   // Расхождение — отдельным событием (владелец должен видеть).
   if (difference !== 0) {
@@ -114,6 +128,16 @@ shiftsRouter.post('/close', async (req, res) => {
   }
   broadcast('shift', closed);
   res.json({ shift: closed });
+});
+
+// Открытые смены (владельцу) — чтобы закрыть за ушедшего кассира.
+shiftsRouter.get('/open', requireOwner, async (_req, res) => {
+  const rows = await query(
+    `SELECT s.*, u.username, u.full_name
+       FROM shifts s JOIN users u ON u.id = s.user_id
+      WHERE s.status = 'open' ORDER BY s.opened_at`,
+  );
+  res.json(rows);
 });
 
 // Список смен. Владелец видит все, кассир — только свои (п.4 ТЗ).

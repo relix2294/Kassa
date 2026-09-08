@@ -9,10 +9,14 @@ dashboardRouter.use(requireOwner);
 
 // Сводка за период: выручка, маржа, чеки, возвраты.
 // period: today | week | month | all (или произвольные from/to в ISO)
+// Часовой пояс магазина: без него «сегодня» считается по времени сервера,
+// и выручка за день съезжает, если сервер в другой зоне (п.27 аудита).
+const TZ = process.env.STORE_TIMEZONE || 'Asia/Dushanbe';
+
 function periodClause(period: string): string {
   switch (period) {
     case 'today':
-      return `created_at >= date_trunc('day', now())`;
+      return `created_at >= date_trunc('day', now() AT TIME ZONE '${TZ}') AT TIME ZONE '${TZ}'`;
     case 'week':
       return `created_at >= now() - interval '7 days'`;
     case 'month':
@@ -62,11 +66,11 @@ dashboardRouter.get('/summary', async (req, res) => {
 // Продажи по часам за сегодня — для мини-графика «продажи сейчас».
 dashboardRouter.get('/today-hours', async (_req, res) => {
   const rows = await query(
-    `SELECT EXTRACT(HOUR FROM created_at)::int AS hour,
+    `SELECT EXTRACT(HOUR FROM created_at AT TIME ZONE '${TZ}')::int AS hour,
             COALESCE(SUM(total),0) AS revenue,
             COUNT(*) AS receipts
        FROM sales
-      WHERE created_at >= date_trunc('day', now())
+      WHERE created_at >= date_trunc('day', now() AT TIME ZONE '${TZ}') AT TIME ZONE '${TZ}'
       GROUP BY 1 ORDER BY 1`,
   );
   res.json(rows);

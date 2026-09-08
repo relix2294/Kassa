@@ -651,3 +651,19 @@ kbd {
 
 .btn--danger { background: var(--danger); color: #fff; }
 .modal--confirm { max-width: 420px; }
+
+/* Предпросмотр массовой смены цен. */
+.preview { background: var(--bg); border: 1px solid var(--surface-2); border-radius: 10px; padding: 12px; }
+.preview__title { font-size: 13px; color: var(--muted); margin-bottom: 8px; }
+.preview__row { display: flex; justify-content: space-between; gap: 12px; padding: 3px 0; font-size: 14px; }
+.preview__name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Предупреждение (инвентаризация во время смены). */
+.warn {
+  background: rgba(245, 158, 11, 0.12);
+  border-left: 3px solid var(--off);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 14px;
+  color: var(--off);
+}

@@ -22,7 +22,9 @@ analyticsRouter.get('/restock', async (_req, res) => {
      )
      SELECT p.id, p.barcode, p.name, p.category, p.stock, p.min_stock, p.cost_price,
             COALESCE(sold.qty_30d, 0) AS sold_30d,
-            CASE WHEN COALESCE(sold.qty_30d,0) > 0
+            -- Прогноз имеет смысл только если товар продавался регулярно.
+            -- Для одной-двух продаж за месяц он вводит в заблуждение (п.25).
+            CASE WHEN COALESCE(sold.qty_30d,0) >= 5
                  THEN ROUND(p.stock / (sold.qty_30d / 30.0), 1)
                  ELSE NULL END AS days_left
        FROM products p

@@ -1,5 +1,8 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api';
+import { db } from '../db';
+import { useLiveQuery } from 'dexie-react-hooks';
+import type { Product } from '../types';
 
 // Массовая смена цен по категории (п.6 ТЗ).
 export default function BulkPricePanel({ onClose, onDone }: { onClose: () => void; onDone: (msg: string) => void }) {
@@ -10,6 +13,23 @@ export default function BulkPricePanel({ onClose, onDone }: { onClose: () => voi
   const [value, setValue] = useState('');
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  // Предпросмотр: владелец должен видеть, что именно изменится, до нажатия.
+  // Опечатка в проценте (500 вместо 50) иначе молча переписывает всю категорию.
+  const products = useLiveQuery(() => db.products.toArray(), [], [] as Product[]);
+  const preview = (() => {
+    const num = Number(value);
+    if (!category || !Number.isFinite(num)) return [];
+    return products
+      .filter((p) => (p.category ?? '') === category)
+      .slice(0, 8)
+      .map((p) => {
+        const old = Number(field === 'sale_price' ? p.sale_price : p.cost_price ?? 0);
+        const next = mode === 'percent' ? Number((old * (1 + num / 100)).toFixed(2)) : num;
+        return { name: p.name, old, next };
+      });
+  })();
+  const affected = products.filter((p) => (p.category ?? '') === category).length;
 
   useEffect(() => {
     api.categories().then(setCats).catch(() => {});
@@ -82,6 +102,21 @@ export default function BulkPricePanel({ onClose, onDone }: { onClose: () => voi
           <span>{mode === 'percent' ? 'Процент (напр. 10 или −5)' : 'Новая цена'}</span>
           <input inputMode="decimal" value={value} onChange={(e) => setValue(e.target.value)} placeholder={mode === 'percent' ? '10' : '15'} />
         </label>
+
+        {preview.length > 0 && (
+          <div className="preview">
+            <div className="preview__title">Как изменится — {affected} товаров</div>
+            {preview.map((r) => (
+              <div key={r.name} className="preview__row">
+                <span className="preview__name">{r.name}</span>
+                <span className="muted">
+                  {r.old} → <b className={r.next > r.old ? 'diff-pos' : r.next < r.old ? 'diff-neg' : ''}>{r.next}</b>
+                </span>
+              </div>
+            ))}
+            {affected > preview.length && <div className="muted">…и ещё {affected - preview.length}</div>}
+          </div>
+        )}
 
         {err && <div className="change change--neg">{err}</div>}
 

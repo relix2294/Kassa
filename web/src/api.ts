@@ -62,8 +62,9 @@ export const api = {
   currentShift: () => req<{ shift: any | null; expected?: number; stats?: any }>('/shifts/current'),
   openShift: (opening_cash: number) =>
     req<{ shift: any }>('/shifts/open', { method: 'POST', body: JSON.stringify({ opening_cash }) }),
-  closeShift: (counted_cash: number) =>
-    req<{ shift: any }>('/shifts/close', { method: 'POST', body: JSON.stringify({ counted_cash }) }),
+  closeShift: (counted_cash: number, user_id?: string) =>
+    req<{ shift: any }>('/shifts/close', { method: 'POST', body: JSON.stringify({ counted_cash, user_id }) }),
+  openShifts: () => req<any[]>('/shifts/open'),
   listShifts: (limit = 100) => req<any[]>(`/shifts?limit=${limit}`),
   summary: (period: string) =>
     req<{

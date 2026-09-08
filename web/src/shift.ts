@@ -53,10 +53,10 @@ export async function openShift(openingCash: number) {
   return shift;
 }
 
-export async function closeShift(countedCash: number) {
-  const { shift } = await api.closeShift(countedCash);
-  current = null; // смена закрыта
-  localStorage.removeItem(CACHE_KEY);
+export async function closeShift(countedCash: number, userId?: string) {
+  const { shift } = await api.closeShift(countedCash, userId);
+  if (!userId) current = null; // закрыли свою смену
+  if (!userId) localStorage.removeItem(CACHE_KEY);
   notify();
   return shift; // закрытая смена с расчётом расхождения
 }

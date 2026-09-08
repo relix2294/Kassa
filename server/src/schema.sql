@@ -43,6 +43,8 @@ CREATE TABLE IF NOT EXISTS stock_receipts (
   created_at  timestamptz NOT NULL DEFAULT now()
 );
 
+ALTER TABLE stock_receipts ADD COLUMN IF NOT EXISTS shift_id uuid;
+
 CREATE INDEX IF NOT EXISTS idx_receipts_product ON stock_receipts(product_id);
 CREATE INDEX IF NOT EXISTS idx_receipts_created ON stock_receipts(created_at);
 
