@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { query, withTx } from '../db.js';
 import { writeLog } from '../lib/log.js';
 import { broadcast } from '../lib/realtime.js';
-import { getOpenShift } from './shifts.js';
+import { getOpenShift, recomputeClosedShift } from './shifts.js';
 import { requireOwner } from '../lib/auth.js';
 
 export const returnsRouter = Router();
@@ -53,9 +53,21 @@ returnsRouter.post('/', async (req, res) => {
     if (existing.length > 0) return res.status(200).json({ ret: existing[0], duplicate: true });
   }
 
-  // Возврат — тоже движение денег в кассе, нужна открытая смена.
-  const shift = await getOpenShift(user_id);
-  if (!shift) return res.status(409).json({ error: 'no_shift' });
+  // Возврат — тоже движение денег: привязываем к своей смене, даже если она
+  // уже закрыта (возврат мог быть отложен обрывом сети).
+  const { shift_id } = req.body ?? {};
+  let shift: any = null;
+  let lateToClosedShift = false;
+
+  if (shift_id) {
+    const rows = await query(`SELECT * FROM shifts WHERE id = $1 AND user_id = $2`, [shift_id, user_id]);
+    shift = rows[0] ?? null;
+    if (!shift) return res.status(400).json({ error: 'Смена не найдена или чужая' });
+    lateToClosedShift = shift.status === 'closed';
+  } else {
+    shift = await getOpenShift(user_id);
+    if (!shift) return res.status(409).json({ error: 'no_shift' });
+  }
 
   try {
     const result = await withTx(async (client) => {
@@ -117,6 +129,15 @@ returnsRouter.post('/', async (req, res) => {
 
       return { ret: retRow, changedProducts };
     });
+
+    if (lateToClosedShift) {
+      const updated = await recomputeClosedShift(shift.id);
+      await writeLog({
+        type: 'late_return', entity: 'shift', entityId: shift.id, userId: user_id,
+        details: { return_id: result.ret.id, total: result.ret.total, new_difference: updated?.difference },
+      });
+      if (updated) broadcast('shift', updated);
+    }
 
     result.changedProducts.forEach((p) => broadcast('product_upsert', p, 'all'));
     broadcast('return', result.ret);

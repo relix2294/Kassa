@@ -11,6 +11,7 @@ import StaffPage from './pages/StaffPage';
 import ShiftPage from './pages/ShiftPage';
 import DashboardPage from './pages/DashboardPage';
 import AnalyticsPage from './pages/AnalyticsPage';
+import QueuePage, { QueueBadge } from './pages/QueuePage';
 
 function OnlineBadge() {
   const [online, setOnline] = useState(isOnline);
@@ -53,6 +54,7 @@ export default function App() {
       <header className="topbar">
         <div className="brand">Kassa</div>
         <div className="topbar__right">
+          <QueueBadge onOpen={() => navigate('/queue')} />
           <OnlineBadge />
           <button className="user-chip" onClick={logout} title="Выйти">
             {user.full_name || user.username} ⏻
@@ -66,6 +68,7 @@ export default function App() {
           <Route path="/dashboard" element={owner ? <DashboardPage /> : <Navigate to="/sale" replace />} />
           <Route path="/sale" element={<SalePage />} />
           <Route path="/shift" element={<ShiftPage />} />
+          <Route path="/queue" element={<QueuePage />} />
           <Route path="/receiving" element={<ReceivingPage />} />
           <Route path="/products" element={owner ? <ProductsPage /> : <Navigate to="/sale" replace />} />
           <Route path="/analytics" element={owner ? <AnalyticsPage /> : <Navigate to="/sale" replace />} />

@@ -11,6 +11,13 @@ export interface OutboxItem {
   payload: any;
   createdAt: number;
   tries: number;
+  // Кто совершил операцию. Отправляем только под этим же пользователем, иначе
+  // сервер запишет чек на того, кто вошёл позже.
+  userId?: string;
+  // Операция не прошла и требует внимания владельца. Не удаляем никогда:
+  // молча потерянный чек — это потерянные деньги без следа.
+  failed?: 0 | 1;
+  lastError?: string;
 }
 
 // Строка открытого чека (живёт локально — не теряется при обрыве/перезагрузке).
@@ -37,6 +44,12 @@ class KassaDB extends Dexie {
     this.version(2).stores({
       products: 'id, barcode, name, category',
       outbox: '++id, kind, createdAt',
+      cart: 'barcode',
+    });
+    // v3: очередь знает автора операции и умеет помечать проблемные.
+    this.version(3).stores({
+      products: 'id, barcode, name, category',
+      outbox: '++id, kind, createdAt, userId, failed',
       cart: 'barcode',
     });
   }

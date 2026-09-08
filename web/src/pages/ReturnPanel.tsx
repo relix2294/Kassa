@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { db } from '../db';
 import { completeReturn } from '../sync';
 import { useCurrentUser } from '../session';
+import { useShift } from '../shift';
 
 // Частые причины — чтобы кассир не писал руками и владельцу было что группировать.
 const REASONS = ['Брак', 'Не подошёл', 'Передумал', 'Ошибка кассира', 'Просрочен'];
@@ -16,6 +17,7 @@ interface RetLine {
 // Возврат/обмен: товар возвращается на склад, деньги выходят из кассы (п.5 ТЗ).
 export default function ReturnPanel({ onClose, onDone }: { onClose: () => void; onDone: (msg: string) => void }) {
   const user = useCurrentUser();
+  const { shift } = useShift();
   const [barcode, setBarcode] = useState('');
   const [lines, setLines] = useState<RetLine[]>([]);
   const [reason, setReason] = useState('');
@@ -53,7 +55,7 @@ export default function ReturnPanel({ onClose, onDone }: { onClose: () => void; 
     }
     try {
       const items = lines.map((l) => ({ barcode: l.barcode, qty: l.qty, unit_price: l.unit_price }));
-      const r = await completeReturn(items, reason.trim(), user?.id);
+      const r = await completeReturn(items, reason.trim(), shift?.id);
       onDone(r.queued ? 'Нет сети — возврат в очереди' : `Возврат оформлен: −${total}`);
       onClose();
     } catch (e: any) {

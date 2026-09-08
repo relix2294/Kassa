@@ -4,7 +4,7 @@ import { writeLog } from '../lib/log.js';
 import { broadcast } from '../lib/realtime.js';
 import { requireOwner } from '../lib/auth.js';
 import { saleFor } from '../lib/sanitize.js';
-import { getOpenShift } from './shifts.js';
+import { getOpenShift, recomputeClosedShift } from './shifts.js';
 
 export const salesRouter = Router();
 
@@ -24,7 +24,7 @@ salesRouter.get('/', requireOwner, async (req, res) => {
 // Провести продажу (чек).
 // Тело: { client_id, items:[{barcode, qty}], payment_method, cash_received?, user_id }
 salesRouter.post('/', async (req, res) => {
-  const { client_id, items, payment_method, cash_received } = req.body ?? {};
+  const { client_id, items, payment_method, cash_received, shift_id } = req.body ?? {};
   const user_id = req.user!.id;
 
   if (!Array.isArray(items) || items.length === 0) {
@@ -42,9 +42,21 @@ salesRouter.post('/', async (req, res) => {
     }
   }
 
-  // Продавать можно только при открытой смене (п.4 ТЗ).
-  const shift = await getOpenShift(user_id);
-  if (!shift) return res.status(409).json({ error: 'no_shift' });
+  // Чек принадлежит той смене, в которую его пробили. Касса присылает свой
+  // shift_id — тогда отложенный при обрыве сети чек попадёт в нужную смену,
+  // даже если она уже закрыта, и не потеряется.
+  let shift: any = null;
+  let lateToClosedShift = false;
+
+  if (shift_id) {
+    const rows = await query(`SELECT * FROM shifts WHERE id = $1 AND user_id = $2`, [shift_id, user_id]);
+    shift = rows[0] ?? null;
+    if (!shift) return res.status(400).json({ error: 'Смена не найдена или чужая' });
+    lateToClosedShift = shift.status === 'closed';
+  } else {
+    shift = await getOpenShift(user_id);
+    if (!shift) return res.status(409).json({ error: 'no_shift' });
+  }
 
   try {
     const result = await withTx(async (client) => {
@@ -139,6 +151,20 @@ salesRouter.post('/', async (req, res) => {
 
       return { sale: saleRow, changedProducts };
     });
+
+    // Чек доехал в уже закрытую смену — пересчитываем её сверку и отмечаем
+    // это в журнале, чтобы владелец видел, откуда изменилось расхождение.
+    if (lateToClosedShift) {
+      const updated = await recomputeClosedShift(shift.id);
+      await writeLog({
+        type: 'late_sale',
+        entity: 'shift',
+        entityId: shift.id,
+        userId: user_id,
+        details: { sale_id: result.sale.id, total: result.sale.total, new_difference: updated?.difference },
+      });
+      if (updated) broadcast('shift', updated);
+    }
 
     result.changedProducts.forEach((p) => broadcast('product_upsert', p, 'all'));
     broadcast('sale', result.sale);

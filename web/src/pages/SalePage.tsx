@@ -74,7 +74,7 @@ export default function SalePage() {
     const due = method === 'cash' && received != null ? Number((received - total).toFixed(2)) : 0;
     try {
       const items = lines.map((l) => ({ barcode: l.barcode, qty: l.qty }));
-      const r = await completeSale(items, method, received, user?.id);
+      const r = await completeSale(items, method, received, shift?.id);
       await clearCart();
       setPayOpen(false);
       // Сдачу показываем крупно и держим на экране, пока кассир её отсчитывает.

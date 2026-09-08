@@ -639,3 +639,12 @@ kbd {
   .sale-side .payform__sum { font-size: 34px; }
   .sale-side .keypad-value { padding: 10px 14px; font-size: 22px; }
 }
+
+/* Индикатор непрошедших операций. */
+.badge--danger {
+  background: rgba(239, 68, 68, 0.18);
+  color: var(--danger);
+  border: none;
+  cursor: pointer;
+  font-weight: 700;
+}

@@ -11,6 +11,24 @@ export async function getOpenShift(userId: string) {
   return rows[0] ?? null;
 }
 
+// Пересчёт итогов уже закрытой смены — если в неё «доехал» отложенный чек
+// после закрытия. Иначе сверка кассы осталась бы неверной.
+export async function recomputeClosedShift(shiftId: string) {
+  const rows = await query(`SELECT * FROM shifts WHERE id = $1`, [shiftId]);
+  const shift = rows[0];
+  if (!shift || shift.status !== 'closed') return null;
+
+  const expected = await computeExpected(shift);
+  const counted = Number(shift.counted_cash ?? 0);
+  const difference = Number((counted - expected).toFixed(2));
+
+  const upd = await query(
+    `UPDATE shifts SET expected_cash = $2, difference = $3 WHERE id = $1 RETURNING *`,
+    [shiftId, expected, difference],
+  );
+  return upd[0];
+}
+
 // Сколько наличных должно быть в кассе по чекам этой смены.
 async function computeExpected(shift: any): Promise<number> {
   const cashSales = (

@@ -1,6 +1,6 @@
 import { db, type OutboxItem } from './db';
 import { api } from './api';
-import { getToken } from './auth';
+import { getToken, getUser } from './auth';
 import type { Product } from './types';
 
 // Слой синхронизации между локальной кассой и сервером.
@@ -112,30 +112,87 @@ async function applyOutboxItem(item: OutboxItem): Promise<Product | void> {
 }
 
 async function enqueue(kind: OutboxItem['kind'], payload: any) {
-  await db.outbox.add({ kind, payload, createdAt: Date.now(), tries: 0 });
+  await db.outbox.add({
+    kind,
+    payload,
+    createdAt: Date.now(),
+    tries: 0,
+    userId: getUser()?.id, // операцию отправим только под этим же пользователем
+    failed: 0,
+  });
+  notifyQueue();
 }
+
+// Сколько операций ждёт отправки и сколько застряло — для индикатора в шапке.
+type QueueListener = () => void;
+const queueListeners = new Set<QueueListener>();
+export function onQueueChange(l: QueueListener) {
+  queueListeners.add(l);
+  return () => {
+    queueListeners.delete(l);
+  };
+}
+function notifyQueue() {
+  queueListeners.forEach((l) => l());
+}
+
+export async function queueStats(): Promise<{ pending: number; failed: number }> {
+  const all = await db.outbox.toArray();
+  return {
+    pending: all.filter((i) => !i.failed).length,
+    failed: all.filter((i) => i.failed).length,
+  };
+}
+
+export async function listFailed(): Promise<OutboxItem[]> {
+  return db.outbox.filter((i) => !!i.failed).toArray();
+}
+
+// Повторить застрявшую операцию вручную (владелец разобрался с причиной).
+export async function retryFailed(id: number) {
+  await db.outbox.update(id, { failed: 0, tries: 0, lastError: undefined });
+  notifyQueue();
+  await flushOutbox();
+}
+
+const MAX_TRIES = 5;
 
 let flushing = false;
 export async function flushOutbox() {
   if (flushing) return;
   flushing = true;
   try {
+    const currentUserId = getUser()?.id;
     const items = await db.outbox.orderBy('createdAt').toArray();
+
     for (const item of items) {
+      if (item.failed) continue; // ждёт разбора владельцем
+
+      // Операция отправляется только под своим автором: иначе сервер запишет
+      // чек на того, кто вошёл позже, и в его смену.
+      if (item.userId && item.userId !== currentUserId) continue;
+
       try {
         const product = await applyOutboxItem(item);
         if (product) await db.products.put(product);
         await db.outbox.delete(item.id!);
         setOnline(true);
+        notifyQueue();
       } catch (err: any) {
-        // Сетевая ошибка — прекращаем, попробуем в следующий тик.
+        // Сети нет — не трогаем очередь, попробуем в следующий тик.
         if (err.status === undefined) {
           setOnline(false);
           break;
         }
-        // Ошибка валидации (4xx) — операцию не повторить, убираем из очереди.
-        await db.outbox.update(item.id!, { tries: item.tries + 1 });
-        if (item.tries + 1 >= 5) await db.outbox.delete(item.id!);
+        // Сервер ответил ошибкой. Пробуем ещё несколько раз, но НИКОГДА
+        // не удаляем: пропавший чек — это деньги в кассе без записи.
+        const tries = item.tries + 1;
+        await db.outbox.update(item.id!, {
+          tries,
+          lastError: String(err.message || err.status),
+          failed: tries >= MAX_TRIES ? 1 : 0,
+        });
+        notifyQueue();
       }
     }
   } finally {
@@ -198,10 +255,18 @@ export async function completeSale(
   items: { barcode: string; qty: number }[],
   paymentMethod: 'cash' | 'card',
   cashReceived: number | undefined,
-  userId?: string,
+  shiftId?: string,
 ): Promise<{ queued: boolean }> {
   const client_id = crypto.randomUUID();
-  const payload = { client_id, items, payment_method: paymentMethod, cash_received: cashReceived, user_id: userId };
+  // shift_id фиксируем на момент продажи: если чек уйдёт в очередь и доедет
+  // после закрытия смены, он всё равно попадёт в свою смену.
+  const payload = {
+    client_id,
+    items,
+    payment_method: paymentMethod,
+    cash_received: cashReceived,
+    shift_id: shiftId,
+  };
   // Оптимистичное списание остатка.
   for (const it of items) await adjustLocalStock(it.barcode, -Number(it.qty));
   try {
@@ -222,10 +287,10 @@ export async function completeSale(
 export async function completeReturn(
   items: { barcode: string; qty: number; unit_price?: number }[],
   reason: string | undefined,
-  userId?: string,
+  shiftId?: string,
 ): Promise<{ queued: boolean }> {
   const client_id = crypto.randomUUID();
-  const payload = { client_id, items, reason, user_id: userId };
+  const payload = { client_id, items, reason, shift_id: shiftId };
   for (const it of items) await adjustLocalStock(it.barcode, Number(it.qty));
   try {
     await api.createReturn(payload);

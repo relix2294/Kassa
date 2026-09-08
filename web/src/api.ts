@@ -41,13 +41,13 @@ export const api = {
     items: { barcode: string; qty: number }[];
     payment_method: 'cash' | 'card';
     cash_received?: number;
-    user_id?: string;
+    shift_id?: string;
   }) => req<{ sale: any; duplicate?: boolean }>('/sales', { method: 'POST', body: JSON.stringify(payload) }),
   createReturn: (payload: {
     client_id: string;
     items: { barcode: string; qty: number; unit_price?: number }[];
     reason?: string;
-    user_id?: string;
+    shift_id?: string;
   }) => req<{ ret: any; duplicate?: boolean }>('/returns', { method: 'POST', body: JSON.stringify(payload) }),
   listSales: (limit = 100) => req<any[]>(`/sales?limit=${limit}`),
   listReturns: (limit = 100) =>
