@@ -1,0 +1,17 @@
+{
+  "name": "kassa",
+  "version": "1.0.0",
+  "private": true,
+  "description": "POS-программа учёта для маленького магазина",
+  "scripts": {
+    "setup": "npm --prefix server install && npm --prefix web install && npm run migrate && npm run seed",
+    "migrate": "npm --prefix server run migrate",
+    "seed": "npm --prefix server run seed",
+    "build": "npm --prefix web run build",
+    "start": "npm --prefix server start",
+    "kassa": "npm run build && npm start",
+    "dev:server": "npm --prefix server run dev",
+    "dev:web": "npm --prefix web run dev",
+    "backup": "bash scripts/backup.sh"
+  }
+}

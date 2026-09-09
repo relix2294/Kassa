@@ -2,6 +2,9 @@ import express from 'express';
 import 'express-async-errors';
 import cors from 'cors';
 import { createServer } from 'node:http';
+import { existsSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import 'dotenv/config';
 
 import { attachRealtime } from './lib/realtime.js';
@@ -34,6 +37,23 @@ app.use('/api/analytics', requireAuth, analyticsRouter);
 app.use('/api/logs', requireAuth, logsRouter);
 app.use('/api/users', usersRouter);
 
+// --- Боевой режим: отдаём собранный интерфейс с того же порта ---
+// В разработке фронт живёт на Vite (:5173) и проксирует /api и /ws сюда.
+// В бою прокси нет, поэтому сервер сам раздаёт web/dist: один процесс,
+// один порт, один адрес. Так касса запускается на ноутбуке магазина.
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const webDist = resolve(process.env.WEB_DIST || join(__dirname, '../../web/dist'));
+const hasBuild = existsSync(join(webDist, 'index.html'));
+
+if (hasBuild) {
+  app.use(express.static(webDist));
+  // Приложение одностраничное: любой не-API адрес отдаём как index.html,
+  // иначе обновление страницы на /sale вернёт 404.
+  app.get(/^(?!\/api\/).*/, (_req, res) => {
+    res.sendFile(join(webDist, 'index.html'));
+  });
+}
+
 // Единый обработчик ошибок, чтобы упавший роут не ронял процесс.
 app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error('Необработанная ошибка:', err);
@@ -44,7 +64,13 @@ const port = Number(process.env.PORT) || 4000;
 const server = createServer(app);
 attachRealtime(server);
 
-server.listen(port, () => {
-  console.log(`✓ Kassa server слушает http://localhost:${port}`);
+// host 0.0.0.0 — чтобы касса была видна с телефона владельца в той же сети.
+server.listen(port, '0.0.0.0', () => {
+  console.log(`✓ Kassa: http://localhost:${port}`);
   console.log(`  WebSocket: ws://localhost:${port}/ws`);
+  console.log(
+    hasBuild
+      ? `  Интерфейс раздаётся из ${webDist}`
+      : `  Интерфейса нет (${webDist}). Для боевого режима: cd web && npm run build`,
+  );
 });
