@@ -729,3 +729,5 @@ kbd {
   padding: 0;
 }
 .force-mobile .tab { flex-direction: column; gap: 3px; padding: 10px; font-size: 12px; }
+
+.warn--inline { display: block; margin-top: 6px; font-size: 13px; }

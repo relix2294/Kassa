@@ -220,6 +220,9 @@ function CreateProduct({
   const [minStock, setMinStock] = useState('0');
   const [qty, setQty] = useState('0');
   const [looking, setLooking] = useState(true);
+  // Название подставлено из внешней базы — его обязательно надо проверить
+  // глазами: база может вернуть чужой товар (проверено на выдуманном коде).
+  const [suggested, setSuggested] = useState(false);
 
   // Пытаемся подтянуть название из внешней базы (п.5 ТЗ).
   useEffect(() => {
@@ -227,7 +230,10 @@ function CreateProduct({
     api
       .lookupBarcode(barcode)
       .then((r) => {
-        if (alive && r.name) setName(r.name);
+        if (alive && r.name) {
+          setName(r.name);
+          setSuggested(true);
+        }
       })
       .finally(() => alive && setLooking(false));
     return () => {
@@ -260,7 +266,20 @@ function CreateProduct({
 
       <label className="field">
         <span>Название {looking && <em className="muted">(ищем в базе…)</em>}</span>
-        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Название товара" autoFocus />
+        <input
+          value={name}
+          onChange={(e) => {
+            setName(e.target.value);
+            setSuggested(false);
+          }}
+          placeholder="Название товара"
+          autoFocus
+        />
+        {suggested && (
+          <span className="warn warn--inline">
+            Подставлено из внешней базы — сверьте с упаковкой, она часто ошибается.
+          </span>
+        )}
       </label>
       <label className="field">
         <span>Категория</span>
