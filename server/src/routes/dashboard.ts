@@ -81,12 +81,13 @@ dashboardRouter.get('/top-products', async (req, res) => {
   const period = String(req.query.period || 'today');
   const where = periodClause(period).replace(/created_at/g, 's.created_at');
   const rows = await query(
-    `SELECT si.name, si.barcode,
+    `SELECT si.name, si.barcode, MAX(p.unit) AS unit,
             SUM(si.qty)        AS qty,
             SUM(si.line_total) AS revenue,
             SUM(si.line_total - si.unit_cost * si.qty) AS margin
        FROM sale_items si
        JOIN sales s ON s.id = si.sale_id
+       LEFT JOIN products p ON p.id = si.product_id
       WHERE ${where}
       GROUP BY si.name, si.barcode
       ORDER BY revenue DESC

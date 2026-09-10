@@ -234,7 +234,8 @@ export async function updateProductRemote(
 }
 
 export async function receiveGoods(payload: {
-  barcode: string;
+  barcode?: string;
+  product_id?: string;
   qty: number;
   cost_price?: number;
 }): Promise<{ queued: boolean; product?: Product }> {
@@ -250,14 +251,16 @@ export async function receiveGoods(payload: {
 }
 
 // Оптимистично меняем остаток локально (до подтверждения сервером).
-async function adjustLocalStock(barcode: string, delta: number) {
-  const p = await db.products.where('barcode').equals(barcode).first();
-  if (p) await db.products.update(p.id, { stock: Number(p.stock) + delta });
+async function adjustLocalStock(item: { barcode?: string; product_id?: string }, delta: number) {
+  const p = item.product_id
+    ? await db.products.get(item.product_id)
+    : await db.products.where('barcode').equals(item.barcode!).first();
+  if (p) await db.products.update(p.id, { stock: Number((Number(p.stock) + delta).toFixed(3)) });
 }
 
 // Провести продажу. items — строки корзины. Возвращает сдачу.
 export async function completeSale(
-  items: { barcode: string; qty: number; expected_price?: number }[],
+  items: { barcode?: string; product_id?: string; qty: number; expected_price?: number }[],
   paymentMethod: 'cash' | 'card',
   cashReceived: number | undefined,
   shiftId?: string,
@@ -273,14 +276,14 @@ export async function completeSale(
     shift_id: shiftId,
   };
   // Оптимистичное списание остатка.
-  for (const it of items) await adjustLocalStock(it.barcode, -Number(it.qty));
+  for (const it of items) await adjustLocalStock(it, -Number(it.qty));
   try {
     await api.createSale(payload);
     return { queued: false };
   } catch (err: any) {
     if (err.status !== undefined) {
       // Ошибка сервера — откатываем оптимистичное списание.
-      for (const it of items) await adjustLocalStock(it.barcode, Number(it.qty));
+      for (const it of items) await adjustLocalStock(it, Number(it.qty));
       throw err;
     }
     await enqueue('sale', payload);
@@ -290,19 +293,19 @@ export async function completeSale(
 
 // Оформить возврат. items — что вернуть (с ценой из чека, если известна).
 export async function completeReturn(
-  items: { barcode: string; qty: number; unit_price?: number }[],
+  items: { barcode?: string; product_id?: string; qty: number; unit_price?: number }[],
   reason: string | undefined,
   shiftId?: string,
 ): Promise<{ queued: boolean }> {
   const client_id = crypto.randomUUID();
   const payload = { client_id, items, reason, shift_id: shiftId };
-  for (const it of items) await adjustLocalStock(it.barcode, Number(it.qty));
+  for (const it of items) await adjustLocalStock(it, Number(it.qty));
   try {
     await api.createReturn(payload);
     return { queued: false };
   } catch (err: any) {
     if (err.status !== undefined) {
-      for (const it of items) await adjustLocalStock(it.barcode, -Number(it.qty));
+      for (const it of items) await adjustLocalStock(it, -Number(it.qty));
       throw err;
     }
     await enqueue('return', payload);

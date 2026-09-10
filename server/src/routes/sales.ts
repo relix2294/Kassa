@@ -69,11 +69,13 @@ salesRouter.post('/', async (req, res) => {
         const qty = Number(item.qty);
         if (!(qty > 0)) throw { status: 400, message: 'qty > 0' };
 
-        const found = await client.query(`SELECT * FROM products WHERE barcode = $1 FOR UPDATE`, [
-          item.barcode,
-        ]);
+        // Товар ищем по id либо по штрихкоду: у весового товара и выпечки
+        // штрихкода нет вовсе, и касса присылает product_id.
+        const found = item.product_id
+          ? await client.query(`SELECT * FROM products WHERE id = $1 FOR UPDATE`, [item.product_id])
+          : await client.query(`SELECT * FROM products WHERE barcode = $1 FOR UPDATE`, [item.barcode]);
         if (found.rows.length === 0) {
-          throw { status: 400, message: `Товар не найден: ${item.barcode}` };
+          throw { status: 400, message: `Товар не найден: ${item.barcode ?? item.product_id}` };
         }
         const p = found.rows[0];
 
@@ -138,7 +140,7 @@ salesRouter.post('/', async (req, res) => {
         await client.query(
           `INSERT INTO sale_items (sale_id, product_id, barcode, name, qty, unit_price, unit_cost, line_total)
            VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-          [saleRow.id, l.p.id, l.p.barcode, l.p.name, l.qty, l.unitPrice, l.unitCost, l.lineTotal],
+          [saleRow.id, l.p.id, l.p.barcode ?? '', l.p.name, l.qty, l.unitPrice, l.unitCost, l.lineTotal],
         );
       }
 

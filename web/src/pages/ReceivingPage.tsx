@@ -89,7 +89,7 @@ export default function ReceivingPage() {
             setBusy(true);
             try {
               const r = await receiveGoods({
-                barcode: product.barcode,
+                product_id: product.id,
                 qty,
                 // Закупочную цену задаёт только владелец.
                 cost_price: user?.role === 'owner' ? cost : undefined,
@@ -167,12 +167,13 @@ function ReceiveExisting({
         <div className="product-name">{product.name}</div>
         <div className="muted">{product.barcode}</div>
         <div className="muted">
-          Остаток сейчас: <b>{product.stock}</b> · цена продажи {product.sale_price}
+          Остаток сейчас: <b>{product.stock} {product.unit === 'kg' ? 'кг' : 'шт'}</b>
+          {' · '}цена продажи {product.sale_price}{product.unit === 'kg' ? ' /кг' : ''}
         </div>
       </div>
 
       <label className="field">
-        <span>Сколько принято</span>
+        <span>Сколько принято{product.unit === 'kg' ? ', кг' : ', шт'}</span>
         <input inputMode="decimal" value={qty} onChange={(e) => setQty(e.target.value)} autoFocus />
       </label>
 

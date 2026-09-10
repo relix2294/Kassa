@@ -34,18 +34,18 @@ export const api = {
     req<Product>('/products', { method: 'POST', body: JSON.stringify(p) }),
   updateProduct: (id: string, p: Partial<Product> & { user_id?: string }) =>
     req<Product>(`/products/${id}`, { method: 'PATCH', body: JSON.stringify(p) }),
-  receive: (payload: { barcode: string; qty: number; cost_price?: number }) =>
+  receive: (payload: { barcode?: string; product_id?: string; qty: number; cost_price?: number }) =>
     req<{ product: Product }>('/receiving', { method: 'POST', body: JSON.stringify(payload) }),
   createSale: (payload: {
     client_id: string;
-    items: { barcode: string; qty: number; expected_price?: number }[];
+    items: { barcode?: string; product_id?: string; qty: number; expected_price?: number }[];
     payment_method: 'cash' | 'card';
     cash_received?: number;
     shift_id?: string;
   }) => req<{ sale: any; duplicate?: boolean }>('/sales', { method: 'POST', body: JSON.stringify(payload) }),
   createReturn: (payload: {
     client_id: string;
-    items: { barcode: string; qty: number; unit_price?: number }[];
+    items: { barcode?: string; product_id?: string; qty: number; unit_price?: number }[];
     reason?: string;
     shift_id?: string;
   }) => req<{ ret: any; duplicate?: boolean }>('/returns', { method: 'POST', body: JSON.stringify(payload) }),
@@ -72,7 +72,7 @@ export const api = {
       cash: number; card: number; refunds_count: number; refunds_total: number;
     }>(`/dashboard/summary?period=${period}`),
   topProducts: (period: string) =>
-    req<{ name: string; barcode: string; qty: number; revenue: number; margin: number }[]>(
+    req<{ name: string; barcode: string; unit: 'pcs' | 'kg'; qty: number; revenue: number; margin: number }[]>(
       `/dashboard/top-products?period=${period}`,
     ),
   recentSales: (limit = 20) =>
@@ -94,11 +94,11 @@ export const api = {
     req<User>(`/users/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
   listLogs: (limit = 200) => req<LogRow[]>(`/logs?limit=${limit}`),
   restock: () =>
-    req<{ id: string; barcode: string; name: string; category: string | null; stock: number; min_stock: number; cost_price: number; sold_30d: number; days_left: number | null }[]>(
+    req<{ id: string; barcode: string; name: string; category: string | null; stock: number; min_stock: number; cost_price: number; unit: 'pcs' | 'kg'; sold_30d: number; days_left: number | null }[]>(
       '/analytics/restock',
     ),
   stale: (days: number) =>
-    req<{ id: string; barcode: string; name: string; category: string | null; stock: number; cost_price: number; sale_price: number; last_sold_at: string | null; total_sold: number; frozen_money: number; days_since_sale: number | null }[]>(
+    req<{ id: string; barcode: string; name: string; category: string | null; stock: number; cost_price: number; sale_price: number; unit: 'pcs' | 'kg'; last_sold_at: string | null; total_sold: number; frozen_money: number; days_since_sale: number | null }[]>(
       `/analytics/stale?days=${days}`,
     ),
   categories: () => req<{ category: string; count: string }[]>('/analytics/categories'),
@@ -109,7 +109,7 @@ export const api = {
     field: 'sale_price' | 'cost_price';
     value: number;
   }) => req<{ updated: number; products: Product[] }>('/analytics/bulk-price', { method: 'POST', body: JSON.stringify(payload) }),
-  saveInventory: (payload: { items: { barcode: string; counted_qty: number }[]; note?: string; apply?: boolean }) =>
+  saveInventory: (payload: { items: { barcode?: string; product_id?: string; counted_qty: number }[]; note?: string; apply?: boolean }) =>
     req<{ inventory: any; items: any[]; total_loss: number }>('/analytics/inventory', {
       method: 'POST',
       body: JSON.stringify(payload),

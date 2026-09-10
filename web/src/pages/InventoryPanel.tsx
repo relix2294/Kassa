@@ -5,8 +5,10 @@ import { useGuardedClose } from '../components/Confirm';
 import { useShift } from '../shift';
 
 interface CountLine {
-  barcode: string;
+  key: string;
+  product_id: string;
   name: string;
+  unit: 'pcs' | 'kg';
   expected: number;
   counted: string;
 }
@@ -39,9 +41,20 @@ export default function InventoryPanel({ onClose, onDone }: { onClose: () => voi
       setTimeout(() => setErr(null), 2000);
       return;
     }
+    const key = p.barcode || p.id;
     setLines((prev) => {
-      if (prev.some((l) => l.barcode === bc)) return prev;
-      return [...prev, { barcode: p.barcode, name: p.name, expected: Number(p.stock), counted: String(p.stock) }];
+      if (prev.some((l) => l.key === key)) return prev;
+      return [
+        ...prev,
+        {
+          key,
+          product_id: p.id,
+          name: p.name,
+          unit: p.unit === 'kg' ? 'kg' : 'pcs',
+          expected: Number(p.stock),
+          counted: String(p.stock),
+        },
+      ];
     });
   }
 
@@ -49,7 +62,7 @@ export default function InventoryPanel({ onClose, onDone }: { onClose: () => voi
     setBusy(true);
     setErr(null);
     try {
-      const items = lines.map((l) => ({ barcode: l.barcode, counted_qty: Number(l.counted) || 0 }));
+      const items = lines.map((l) => ({ product_id: l.product_id, counted_qty: Number(l.counted) || 0 }));
       const r = await api.saveInventory({ items, note: note || undefined, apply });
       setResult(r);
     } catch (e: any) {
@@ -132,11 +145,11 @@ export default function InventoryPanel({ onClose, onDone }: { onClose: () => voi
           {lines.map((l) => {
             const diff = (Number(l.counted) || 0) - l.expected;
             return (
-              <div key={l.barcode} className="cart-line">
+              <div key={l.key} className="cart-line">
                 <div className="cart-line__main">
                   <div className="cart-line__name">{l.name}</div>
                   <div className="muted">
-                    по системе {l.expected}
+                    по системе {l.expected} {l.unit === 'kg' ? 'кг' : 'шт'}
                     {diff !== 0 && (
                       <span className={diff < 0 ? 'diff-neg' : 'diff-pos'}>
                         {' '}
@@ -151,12 +164,12 @@ export default function InventoryPanel({ onClose, onDone }: { onClose: () => voi
                   inputMode="decimal"
                   value={l.counted}
                   onChange={(e) =>
-                    setLines((prev) => prev.map((x) => (x.barcode === l.barcode ? { ...x, counted: e.target.value } : x)))
+                    setLines((prev) => prev.map((x) => (x.key === l.key ? { ...x, counted: e.target.value } : x)))
                   }
                 />
                 <button
                   className="cart-line__del"
-                  onClick={() => setLines((prev) => prev.filter((x) => x.barcode !== l.barcode))}
+                  onClick={() => setLines((prev) => prev.filter((x) => x.key !== l.key))}
                 >
                   ×
                 </button>

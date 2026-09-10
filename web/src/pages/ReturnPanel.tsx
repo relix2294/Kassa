@@ -9,8 +9,10 @@ import { useGuardedClose } from '../components/Confirm';
 const REASONS = ['Брак', 'Не подошёл', 'Передумал', 'Ошибка кассира', 'Просрочен'];
 
 interface RetLine {
-  barcode: string;
+  key: string;
+  product_id: string;
   name: string;
+  unit: 'pcs' | 'kg';
   unit_price: number;
   qty: number;
 }
@@ -42,10 +44,21 @@ export default function ReturnPanel({ onClose, onDone }: { onClose: () => void; 
       setTimeout(() => setErr(null), 2000);
       return;
     }
+    const key = p.barcode || p.id;
     setLines((prev) => {
-      const ex = prev.find((l) => l.barcode === bc);
-      if (ex) return prev.map((l) => (l.barcode === bc ? { ...l, qty: l.qty + 1 } : l));
-      return [...prev, { barcode: p.barcode, name: p.name, unit_price: Number(p.sale_price), qty: 1 }];
+      const ex = prev.find((l) => l.key === key);
+      if (ex) return prev.map((l) => (l.key === key ? { ...l, qty: l.qty + 1 } : l));
+      return [
+        ...prev,
+        {
+          key,
+          product_id: p.id,
+          name: p.name,
+          unit: p.unit === 'kg' ? 'kg' : 'pcs',
+          unit_price: Number(p.sale_price),
+          qty: 1,
+        },
+      ];
     });
   }
 
@@ -56,7 +69,7 @@ export default function ReturnPanel({ onClose, onDone }: { onClose: () => void; 
       return;
     }
     try {
-      const items = lines.map((l) => ({ barcode: l.barcode, qty: l.qty, unit_price: l.unit_price }));
+      const items = lines.map((l) => ({ product_id: l.product_id, qty: l.qty, unit_price: l.unit_price }));
       const r = await completeReturn(items, reason.trim(), shift?.id);
       onDone(r.queued ? 'Нет сети — возврат в очереди' : `Возврат оформлен: −${total}`);
       onClose();
@@ -84,16 +97,17 @@ export default function ReturnPanel({ onClose, onDone }: { onClose: () => void; 
 
         <div className="cart">
           {lines.map((l) => (
-            <div key={l.barcode} className="cart-line">
+            <div key={l.key} className="cart-line">
               <div className="cart-line__main">
                 <div className="cart-line__name">{l.name}</div>
                 <div className="muted">
-                  {l.unit_price} × {l.qty} = <b>{Number((l.unit_price * l.qty).toFixed(2))}</b>
+                  {l.unit_price}{l.unit === 'kg' ? ' /кг' : ''} × {l.qty}{l.unit === 'kg' ? ' кг' : ' шт'} ={' '}
+                  <b>{Number((l.unit_price * l.qty).toFixed(2))}</b>
                 </div>
               </div>
               <button
                 className="cart-line__del"
-                onClick={() => setLines((prev) => prev.filter((x) => x.barcode !== l.barcode))}
+                onClick={() => setLines((prev) => prev.filter((x) => x.key !== l.key))}
               >
                 ×
               </button>

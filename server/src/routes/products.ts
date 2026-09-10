@@ -31,17 +31,20 @@ productsRouter.get('/lookup/:barcode', async (req, res) => {
 
 // Создать товар — только владелец (кассир не задаёт цены).
 productsRouter.post('/', requireOwner, async (req, res) => {
-  const { barcode, name, category, sale_price, cost_price, min_stock } = req.body ?? {};
+  const { barcode, name, category, sale_price, cost_price, min_stock, unit } = req.body ?? {};
   const user_id = req.user!.id;
-  if (!barcode || !name) {
-    return res.status(400).json({ error: 'barcode и name обязательны' });
+  // Штрихкод не обязателен: у весового товара и выпечки его обычно нет.
+  if (!name) {
+    return res.status(400).json({ error: 'Название обязательно' });
   }
+  const cleanBarcode = typeof barcode === 'string' && barcode.trim() ? barcode.trim() : null;
+  const cleanUnit = unit === 'kg' ? 'kg' : 'pcs';
   try {
     const rows = await query(
-      `INSERT INTO products (barcode, name, category, sale_price, cost_price, min_stock)
-       VALUES ($1, $2, $3, $4, $5, $6)
+      `INSERT INTO products (barcode, name, category, sale_price, cost_price, min_stock, unit)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING *`,
-      [barcode, name, category ?? null, sale_price ?? 0, cost_price ?? 0, min_stock ?? 0],
+      [cleanBarcode, name, category ?? null, sale_price ?? 0, cost_price ?? 0, min_stock ?? 0, cleanUnit],
     );
     const product = rows[0];
     await writeLog({
@@ -64,7 +67,7 @@ productsRouter.post('/', requireOwner, async (req, res) => {
 // Обновить карточку — только владелец. Изменения цен фиксируем в журнале отдельно.
 productsRouter.patch('/:id', requireOwner, async (req, res) => {
   const { id } = req.params;
-  const { name, category, sale_price, cost_price, min_stock } = req.body ?? {};
+  const { name, category, sale_price, cost_price, min_stock, unit } = req.body ?? {};
   const user_id = req.user!.id;
 
   const before = (await query(`SELECT * FROM products WHERE id = $1`, [id]))[0];
@@ -77,10 +80,12 @@ productsRouter.patch('/:id', requireOwner, async (req, res) => {
         sale_price = COALESCE($4, sale_price),
         cost_price = COALESCE($5, cost_price),
         min_stock  = COALESCE($6, min_stock),
+        unit       = COALESCE($7, unit),
         updated_at = now()
       WHERE id = $1
       RETURNING *`,
-    [id, name ?? null, category ?? null, sale_price ?? null, cost_price ?? null, min_stock ?? null],
+    [id, name ?? null, category ?? null, sale_price ?? null, cost_price ?? null, min_stock ?? null,
+     unit === 'kg' || unit === 'pcs' ? unit : null],
   );
   const after = rows[0];
 

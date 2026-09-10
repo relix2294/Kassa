@@ -731,3 +731,6 @@ kbd {
 .force-mobile .tab { flex-direction: column; gap: 3px; padding: 10px; font-size: 12px; }
 
 .warn--inline { display: block; margin-top: 6px; font-size: 13px; }
+
+/* Кнопка выбора товара без штрихкода — под полем скана. */
+.btn--pick { width: 100%; margin-bottom: 12px; padding: 12px; }

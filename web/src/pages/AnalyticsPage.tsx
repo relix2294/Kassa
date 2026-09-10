@@ -67,7 +67,7 @@ function RestockTab() {
                 {p.days_left != null && ` · хватит на ~${p.days_left} дн`}
               </div>
             </div>
-            <div className="stock stock--low">{p.stock} шт</div>
+            <div className="stock stock--low">{p.stock} {p.unit === 'kg' ? 'кг' : 'шт'}</div>
           </div>
         ))}
       </div>
@@ -114,7 +114,7 @@ function StaleTab() {
                       ? `не продавался ${p.days_since_sale} дн`
                       : 'ни разу не продавался'}
                     {' · '}
-                    {p.stock} шт × {p.cost_price}
+                    {p.stock} {p.unit === 'kg' ? 'кг' : 'шт'} × {p.cost_price}
                   </div>
                 </div>
                 <div className="stock">{Number(p.frozen_money).toFixed(2)}</div>

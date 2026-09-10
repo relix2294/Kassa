@@ -22,9 +22,12 @@ export interface OutboxItem {
 
 // Строка открытого чека (живёт локально — не теряется при обрыве/перезагрузке).
 export interface CartLine {
-  barcode: string;
+  /** Ключ строки. Для товара без штрихкода используем его id. */
+  key: string;
+  barcode: string | null;
   product_id: string;
   name: string;
+  unit: 'pcs' | 'kg';
   unit_price: number;
   qty: number;
 }
@@ -52,6 +55,17 @@ class KassaDB extends Dexie {
       outbox: '++id, kind, createdAt, userId, failed',
       cart: 'barcode',
     });
+    // v4: весовой товар и товар без штрихкода — ключ строки чека больше
+    // не может быть штрихкодом, он не у всех есть.
+    this.version(4)
+      .stores({
+        products: 'id, barcode, name, category',
+        outbox: '++id, kind, createdAt, userId, failed',
+        cart: 'key',
+      })
+      .upgrade(async (tx) => {
+        await tx.table('cart').clear(); // открытый чек старого формата не переносим
+      });
   }
 }
 

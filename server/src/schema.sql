@@ -33,6 +33,19 @@ CREATE TABLE IF NOT EXISTS products (
 CREATE INDEX IF NOT EXISTS idx_products_barcode ON products(barcode);
 CREATE INDEX IF NOT EXISTS idx_products_category ON products(category);
 
+-- Единица измерения: 'pcs' — штучный, 'kg' — весовой (курут, развес).
+-- Для весового sale_price и cost_price — это цена за килограмм,
+-- а stock хранится в килограммах.
+ALTER TABLE products ADD COLUMN IF NOT EXISTS unit text NOT NULL DEFAULT 'pcs';
+
+-- У весового товара и выпечки штрихкода обычно нет вообще, поэтому он
+-- перестаёт быть обязательным. Уникальность оставляем только для
+-- заполненных штрихкодов: пустых может быть много.
+ALTER TABLE products ALTER COLUMN barcode DROP NOT NULL;
+ALTER TABLE products DROP CONSTRAINT IF EXISTS products_barcode_key;
+CREATE UNIQUE INDEX IF NOT EXISTS uniq_products_barcode
+  ON products(barcode) WHERE barcode IS NOT NULL;
+
 -- Приёмка: каждое поступление товара. Нужна для истории и расчёта средней.
 CREATE TABLE IF NOT EXISTS stock_receipts (
   id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),

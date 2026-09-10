@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, type CartLine } from '../db';
-import { addToCart, cartTotal, clearCart, removeLine, setQty } from '../cart';
+import { addToCart, cartTotal, clearCart, removeLine, setQty, formatQty } from '../cart';
 import { completeSale } from '../sync';
 import { useCurrentUser } from '../session';
 import { useShift, refreshShift, openShift } from '../shift';
@@ -10,6 +10,7 @@ import { useIsDesktop } from '../useMedia';
 import Keypad from '../components/Keypad';
 import PaymentForm from '../components/PaymentForm';
 import ReturnPanel from './ReturnPanel';
+import ProductPicker from '../components/ProductPicker';
 import Confirm from '../components/Confirm';
 
 export default function SalePage() {
@@ -24,6 +25,7 @@ export default function SalePage() {
   const [returnOpen, setReturnOpen] = useState(false);
   const [changeDue, setChangeDue] = useState<number | null>(null);
   const [askClear, setAskClear] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
   const scanRef = useRef<HTMLInputElement>(null);
 
   const lines = useLiveQuery(() => db.cart.toArray(), [], [] as CartLine[]);
@@ -75,7 +77,7 @@ export default function SalePage() {
   async function pay(method: 'cash' | 'card', received?: number) {
     const due = method === 'cash' && received != null ? Number((received - total).toFixed(2)) : 0;
     try {
-      const items = lines.map((l) => ({ barcode: l.barcode, qty: l.qty, expected_price: l.unit_price }));
+      const items = lines.map((l) => ({ product_id: l.product_id, qty: l.qty, expected_price: l.unit_price }));
       const r = await completeSale(items, method, received, shift?.id);
       await clearCart();
       setPayOpen(false);
@@ -97,25 +99,27 @@ export default function SalePage() {
     <div className="cart">
       {lines.length === 0 && <p className="hint">Отсканируйте товар, чтобы начать чек.</p>}
       {lines.map((l) => (
-        <div key={l.barcode} className="cart-line">
+        <div key={l.key} className="cart-line">
           <div className="cart-line__main">
             <div className="cart-line__name">{l.name}</div>
             <div className="muted">
-              {l.unit_price} × {l.qty} = <b>{Number((l.unit_price * l.qty).toFixed(2))}</b>
+              {l.unit_price}{l.unit === 'kg' ? ' /кг' : ''} × {formatQty(l)} ={' '}
+              <b>{Number((l.unit_price * l.qty).toFixed(2))}</b>
             </div>
           </div>
           <div className="qty-ctrl">
-            <button className="qty-btn" onClick={() => setQty(l.barcode, l.qty - 1)}>
+            {/* Весовой товар меняем шагом 100 г, штучный — по одной штуке. */}
+            <button className="qty-btn" onClick={() => setQty(l.key, l.qty - (l.unit === 'kg' ? 0.1 : 1))}>
               −
             </button>
             <button className="qty-num" onClick={() => setQtyEdit(l)}>
               {l.qty}
             </button>
-            <button className="qty-btn" onClick={() => setQty(l.barcode, l.qty + 1)}>
+            <button className="qty-btn" onClick={() => setQty(l.key, l.qty + (l.unit === 'kg' ? 0.1 : 1))}>
               +
             </button>
           </div>
-          <button className="cart-line__del" onClick={() => removeLine(l.barcode)} title="Отменить позицию">
+          <button className="cart-line__del" onClick={() => removeLine(l.key)} title="Отменить позицию">
             ×
           </button>
         </div>
@@ -124,6 +128,7 @@ export default function SalePage() {
   );
 
   const scanForm = (
+    <>
     <form
       className="scan-row"
       onSubmit={(e) => {
@@ -140,6 +145,11 @@ export default function SalePage() {
         onChange={(e) => setBarcode(e.target.value)}
       />
     </form>
+    {/* Весовой товар и выпечка — без штрихкода, сканером их не пробить. */}
+    <button className="btn btn--ghost btn--pick" onClick={() => setPickerOpen(true)}>
+      Товар без штрихкода
+    </button>
+    </>
   );
 
   return (
@@ -204,7 +214,7 @@ export default function SalePage() {
           line={qtyEdit}
           onClose={() => setQtyEdit(null)}
           onSave={(q) => {
-            setQty(qtyEdit.barcode, q);
+            setQty(qtyEdit.key, q);
             setQtyEdit(null);
           }}
         />
@@ -216,6 +226,16 @@ export default function SalePage() {
             <PaymentForm total={total} onPay={pay} onCancel={() => setPayOpen(false)} />
           </div>
         </div>
+      )}
+
+      {pickerOpen && (
+        <ProductPicker
+          onClose={() => setPickerOpen(false)}
+          onPick={async (product, qty) => {
+            await addToCart(product, qty);
+            setPickerOpen(false);
+          }}
+        />
       )}
 
       {returnOpen && <ReturnPanel onClose={() => setReturnOpen(false)} onDone={(m) => flash(m)} />}

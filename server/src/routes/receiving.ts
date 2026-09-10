@@ -12,13 +12,13 @@ export const receivingRouter = Router();
 // Товар должен уже существовать (новый заводится через POST /api/products).
 // Пересчитываем среднюю скользящую себестоимость и увеличиваем остаток.
 receivingRouter.post('/', async (req, res) => {
-  const { barcode, qty, cost_price } = req.body ?? {};
+  const { barcode, qty, cost_price, product_id } = req.body ?? {};
   const user_id = req.user!.id;
   const isOwner = req.user!.role === 'owner';
 
   const qtyNum = Number(qty);
-  if (!barcode || !(qtyNum > 0)) {
-    return res.status(400).json({ error: 'Нужны barcode и qty > 0' });
+  if ((!barcode && !product_id) || !(qtyNum > 0)) {
+    return res.status(400).json({ error: 'Нужен товар (barcode или product_id) и qty > 0' });
   }
   // Закупочную цену задаёт только владелец (п.4 ТЗ). У кассира приём идёт
   // по текущей средней себестоимости — она при этом не меняется.
@@ -35,10 +35,9 @@ receivingRouter.post('/', async (req, res) => {
   try {
     const result = await withTx(async (client) => {
       // Блокируем строку товара на время пересчёта.
-      const found = await client.query(
-        `SELECT * FROM products WHERE barcode = $1 FOR UPDATE`,
-        [barcode],
-      );
+      const found = product_id
+        ? await client.query(`SELECT * FROM products WHERE id = $1 FOR UPDATE`, [product_id])
+        : await client.query(`SELECT * FROM products WHERE barcode = $1 FOR UPDATE`, [barcode]);
       if (found.rows.length === 0) {
         return { notFound: true as const };
       }

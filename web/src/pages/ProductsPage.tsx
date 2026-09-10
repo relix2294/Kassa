@@ -32,7 +32,7 @@ export default function ProductsPage() {
     return products.filter(
       (p) =>
         p.name.toLowerCase().includes(s) ||
-        p.barcode.includes(s) ||
+        (p.barcode ?? '').includes(s) ||
         (p.category ?? '').toLowerCase().includes(s),
     );
   }, [products, query]);
@@ -76,14 +76,16 @@ export default function ProductsPage() {
               <div className="list-item__main">
                 <div className="list-item__name">{p.name}</div>
                 <div className="muted">
-                  {p.barcode}
+                  {p.barcode || 'без штрихкода'}
                   {p.category ? ` · ${p.category}` : ''}
                 </div>
               </div>
               <div className="list-item__side">
-                <div className={`stock ${low ? 'stock--low' : ''}`}>{p.stock} шт</div>
+                <div className={`stock ${low ? 'stock--low' : ''}`}>
+                  {p.stock} {p.unit === 'kg' ? 'кг' : 'шт'}
+                </div>
                 <div className="muted">
-                  {p.sale_price} прод.{p.cost_price != null ? ` · ${p.cost_price} закуп.` : ''}
+                  {p.sale_price}{p.unit === 'kg' ? ' /кг' : ''} прод.{p.cost_price != null ? ` · ${p.cost_price} закуп.` : ''}
                 </div>
               </div>
             </button>
@@ -131,21 +133,23 @@ function AddProduct({ onClose, onDone }: { onClose: () => void; onDone: (name: s
   const [sale, setSale] = useState('');
   const [cost, setCost] = useState('');
   const [min, setMin] = useState('0');
+  const [unit, setUnit] = useState<'pcs' | 'kg'>('pcs');
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   async function save() {
-    if (!barcode.trim() || !name.trim()) {
-      setErr('Штрихкод и название обязательны');
+    if (!name.trim()) {
+      setErr('Название обязательно');
       return;
     }
     setBusy(true);
     setErr(null);
     try {
       await createProduct({
-        barcode: barcode.trim(),
+        barcode: barcode.trim() || undefined, // у весового товара его нет
         name: name.trim(),
         category: category.trim(),
+        unit,
         sale_price: Number(sale) || 0,
         cost_price: Number(cost) || 0,
         min_stock: Number(min) || 0,
@@ -165,12 +169,30 @@ function AddProduct({ onClose, onDone }: { onClose: () => void; onDone: (name: s
         <p className="muted">Остаток появится после приёма — здесь только карточка.</p>
 
         <label className="field">
-          <span>Штрихкод</span>
-          <input inputMode="numeric" value={barcode} onChange={(e) => setBarcode(e.target.value)} autoFocus />
-        </label>
-        <label className="field">
           <span>Название</span>
-          <input value={name} onChange={(e) => setName(e.target.value)} />
+          <input value={name} onChange={(e) => setName(e.target.value)} autoFocus />
+        </label>
+
+        <div className="field">
+          <span>Как продаётся</span>
+          <div className="seg">
+            <button className={`seg__btn ${unit === 'pcs' ? 'seg__btn--on' : ''}`} onClick={() => setUnit('pcs')}>
+              Поштучно
+            </button>
+            <button className={`seg__btn ${unit === 'kg' ? 'seg__btn--on' : ''}`} onClick={() => setUnit('kg')}>
+              На вес (кг)
+            </button>
+          </div>
+        </div>
+
+        <label className="field">
+          <span>Штрихкод — необязательно</span>
+          <input
+            inputMode="numeric"
+            value={barcode}
+            onChange={(e) => setBarcode(e.target.value)}
+            placeholder={unit === 'kg' ? 'у весового обычно нет' : 'если есть на упаковке'}
+          />
         </label>
         <label className="field">
           <span>Категория</span>
@@ -178,16 +200,16 @@ function AddProduct({ onClose, onDone }: { onClose: () => void; onDone: (name: s
         </label>
         <div className="row">
           <label className="field">
-            <span>Цена продажи</span>
+            <span>Цена продажи{unit === 'kg' ? ' за кг' : ''}</span>
             <input inputMode="decimal" value={sale} onChange={(e) => setSale(e.target.value)} />
           </label>
           <label className="field">
-            <span>Закупочная</span>
+            <span>Закупочная{unit === 'kg' ? ' за кг' : ''}</span>
             <input inputMode="decimal" value={cost} onChange={(e) => setCost(e.target.value)} />
           </label>
         </div>
         <label className="field">
-          <span>Мин. остаток</span>
+          <span>Мин. остаток{unit === 'kg' ? ', кг' : ', шт'}</span>
           <input inputMode="decimal" value={min} onChange={(e) => setMin(e.target.value)} />
         </label>
 
@@ -220,6 +242,7 @@ function EditModal({
   const [sale, setSale] = useState(String(product.sale_price));
   const [cost, setCost] = useState(String(product.cost_price ?? ''));
   const [min, setMin] = useState(String(product.min_stock));
+  const [unit, setUnit] = useState<'pcs' | 'kg'>(product.unit === 'kg' ? 'kg' : 'pcs');
   const [busy, setBusy] = useState(false);
   const [askArchive, setAskArchive] = useState(false);
 
@@ -228,7 +251,7 @@ function EditModal({
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <h2>{product.name}</h2>
         <div className="muted mb">
-          {product.barcode} · остаток {product.stock}
+          {product.barcode || 'без штрихкода'} · остаток {product.stock} {unit === 'kg' ? 'кг' : 'шт'}
         </div>
 
         <label className="field">
@@ -239,18 +262,30 @@ function EditModal({
           <span>Категория</span>
           <input value={category} onChange={(e) => setCategory(e.target.value)} />
         </label>
+
+        <div className="field">
+          <span>Как продаётся</span>
+          <div className="seg">
+            <button className={`seg__btn ${unit === 'pcs' ? 'seg__btn--on' : ''}`} onClick={() => setUnit('pcs')}>
+              Поштучно
+            </button>
+            <button className={`seg__btn ${unit === 'kg' ? 'seg__btn--on' : ''}`} onClick={() => setUnit('kg')}>
+              На вес (кг)
+            </button>
+          </div>
+        </div>
         <div className="row">
           <label className="field">
-            <span>Цена продажи</span>
+            <span>Цена продажи{unit === 'kg' ? ' за кг' : ''}</span>
             <input inputMode="decimal" value={sale} onChange={(e) => setSale(e.target.value)} />
           </label>
           <label className="field">
-            <span>Закупочная</span>
+            <span>Закупочная{unit === 'kg' ? ' за кг' : ''}</span>
             <input inputMode="decimal" value={cost} onChange={(e) => setCost(e.target.value)} />
           </label>
         </div>
         <label className="field">
-          <span>Мин. остаток</span>
+          <span>Мин. остаток{unit === 'kg' ? ', кг' : ', шт'}</span>
           <input inputMode="decimal" value={min} onChange={(e) => setMin(e.target.value)} />
         </label>
 
@@ -267,6 +302,7 @@ function EditModal({
                 await updateProductRemote(product.id, {
                   name: name.trim(),
                   category: category.trim(),
+                  unit,
                   sale_price: Number(sale),
                   cost_price: Number(cost),
                   min_stock: Number(min),

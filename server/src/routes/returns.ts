@@ -79,10 +79,12 @@ returnsRouter.post('/', async (req, res) => {
         const qty = Number(item.qty);
         if (!(qty > 0)) throw { status: 400, message: 'qty > 0' };
 
-        const found = await client.query(`SELECT * FROM products WHERE barcode = $1 FOR UPDATE`, [
-          item.barcode,
-        ]);
-        if (found.rows.length === 0) throw { status: 400, message: `Товар не найден: ${item.barcode}` };
+        const found = item.product_id
+          ? await client.query(`SELECT * FROM products WHERE id = $1 FOR UPDATE`, [item.product_id])
+          : await client.query(`SELECT * FROM products WHERE barcode = $1 FOR UPDATE`, [item.barcode]);
+        if (found.rows.length === 0) {
+          throw { status: 400, message: `Товар не найден: ${item.barcode ?? item.product_id}` };
+        }
         const p = found.rows[0];
 
         // Цену возврата берём из чека, если передана, иначе текущую цену продажи.
@@ -112,7 +114,7 @@ returnsRouter.post('/', async (req, res) => {
         await client.query(
           `INSERT INTO return_items (return_id, product_id, barcode, name, qty, unit_price, line_total)
            VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-          [retRow.id, l.p.id, l.p.barcode, l.p.name, l.qty, l.unitPrice, l.lineTotal],
+          [retRow.id, l.p.id, l.p.barcode ?? '', l.p.name, l.qty, l.unitPrice, l.lineTotal],
         );
       }
 

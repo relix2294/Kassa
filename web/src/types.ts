@@ -1,6 +1,9 @@
 export interface Product {
   id: string;
-  barcode: string;
+  /** У весового товара и выпечки штрихкода может не быть. */
+  barcode: string | null;
+  /** 'pcs' — штучный, 'kg' — весовой (цена за килограмм). */
+  unit: 'pcs' | 'kg';
   name: string;
   category: string | null;
   sale_price: number;

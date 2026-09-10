@@ -133,7 +133,7 @@ function SalesTab({ top, recent }: { top: any[]; recent: any[] }) {
           <div key={p.barcode} className="list-item list-item--static">
             <div className="list-item__main">
               <div className="list-item__name">{p.name}</div>
-              <div className="muted">{p.qty} шт · маржа {Number(p.margin).toFixed(2)}</div>
+              <div className="muted">{p.qty} {p.unit === 'kg' ? 'кг' : 'шт'} · маржа {Number(p.margin).toFixed(2)}</div>
             </div>
             <div className="stock">{Number(p.revenue).toFixed(2)}</div>
           </div>
@@ -243,7 +243,7 @@ function StockTab() {
                   <div className="list-item__name">{p.name}</div>
                   <div className="muted">минимум {p.min_stock}</div>
                 </div>
-                <div className="stock stock--low">{p.stock} шт</div>
+                <div className="stock stock--low">{p.stock} {p.unit === 'kg' ? 'кг' : 'шт'}</div>
               </div>
             ))}
           </div>
@@ -260,7 +260,7 @@ function StockTab() {
                 прод. {p.sale_price} · закуп. {p.cost_price}
               </div>
             </div>
-            <div className={`stock ${p.min_stock > 0 && p.stock <= p.min_stock ? 'stock--low' : ''}`}>{p.stock} шт</div>
+            <div className={`stock ${p.min_stock > 0 && p.stock <= p.min_stock ? 'stock--low' : ''}`}>{p.stock} {p.unit === 'kg' ? 'кг' : 'шт'}</div>
           </div>
         ))}
       </div>
@@ -328,7 +328,7 @@ function formatDetails(type: string, d: any): string {
     case 'line_cancel':
       return `${d.name} × ${d.qty}`;
     case 'receiving':
-      return `+${d.qty} шт по ${d.cost_price} → остаток ${d.new_stock}`;
+      return `+${d.qty} по ${d.cost_price} → остаток ${d.new_stock}`;
     case 'price_change':
       return `${d.field === 'sale_price' ? 'продажи' : 'закупочная'}: ${d.old} → ${d.new}`;
     case 'shift_open':

@@ -20,7 +20,7 @@ analyticsRouter.get('/restock', async (_req, res) => {
         WHERE s.created_at >= now() - interval '30 days'
         GROUP BY si.product_id
      )
-     SELECT p.id, p.barcode, p.name, p.category, p.stock, p.min_stock, p.cost_price,
+     SELECT p.id, p.barcode, p.name, p.category, p.stock, p.min_stock, p.cost_price, p.unit,
             COALESCE(sold.qty_30d, 0) AS sold_30d,
             -- Прогноз имеет смысл только если товар продавался регулярно.
             -- Для одной-двух продаж за месяц он вводит в заблуждение (п.25).
@@ -48,7 +48,7 @@ analyticsRouter.get('/stale', async (req, res) => {
          JOIN sales s ON s.id = si.sale_id
         GROUP BY si.product_id
      )
-     SELECT p.id, p.barcode, p.name, p.category, p.stock, p.cost_price, p.sale_price,
+     SELECT p.id, p.barcode, p.name, p.category, p.stock, p.cost_price, p.sale_price, p.unit,
             ls.last_sold_at,
             COALESCE(ls.total_sold, 0) AS total_sold,
             ROUND(p.stock * p.cost_price, 2) AS frozen_money,
