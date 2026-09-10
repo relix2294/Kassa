@@ -31,7 +31,22 @@ export default function BulkEntryPage() {
   // Запоминаем между товарами — их обычно заводят пачками.
   const [category, setCategory] = useState('');
   const [unit, setUnit] = useState<'pcs' | 'kg'>('pcs');
+
+  // Наценку можно задать двумя способами. Не все считают в процентах:
+  // «купили за 3, продаём за 5» — привычнее, чем «66.7%».
+  const [markupMode, setMarkupMode] = useState<'percent' | 'example'>('percent');
   const [markup, setMarkup] = useState('30');
+  const [exCost, setExCost] = useState('');
+  const [exSale, setExSale] = useState('');
+
+  // Действующая наценка в процентах — из процента либо из примера.
+  const effectiveMarkup = (() => {
+    if (markupMode === 'percent') return Number(markup);
+    const c = Number(exCost);
+    const s = Number(exSale);
+    if (!(c > 0) || !(s > 0)) return NaN;
+    return ((s - c) / c) * 100;
+  })();
 
   const [existing, setExisting] = useState<Product | null>(null);
   const [added, setAdded] = useState<Added[]>([]);
@@ -79,9 +94,8 @@ export default function BulkEntryPage() {
   function onCostChange(v: string) {
     setCost(v);
     const c = Number(v);
-    const m = Number(markup);
-    if (c > 0 && Number.isFinite(m) && !existing) {
-      setSale(String(Number((c * (1 + m / 100)).toFixed(2))));
+    if (c > 0 && Number.isFinite(effectiveMarkup) && !existing) {
+      setSale(String(Number((c * (1 + effectiveMarkup / 100)).toFixed(2))));
     }
   }
 
@@ -168,16 +182,53 @@ export default function BulkEntryPage() {
 
       {/* Общие настройки пачки: их не надо трогать на каждом товаре. */}
       <div className="card batch-settings">
-        <div className="row">
+        <label className="field">
+          <span>Категория пачки</span>
+          <input value={category} onChange={(e) => setCategory(e.target.value)} placeholder="напр. Напитки" />
+        </label>
+
+        <div className="field">
+          <span>Наценка — цена продажи посчитается сама</span>
+          <div className="seg">
+            <button
+              className={`seg__btn ${markupMode === 'percent' ? 'seg__btn--on' : ''}`}
+              onClick={() => setMarkupMode('percent')}
+            >
+              Процентом
+            </button>
+            <button
+              className={`seg__btn ${markupMode === 'example' ? 'seg__btn--on' : ''}`}
+              onClick={() => setMarkupMode('example')}
+            >
+              По примеру
+            </button>
+          </div>
+        </div>
+
+        {markupMode === 'percent' ? (
           <label className="field">
-            <span>Категория пачки</span>
-            <input value={category} onChange={(e) => setCategory(e.target.value)} placeholder="напр. Напитки" />
-          </label>
-          <label className="field">
-            <span>Наценка, %</span>
+            <span>Процент</span>
             <input inputMode="decimal" value={markup} onChange={(e) => setMarkup(e.target.value)} />
           </label>
-        </div>
+        ) : (
+          <>
+            <div className="row">
+              <label className="field">
+                <span>Купили за</span>
+                <input inputMode="decimal" value={exCost} onChange={(e) => setExCost(e.target.value)} placeholder="3" />
+              </label>
+              <label className="field">
+                <span>Продаём за</span>
+                <input inputMode="decimal" value={exSale} onChange={(e) => setExSale(e.target.value)} placeholder="5" />
+              </label>
+            </div>
+            <p className="hint">
+              {Number.isFinite(effectiveMarkup)
+                ? `Это наценка ${effectiveMarkup.toFixed(1)}% — она применится к остальным товарам пачки.`
+                : 'Введите обе цены одного товара — по ним посчитается наценка для всей пачки.'}
+            </p>
+          </>
+        )}
         <div className="field">
           <span>Как продаётся</span>
           <div className="seg">
