@@ -49,9 +49,12 @@ export default function ProductsPage() {
     <div className="page">
       <div className="sale-head">
         <h1>Товары</h1>
-        <button className="btn btn--ghost" onClick={() => setAdding(true)}>
-          + Товар
-        </button>
+        <div className="staff-actions">
+          <a className="btn btn--ghost" href="/bulk">Быстрый завод</a>
+          <button className="btn btn--ghost" onClick={() => setAdding(true)}>
+            + Товар
+          </button>
+        </div>
       </div>
 
       <input

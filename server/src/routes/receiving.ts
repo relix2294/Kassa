@@ -22,9 +22,14 @@ receivingRouter.post('/', async (req, res) => {
   }
   // Закупочную цену задаёт только владелец (п.4 ТЗ). У кассира приём идёт
   // по текущей средней себестоимости — она при этом не меняется.
-  const costNum = isOwner ? Number(cost_price) : null;
-  if (isOwner && !(costNum! >= 0)) {
-    return res.status(400).json({ error: 'cost_price >= 0' });
+  //
+  // Владелец тоже может её не указывать: при быстром заводе товар часто
+  // приходит по той же цене, что и раньше, и перенабирать её на каждой
+  // позиции — лишняя работа. Тогда берём текущую среднюю.
+  const costGiven = isOwner && cost_price !== undefined && cost_price !== null && cost_price !== '';
+  const costNum = costGiven ? Number(cost_price) : null;
+  if (costGiven && !(costNum! >= 0)) {
+    return res.status(400).json({ error: 'Закупочная цена не может быть отрицательной' });
   }
 
   // Приём привязываем к смене, чтобы можно было спросить «что принимали

@@ -12,6 +12,7 @@ import ShiftPage from './pages/ShiftPage';
 import DashboardPage from './pages/DashboardPage';
 import AnalyticsPage from './pages/AnalyticsPage';
 import QueuePage, { QueueBadge } from './pages/QueuePage';
+import BulkEntryPage from './pages/BulkEntryPage';
 
 function OnlineBadge() {
   const [online, setOnline] = useState(isOnline);
@@ -71,6 +72,7 @@ export default function App() {
           <Route path="/queue" element={<QueuePage />} />
           <Route path="/receiving" element={<ReceivingPage />} />
           <Route path="/products" element={owner ? <ProductsPage /> : <Navigate to="/sale" replace />} />
+          <Route path="/bulk" element={owner ? <BulkEntryPage /> : <Navigate to="/sale" replace />} />
           <Route path="/analytics" element={owner ? <AnalyticsPage /> : <Navigate to="/sale" replace />} />
           <Route path="/staff" element={owner ? <StaffPage /> : <Navigate to="/sale" replace />} />
           <Route path="*" element={<Navigate to="/sale" replace />} />
@@ -100,6 +102,12 @@ export default function App() {
           <NavLink to="/products" className="tab">
             <span className="tab__icon">🏷️</span>
             <span>Товары</span>
+          </NavLink>
+        )}
+        {owner && (
+          <NavLink to="/bulk" className="tab">
+            <span className="tab__icon">⚡</span>
+            <span>Завод</span>
           </NavLink>
         )}
         {owner && (

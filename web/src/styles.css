@@ -734,3 +734,7 @@ kbd {
 
 /* Кнопка выбора товара без штрихкода — под полем скана. */
 .btn--pick { width: 100%; margin-bottom: 12px; padding: 12px; }
+
+/* Конвейерный завод товаров. */
+.batch-settings { margin-bottom: 12px; background: var(--surface-2); }
+.staff-actions a.btn { text-decoration: none; display: inline-flex; align-items: center; }
