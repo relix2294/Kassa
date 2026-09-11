@@ -4,6 +4,8 @@ import { completeReturn } from '../sync';
 import { useCurrentUser } from '../session';
 import { useShift } from '../shift';
 import { useGuardedClose } from '../components/Confirm';
+import ProductPicker from '../components/ProductPicker';
+import type { Product } from '../types';
 
 // Частые причины — чтобы кассир не писал руками и владельцу было что группировать.
 const REASONS = ['Брак', 'Не подошёл', 'Передумал', 'Ошибка кассира', 'Просрочен'];
@@ -26,6 +28,7 @@ export default function ReturnPanel({ onClose, onDone }: { onClose: () => void; 
   const [reason, setReason] = useState('');
   const [err, setErr] = useState<string | null>(null);
   const scanRef = useRef<HTMLInputElement>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
   const { requestClose, guard } = useGuardedClose(lines.length > 0 || reason.trim() !== '', onClose);
 
   useEffect(() => {
@@ -33,6 +36,27 @@ export default function ReturnPanel({ onClose, onDone }: { onClose: () => void; 
   }, []);
 
   const total = Number(lines.reduce((s, l) => s + l.unit_price * l.qty, 0).toFixed(2));
+
+  // Добавить товар в возврат. Весовой приходит с указанным весом из выбора,
+  // штучный — по единице (скан или +1).
+  function addLine(p: Product, qty: number) {
+    const key = p.barcode || p.id;
+    setLines((prev) => {
+      const ex = prev.find((l) => l.key === key);
+      if (ex) return prev.map((l) => (l.key === key ? { ...l, qty: Number((l.qty + qty).toFixed(3)) } : l));
+      return [
+        ...prev,
+        {
+          key,
+          product_id: p.id,
+          name: p.name,
+          unit: p.unit === 'kg' ? 'kg' : 'pcs',
+          unit_price: Number(p.sale_price),
+          qty,
+        },
+      ];
+    });
+  }
 
   async function onScan(code: string) {
     const bc = code.trim();
@@ -44,22 +68,7 @@ export default function ReturnPanel({ onClose, onDone }: { onClose: () => void; 
       setTimeout(() => setErr(null), 2000);
       return;
     }
-    const key = p.barcode || p.id;
-    setLines((prev) => {
-      const ex = prev.find((l) => l.key === key);
-      if (ex) return prev.map((l) => (l.key === key ? { ...l, qty: l.qty + 1 } : l));
-      return [
-        ...prev,
-        {
-          key,
-          product_id: p.id,
-          name: p.name,
-          unit: p.unit === 'kg' ? 'kg' : 'pcs',
-          unit_price: Number(p.sale_price),
-          qty: 1,
-        },
-      ];
-    });
+    addLine(p, 1);
   }
 
   async function confirm() {
@@ -92,6 +101,11 @@ export default function ReturnPanel({ onClose, onDone }: { onClose: () => void; 
         >
           <input ref={scanRef} inputMode="numeric" placeholder="Скан возвращаемого товара…" value={barcode} onChange={(e) => setBarcode(e.target.value)} />
         </form>
+
+        {/* Весовой товар и выпечку сканером не вернуть — выбираем из списка. */}
+        <button className="btn btn--ghost btn--pick" onClick={() => setPickerOpen(true)}>
+          Товар без штрихкода
+        </button>
 
         {err && <div className="change change--neg">{err}</div>}
 
@@ -150,6 +164,15 @@ export default function ReturnPanel({ onClose, onDone }: { onClose: () => void; 
         </div>
       </div>
       {guard}
+      {pickerOpen && (
+        <ProductPicker
+          onClose={() => setPickerOpen(false)}
+          onPick={(product, qty) => {
+            addLine(product, qty);
+            setPickerOpen(false);
+          }}
+        />
+      )}
     </div>
   );
 }

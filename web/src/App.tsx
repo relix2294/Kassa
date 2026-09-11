@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { onOnlineChange, isOnline, pullProducts, reconnectRealtime } from './sync';
 import { refreshShift } from './shift';
 import { useAuth, logout } from './auth';
+import { useThemeMode } from './theme';
 import LoginPage from './pages/LoginPage';
 import SalePage from './pages/SalePage';
 import ReceivingPage from './pages/ReceivingPage';
@@ -19,6 +20,15 @@ function OnlineBadge() {
   useEffect(() => onOnlineChange(() => setOnline(isOnline)), []);
   return (
     <span className={`badge ${online ? 'badge--ok' : 'badge--off'}`}>{online ? 'онлайн' : 'нет сети'}</span>
+  );
+}
+
+function ThemeButton() {
+  const { icon, label, cycle } = useThemeMode();
+  return (
+    <button className="theme-btn" onClick={cycle} title={`Тема: ${label} (нажмите, чтобы сменить)`}>
+      {icon}
+    </button>
   );
 }
 
@@ -57,6 +67,7 @@ export default function App() {
         <div className="topbar__right">
           <QueueBadge onOpen={() => navigate('/queue')} />
           <OnlineBadge />
+          <ThemeButton />
           <button className="user-chip" onClick={logout} title="Выйти">
             {user.full_name || user.username} ⏻
           </button>

@@ -3,6 +3,8 @@ import { db } from '../db';
 import { api } from '../api';
 import { useGuardedClose } from '../components/Confirm';
 import { useShift } from '../shift';
+import ProductPicker from '../components/ProductPicker';
+import type { Product } from '../types';
 
 interface CountLine {
   key: string;
@@ -24,6 +26,7 @@ export default function InventoryPanel({ onClose, onDone }: { onClose: () => voi
   const [result, setResult] = useState<any | null>(null);
   const [busy, setBusy] = useState(false);
   const scanRef = useRef<HTMLInputElement>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
   const { requestClose, guard } = useGuardedClose(lines.length > 0, onClose);
   const { shift } = useShift();
 
@@ -31,16 +34,7 @@ export default function InventoryPanel({ onClose, onDone }: { onClose: () => voi
     scanRef.current?.focus();
   }, []);
 
-  async function onScan(code: string) {
-    const bc = code.trim();
-    setBarcode('');
-    if (!bc) return;
-    const p = await db.products.where('barcode').equals(bc).first();
-    if (!p) {
-      setErr('Товара нет в базе');
-      setTimeout(() => setErr(null), 2000);
-      return;
-    }
+  function addProductLine(p: Product) {
     const key = p.barcode || p.id;
     setLines((prev) => {
       if (prev.some((l) => l.key === key)) return prev;
@@ -56,6 +50,19 @@ export default function InventoryPanel({ onClose, onDone }: { onClose: () => voi
         },
       ];
     });
+  }
+
+  async function onScan(code: string) {
+    const bc = code.trim();
+    setBarcode('');
+    if (!bc) return;
+    const p = await db.products.where('barcode').equals(bc).first();
+    if (!p) {
+      setErr('Товара нет в базе');
+      setTimeout(() => setErr(null), 2000);
+      return;
+    }
+    addProductLine(p);
   }
 
   async function save() {
@@ -139,6 +146,10 @@ export default function InventoryPanel({ onClose, onDone }: { onClose: () => voi
           />
         </form>
 
+        <button className="btn btn--ghost btn--pick" onClick={() => setPickerOpen(true)}>
+          Товар без штрихкода
+        </button>
+
         {err && <div className="change change--neg">{err}</div>}
 
         <div className="cart">
@@ -198,6 +209,15 @@ export default function InventoryPanel({ onClose, onDone }: { onClose: () => voi
         </div>
       </div>
       {guard}
+      {pickerOpen && (
+        <ProductPicker
+          onClose={() => setPickerOpen(false)}
+          onPick={(product) => {
+            addProductLine(product);
+            setPickerOpen(false);
+          }}
+        />
+      )}
     </div>
   );
 }

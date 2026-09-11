@@ -1,15 +1,43 @@
-:root {
-  --bg: #0f172a;
-  --surface: #1e293b;
-  --surface-2: #334155;
-  --text: #e2e8f0;
-  --muted: #94a3b8;
-  --primary: #38bdf8;
-  --primary-ink: #0f172a;
-  --ok: #22c55e;
-  --off: #f59e0b;
-  --danger: #ef4444;
-  --radius: 14px;
+/* Тёмная тема — по умолчанию (вечер/ночь). */
+:root,
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --bg: #0b1220;
+  --surface: #151d2e;
+  --surface-2: #26324a;
+  --border: #2a3650;
+  --text: #eaf0f8;
+  --muted: #8ea0ba;
+  --primary: #4f9dff;
+  --primary-2: #6ea8ff;
+  --primary-ink: #06122a;
+  --ok: #34d399;
+  --off: #fbbf24;
+  --danger: #f87171;
+  --radius: 16px;
+  --shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.25);
+  --overlay: rgba(3, 7, 18, 0.66);
+}
+
+/* Светлая тема — день. */
+:root[data-theme='light'] {
+  color-scheme: light;
+  --bg: #eef2f9;
+  --surface: #ffffff;
+  --surface-2: #eceff5;
+  --border: #dce2ec;
+  --text: #10192e;
+  --muted: #5b6a82;
+  --primary: #2563eb;
+  --primary-2: #3b82f6;
+  --primary-ink: #ffffff;
+  --ok: #059669;
+  --off: #d97706;
+  --danger: #dc2626;
+  --shadow: 0 12px 30px rgba(30, 50, 90, 0.12);
+  --shadow-sm: 0 1px 4px rgba(30, 50, 90, 0.08);
+  --overlay: rgba(15, 23, 42, 0.4);
 }
 
 * { box-sizing: border-box; }
@@ -21,6 +49,7 @@ body {
   color: var(--text);
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 .app {
@@ -45,7 +74,7 @@ body {
   justify-content: space-between;
   padding: 14px 16px;
   padding-top: max(14px, env(safe-area-inset-top));
-  border-bottom: 1px solid var(--surface-2);
+  border-bottom: 1px solid var(--border);
 }
 .brand { font-weight: 700; font-size: 20px; letter-spacing: 0.5px; }
 
@@ -67,7 +96,7 @@ body {
 
 input, .search {
   background: var(--bg);
-  border: 1px solid var(--surface-2);
+  border: 1px solid var(--border);
   color: var(--text);
   border-radius: 10px;
   padding: 12px 14px;
@@ -134,7 +163,7 @@ input:focus, .search:focus { outline: none; border-color: var(--primary); }
 
 .tabbar {
   display: flex;
-  border-top: 1px solid var(--surface-2);
+  border-top: 1px solid var(--border);
   padding-bottom: env(safe-area-inset-bottom);
   overflow-x: auto;
   scrollbar-width: none;
@@ -165,7 +194,7 @@ input:focus, .search:focus { outline: none; border-color: var(--primary); }
   padding: 12px 18px;
   border-radius: 999px;
   font-size: 15px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  box-shadow: var(--shadow);
   z-index: 50;
   max-width: 90%;
   text-align: center;
@@ -174,7 +203,7 @@ input:focus, .search:focus { outline: none; border-color: var(--primary); }
 .modal-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.6);
+  background: var(--overlay);
   display: flex;
   align-items: flex-end;
   justify-content: center;
@@ -201,7 +230,7 @@ input:focus, .search:focus { outline: none; border-color: var(--primary); }
 /* --- Продажа --- */
 .page--sale { display: flex; flex-direction: column; height: 100%; }
 .sale-head { display: flex; align-items: center; justify-content: space-between; }
-.btn--ghost { background: transparent; border: 1px solid var(--surface-2); flex: 0 0 auto; padding: 8px 14px; }
+.btn--ghost { background: transparent; border: 1px solid var(--border); flex: 0 0 auto; padding: 8px 14px; }
 .btn--pay { flex: 2; }
 .btn--big { padding: 20px; font-size: 18px; }
 
@@ -275,7 +304,7 @@ input:focus, .search:focus { outline: none; border-color: var(--primary); }
 
 .keypad-value {
   background: var(--bg);
-  border: 1px solid var(--surface-2);
+  border: 1px solid var(--border);
   border-radius: 10px;
   padding: 14px;
   font-size: 26px;
@@ -393,7 +422,7 @@ input:focus, .search:focus { outline: none; border-color: var(--primary); }
 
 select {
   background: var(--bg);
-  border: 1px solid var(--surface-2);
+  border: 1px solid var(--border);
   color: var(--text);
   border-radius: 10px;
   padding: 12px 14px;
@@ -408,7 +437,7 @@ select:focus { outline: none; border-color: var(--primary); }
   font-size: 18px;
   text-align: right;
   padding-top: 8px;
-  border-top: 1px solid var(--surface-2);
+  border-top: 1px solid var(--border);
 }
 .shift-diff { font-size: 18px; }
 .shift-diff--neg { color: var(--danger); }
@@ -444,7 +473,7 @@ select:focus { outline: none; border-color: var(--primary); }
     justify-content: flex-start;
     gap: 4px;
     border-top: none;
-    border-right: 1px solid var(--surface-2);
+    border-right: 1px solid var(--border);
     padding: 16px 10px;
     overflow-y: auto;
     overflow-x: hidden;
@@ -603,7 +632,7 @@ kbd {
   cursor: pointer;
 }
 .quick-sum:active { background: var(--primary); color: var(--primary-ink); }
-.quick-sum--exact { font-size: 15px; background: var(--surface); border: 1px solid var(--surface-2); }
+.quick-sum--exact { font-size: 15px; background: var(--surface); border: 1px solid var(--border); }
 
 /* Экран сдачи после оплаты. */
 .change-screen {
@@ -653,7 +682,7 @@ kbd {
 .modal--confirm { max-width: 420px; }
 
 /* Предпросмотр массовой смены цен. */
-.preview { background: var(--bg); border: 1px solid var(--surface-2); border-radius: 10px; padding: 12px; }
+.preview { background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 12px; }
 .preview__title { font-size: 13px; color: var(--muted); margin-bottom: 8px; }
 .preview__row { display: flex; justify-content: space-between; gap: 12px; padding: 3px 0; font-size: 14px; }
 .preview__name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -683,7 +712,7 @@ kbd {
   justify-content: flex-start;
   gap: 4px;
   border-top: none;
-  border-right: 1px solid var(--surface-2);
+  border-right: 1px solid var(--border);
   padding: 16px 10px;
   overflow-y: auto;
   overflow-x: hidden;
@@ -724,7 +753,7 @@ kbd {
 }
 .force-mobile .tabbar {
   flex-direction: row;
-  border-top: 1px solid var(--surface-2);
+  border-top: 1px solid var(--border);
   border-right: none;
   padding: 0;
 }
@@ -738,3 +767,93 @@ kbd {
 /* Конвейерный завод товаров. */
 .batch-settings { margin-bottom: 12px; background: var(--surface-2); }
 .staff-actions a.btn { text-decoration: none; display: inline-flex; align-items: center; }
+
+/* ==========================================================================
+   Визуальный слой: глубина, границы, акценты. Работает в обеих темах.
+   ========================================================================== */
+
+/* Карточки и элементы списков получают мягкую тень и границу — на светлом
+   фоне белые блоки иначе сливаются, на тёмном добавляют объём. */
+.card,
+.kpi,
+.list-item,
+.cart-line,
+.payform__total,
+.change-box {
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-sm);
+}
+.list-item { transition: transform 0.08s ease, border-color 0.15s ease; }
+.list-item:not(.list-item--static):active { transform: scale(0.99); }
+.list-item:not(.list-item--static):hover { border-color: var(--primary); }
+
+/* Главные кнопки — лёгкий градиент, чтобы касса не выглядела плоско. */
+.btn--primary {
+  background: linear-gradient(135deg, var(--primary), var(--primary-2));
+  box-shadow: var(--shadow-sm);
+}
+.btn--primary:active { filter: brightness(0.96); }
+
+/* Шапка приподнята над контентом. */
+.topbar {
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+  position: relative;
+  z-index: 10;
+}
+.brand {
+  background: linear-gradient(135deg, var(--primary), var(--primary-2));
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Активная вкладка на телефоне — подсвеченная плашка. */
+.tab.active { position: relative; }
+.tab.active::before {
+  content: '';
+  position: absolute;
+  top: 4px;
+  width: 34px;
+  height: 3px;
+  border-radius: 3px;
+  background: var(--primary);
+}
+@media (min-width: 768px) {
+  .tab.active::before { display: none; }
+}
+
+/* Сумма к оплате и крупные числа — акцент цветом бренда. */
+.payform__sum { color: var(--primary); }
+
+/* KPI-плитки в кабинете — цветная полоска слева, живее плоских цифр. */
+.kpi { position: relative; overflow: hidden; }
+.kpi::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 4px;
+  background: var(--primary);
+  opacity: 0.5;
+}
+.kpi--big::before { opacity: 1; }
+
+/* Кнопка переключения темы в шапке. */
+.theme-btn {
+  background: var(--surface-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  width: 38px;
+  height: 38px;
+  font-size: 17px;
+  cursor: pointer;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.theme-btn:active { transform: scale(0.94); }
+
+/* Логин — карточка с тенью по центру. */
+.login__card { box-shadow: var(--shadow); border: 1px solid var(--border); }
