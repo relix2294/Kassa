@@ -74,11 +74,13 @@ export default function SalePage() {
     await addToCart(product);
   }
 
-  async function pay(method: 'cash' | 'card', received?: number) {
-    const due = method === 'cash' && received != null ? Number((received - total).toFixed(2)) : 0;
+  async function pay(method: 'cash' | 'card' | 'mixed', received?: number, cardAmount?: number) {
+    // Сдача считается от наличной части: для смешанной это total минус карта.
+    const cashDue = method === 'mixed' ? total - (cardAmount ?? 0) : method === 'cash' ? total : 0;
+    const due = received != null && cashDue > 0 ? Number((received - cashDue).toFixed(2)) : 0;
     try {
       const items = lines.map((l) => ({ product_id: l.product_id, qty: l.qty, expected_price: l.unit_price }));
-      const r = await completeSale(items, method, received, shift?.id);
+      const r = await completeSale(items, method, received, shift?.id, cardAmount);
       await clearCart();
       setPayOpen(false);
       // Сдачу показываем крупно и держим на экране, пока кассир её отсчитывает.

@@ -81,12 +81,23 @@ CREATE TABLE IF NOT EXISTS sales (
   client_id      text UNIQUE,                       -- id чека с кассы (идемпотентность при повторной отправке)
   total          numeric(12,2) NOT NULL,            -- сумма к оплате
   cost_total     numeric(12,2) NOT NULL DEFAULT 0,  -- сумма себестоимости (для маржи)
-  payment_method text NOT NULL,                     -- 'cash' | 'card'
+  payment_method text NOT NULL,                     -- 'cash' | 'card' | 'mixed'
   cash_received  numeric(12,2),                     -- получено наличными (для сдачи)
   change_given   numeric(12,2),                     -- сдача
   user_id        uuid REFERENCES users(id),
   created_at     timestamptz NOT NULL DEFAULT now()
 );
+
+-- Разбивка оплаты. Ведём для каждого чека, чтобы смешанная оплата (часть
+-- наличными, часть картой) корректно попадала в сверку кассы и в кабинет.
+ALTER TABLE sales ADD COLUMN IF NOT EXISTS cash_amount numeric(12,2);
+ALTER TABLE sales ADD COLUMN IF NOT EXISTS card_amount numeric(12,2);
+
+-- Заполняем разбивку для старых чеков по способу оплаты.
+UPDATE sales SET cash_amount = total, card_amount = 0
+  WHERE cash_amount IS NULL AND payment_method = 'cash';
+UPDATE sales SET cash_amount = 0, card_amount = total
+  WHERE cash_amount IS NULL AND payment_method = 'card';
 
 CREATE INDEX IF NOT EXISTS idx_sales_created ON sales(created_at);
 

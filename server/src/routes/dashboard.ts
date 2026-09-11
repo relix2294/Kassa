@@ -36,8 +36,8 @@ dashboardRouter.get('/summary', async (req, res) => {
          COUNT(*)                       AS receipts,
          COALESCE(SUM(total),0)         AS revenue,
          COALESCE(SUM(cost_total),0)    AS cost,
-         COALESCE(SUM(total) FILTER (WHERE payment_method='cash'),0) AS cash,
-         COALESCE(SUM(total) FILTER (WHERE payment_method='card'),0) AS card
+         COALESCE(SUM(COALESCE(cash_amount, total)),0) AS cash,
+         COALESCE(SUM(COALESCE(card_amount, 0)),0)     AS card
        FROM sales WHERE ${where}`,
     )
   )[0];

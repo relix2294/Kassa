@@ -261,9 +261,10 @@ async function adjustLocalStock(item: { barcode?: string; product_id?: string },
 // Провести продажу. items — строки корзины. Возвращает сдачу.
 export async function completeSale(
   items: { barcode?: string; product_id?: string; qty: number; expected_price?: number }[],
-  paymentMethod: 'cash' | 'card',
+  paymentMethod: 'cash' | 'card' | 'mixed',
   cashReceived: number | undefined,
   shiftId?: string,
+  cardAmount?: number,
 ): Promise<{ queued: boolean }> {
   const client_id = crypto.randomUUID();
   // shift_id фиксируем на момент продажи: если чек уйдёт в очередь и доедет
@@ -273,6 +274,7 @@ export async function completeSale(
     items,
     payment_method: paymentMethod,
     cash_received: cashReceived,
+    card_amount: cardAmount,
     shift_id: shiftId,
   };
   // Оптимистичное списание остатка.

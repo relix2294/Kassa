@@ -39,8 +39,9 @@ export const api = {
   createSale: (payload: {
     client_id: string;
     items: { barcode?: string; product_id?: string; qty: number; expected_price?: number }[];
-    payment_method: 'cash' | 'card';
+    payment_method: 'cash' | 'card' | 'mixed';
     cash_received?: number;
+    card_amount?: number;
     shift_id?: string;
   }) => req<{ sale: any; duplicate?: boolean }>('/sales', { method: 'POST', body: JSON.stringify(payload) }),
   createReturn: (payload: {

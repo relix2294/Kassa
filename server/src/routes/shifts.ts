@@ -32,9 +32,11 @@ export async function recomputeClosedShift(shiftId: string) {
 
 // Сколько наличных должно быть в кассе по чекам этой смены.
 async function computeExpected(shift: any): Promise<number> {
+  // Наличными в кассу попадает наличная часть чека — в т.ч. у смешанной оплаты.
   const cashSales = (
     await query<{ sum: number }>(
-      `SELECT COALESCE(SUM(total),0) AS sum FROM sales WHERE shift_id = $1 AND payment_method = 'cash'`,
+      `SELECT COALESCE(SUM(COALESCE(cash_amount, total)),0) AS sum
+         FROM sales WHERE shift_id = $1`,
       [shift.id],
     )
   )[0].sum;
@@ -53,8 +55,8 @@ shiftsRouter.get('/current', async (req, res) => {
     await query(
       `SELECT
          (SELECT COUNT(*) FROM sales WHERE shift_id = $1) AS sales_count,
-         (SELECT COALESCE(SUM(total),0) FROM sales WHERE shift_id = $1 AND payment_method = 'cash') AS cash_sales,
-         (SELECT COALESCE(SUM(total),0) FROM sales WHERE shift_id = $1 AND payment_method = 'card') AS card_sales,
+         (SELECT COALESCE(SUM(COALESCE(cash_amount, total)),0) FROM sales WHERE shift_id = $1) AS cash_sales,
+         (SELECT COALESCE(SUM(COALESCE(card_amount, 0)),0) FROM sales WHERE shift_id = $1) AS card_sales,
          (SELECT COALESCE(SUM(total),0) FROM returns WHERE shift_id = $1) AS refunds`,
       [shift.id],
     )

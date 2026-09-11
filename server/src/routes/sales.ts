@@ -24,14 +24,14 @@ salesRouter.get('/', requireOwner, async (req, res) => {
 // Провести продажу (чек).
 // Тело: { client_id, items:[{barcode, qty}], payment_method, cash_received?, user_id }
 salesRouter.post('/', async (req, res) => {
-  const { client_id, items, payment_method, cash_received, shift_id } = req.body ?? {};
+  const { client_id, items, payment_method, cash_received, card_amount, shift_id } = req.body ?? {};
   const user_id = req.user!.id;
 
   if (!Array.isArray(items) || items.length === 0) {
     return res.status(400).json({ error: 'Пустой чек' });
   }
-  if (payment_method !== 'cash' && payment_method !== 'card') {
-    return res.status(400).json({ error: 'payment_method: cash | card' });
+  if (payment_method !== 'cash' && payment_method !== 'card' && payment_method !== 'mixed') {
+    return res.status(400).json({ error: 'payment_method: cash | card | mixed' });
   }
 
   // Идемпотентность: тот же чек не проводим дважды (повтор из outbox при обрыве).
@@ -114,21 +114,36 @@ salesRouter.post('/', async (req, res) => {
       total = Number(total.toFixed(2));
       costTotal = Number(costTotal.toFixed(2));
 
+      // Разбивка оплаты. Картой покрывается заданная часть, остальное —
+      // наличными. Для чистого 'card' карта = вся сумма, для 'cash' — 0.
+      let cardAmount = 0;
+      if (payment_method === 'card') cardAmount = total;
+      else if (payment_method === 'mixed') {
+        cardAmount = Math.min(Math.max(Number(card_amount) || 0, 0), total);
+      }
+      const cashAmount = Number((total - cardAmount).toFixed(2));
+
+      // Сдача считается только от наличной части. cash_received — сколько
+      // покупатель дал наличными; если не передано, считаем «под расчёт».
+      const cashReceivedNum =
+        cashAmount > 0 && cash_received != null ? Number(cash_received) : cashAmount;
       const change =
-        payment_method === 'cash' && cash_received != null
-          ? Number((Number(cash_received) - total).toFixed(2))
-          : null;
+        cashAmount > 0 ? Number((cashReceivedNum - cashAmount).toFixed(2)) : null;
 
       const saleRow = (
         await client.query(
-          `INSERT INTO sales (client_id, total, cost_total, payment_method, cash_received, change_given, user_id, shift_id)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
+          `INSERT INTO sales
+             (client_id, total, cost_total, payment_method, cash_amount, card_amount,
+              cash_received, change_given, user_id, shift_id)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
           [
             client_id ?? null,
             total,
             costTotal,
             payment_method,
-            payment_method === 'cash' ? cash_received ?? null : null,
+            cashAmount,
+            cardAmount,
+            cashAmount > 0 ? cashReceivedNum : null,
             change,
             user_id ?? null,
             shift.id,
