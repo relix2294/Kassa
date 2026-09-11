@@ -28,9 +28,25 @@ export async function addToCart(product: Product, qty = 1) {
     name: product.name,
     unit: product.unit === 'kg' ? 'kg' : 'pcs',
     unit_price: Number(product.sale_price),
+    discount_price: product.discount_price ?? null,
+    discount_left: product.discount_left ?? null,
     qty,
   };
   await db.cart.put(line);
+}
+
+// Сумма строки с учётом акции (совпадает с расчётом сервера). При лимите
+// количества часть единиц идёт по акции, часть — по обычной цене.
+export function lineTotal(l: CartLine): number {
+  const active = l.discount_price != null && (l.discount_left == null || l.discount_left > 0);
+  if (!active) return Number((l.unit_price * l.qty).toFixed(2));
+  const dUnits = l.discount_left == null ? l.qty : Math.min(l.qty, l.discount_left);
+  return Number((dUnits * (l.discount_price as number) + (l.qty - dUnits) * l.unit_price).toFixed(2));
+}
+
+// Есть ли на строке действующая акция.
+export function lineHasDiscount(l: CartLine): boolean {
+  return l.discount_price != null && (l.discount_left == null || l.discount_left > 0);
 }
 
 export async function setQty(key: string, qty: number) {
@@ -66,7 +82,7 @@ export async function clearCart(logIt = false) {
 }
 
 export function cartTotal(lines: CartLine[]): number {
-  return Number(lines.reduce((s, l) => s + l.unit_price * l.qty, 0).toFixed(2));
+  return Number(lines.reduce((s, l) => s + lineTotal(l), 0).toFixed(2));
 }
 
 // Как показать количество: «2 шт» или «0.35 кг».

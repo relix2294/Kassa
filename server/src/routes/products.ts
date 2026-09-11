@@ -111,6 +111,49 @@ productsRouter.patch('/:id', requireOwner, async (req, res) => {
   res.json(after);
 });
 
+// Назначить или снять скидку на товар — только владелец.
+// Тело: { discount_price, discount_limit }  или  { clear: true }
+//   discount_price — акционная цена (должна быть меньше обычной);
+//   discount_limit — сколько единиц продать по акции (пусто = без лимита).
+productsRouter.post('/:id/discount', requireOwner, async (req, res) => {
+  const { id } = req.params;
+  const { discount_price, discount_limit, clear } = req.body ?? {};
+
+  const before = (await query(`SELECT * FROM products WHERE id = $1`, [id]))[0];
+  if (!before) return res.status(404).json({ error: 'not_found' });
+
+  if (clear) {
+    const rows = await query(
+      `UPDATE products SET discount_price = NULL, discount_left = NULL, updated_at = now()
+        WHERE id = $1 RETURNING *`,
+      [id],
+    );
+    await writeLog({ type: 'discount_clear', entity: 'product', entityId: id, userId: req.user!.id, details: { name: before.name } });
+    broadcast('product_upsert', rows[0], 'all');
+    return res.json(rows[0]);
+  }
+
+  const price = Number(discount_price);
+  if (!(price >= 0)) return res.status(400).json({ error: 'Укажите акционную цену' });
+  if (price >= Number(before.sale_price)) {
+    return res.status(400).json({ error: 'Акционная цена должна быть меньше обычной' });
+  }
+  const limit = discount_limit === '' || discount_limit == null ? null : Number(discount_limit);
+  if (limit != null && !(limit > 0)) return res.status(400).json({ error: 'Лимит количества должен быть больше нуля' });
+
+  const rows = await query(
+    `UPDATE products SET discount_price = $2, discount_left = $3, updated_at = now()
+      WHERE id = $1 RETURNING *`,
+    [id, price, limit],
+  );
+  await writeLog({
+    type: 'discount_set', entity: 'product', entityId: id, userId: req.user!.id,
+    details: { name: before.name, old_price: before.sale_price, discount_price: price, limit },
+  });
+  broadcast('product_upsert', rows[0], 'all');
+  res.json(rows[0]);
+});
+
 // Убрать товар из работы. Не удаляем: на него ссылаются проданные чеки
 // и приёмки, история должна остаться целой.
 productsRouter.post('/:id/archive', requireOwner, async (req, res) => {

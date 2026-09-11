@@ -33,6 +33,13 @@ CREATE TABLE IF NOT EXISTS products (
 CREATE INDEX IF NOT EXISTS idx_products_barcode ON products(barcode);
 CREATE INDEX IF NOT EXISTS idx_products_category ON products(category);
 
+-- Скидка на товар. Задаёт только владелец: например, на товар со скоро
+-- истекающим сроком. discount_price — акционная цена (< обычной).
+-- discount_left — сколько ещё единиц продать по акции (null = без лимита,
+-- 0 = акция закончилась). Кассир скидку не назначает, только продаёт.
+ALTER TABLE products ADD COLUMN IF NOT EXISTS discount_price numeric(12,2);
+ALTER TABLE products ADD COLUMN IF NOT EXISTS discount_left  numeric(12,3);
+
 -- Единица измерения: 'pcs' — штучный, 'kg' — весовой (курут, развес).
 -- Для весового sale_price и cost_price — это цена за килограмм,
 -- а stock хранится в килограммах.

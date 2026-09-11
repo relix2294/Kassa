@@ -29,6 +29,9 @@ export interface CartLine {
   name: string;
   unit: 'pcs' | 'kg';
   unit_price: number;
+  /** Снимок акции на момент добавления (цену считает сервер, это для показа). */
+  discount_price?: number | null;
+  discount_left?: number | null;
   qty: number;
 }
 

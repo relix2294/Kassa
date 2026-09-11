@@ -88,24 +88,42 @@ salesRouter.post('/', async (req, res) => {
           };
         }
 
-        // Цену считаем свою (клиенту доверять нельзя — иначе можно прислать 0),
-        // но сверяем с той, что видел кассир. Если владелец поменял цену, пока
-        // чек набирали, — не пробиваем молча другую сумму.
-        const unitPrice = Number(p.sale_price);
-        if (item.expected_price != null && Number(item.expected_price) !== unitPrice) {
+        // Базовую цену считаем свою (клиенту доверять нельзя), но сверяем с той,
+        // что видел кассир. Если владелец поменял обычную цену, пока чек
+        // набирали, — не пробиваем молча другую сумму.
+        const basePrice = Number(p.sale_price);
+        if (item.expected_price != null && Number(item.expected_price) !== basePrice) {
           throw {
             status: 409,
-            message: `Цена «${p.name}» изменилась: было ${item.expected_price}, стало ${unitPrice}. Пересоберите чек.`,
+            message: `Цена «${p.name}» изменилась: было ${item.expected_price}, стало ${basePrice}. Пересоберите чек.`,
           };
         }
+
+        // Скидка владельца применяется автоматически. Считает сервер — с учётом
+        // лимита количества, чтобы по акции ушло ровно столько, сколько назначено.
+        const discActive = p.discount_price != null && (p.discount_left == null || Number(p.discount_left) > 0);
+        let discUnits = 0;
+        if (discActive) {
+          discUnits = p.discount_left == null ? qty : Math.min(qty, Number(p.discount_left));
+        }
+        const discPrice = discActive ? Number(p.discount_price) : basePrice;
+        const lineTotal = Number((discUnits * discPrice + (qty - discUnits) * basePrice).toFixed(2));
+        // Средняя цена единицы в этой строке (для чека — цена может быть смешанной).
+        const unitPrice = Number((lineTotal / qty).toFixed(2));
+
         const unitCost = Number(p.cost_price);
-        const lineTotal = Number((unitPrice * qty).toFixed(2));
         total += lineTotal;
         costTotal += Number((unitCost * qty).toFixed(2));
 
+        // Списываем остаток и уменьшаем остаток акции на проданное по скидке.
         const upd = await client.query(
-          `UPDATE products SET stock = stock - $2, updated_at = now() WHERE id = $1 RETURNING *`,
-          [p.id, qty],
+          `UPDATE products
+              SET stock = stock - $2,
+                  discount_left = CASE WHEN discount_left IS NULL THEN NULL
+                                       ELSE GREATEST(discount_left - $3, 0) END,
+                  updated_at = now()
+            WHERE id = $1 RETURNING *`,
+          [p.id, qty, discUnits],
         );
         changedProducts.push(upd.rows[0]);
         lineRows.push({ p, qty, unitPrice, unitCost, lineTotal });

@@ -8,6 +8,10 @@ export interface Product {
   category: string | null;
   sale_price: number;
   cost_price: number;
+  /** Акционная цена (задаёт владелец). null — скидки нет. */
+  discount_price: number | null;
+  /** Сколько ещё единиц по акции. null — без лимита, 0 — акция кончилась. */
+  discount_left: number | null;
   stock: number;
   min_stock: number;
   is_archived: boolean;

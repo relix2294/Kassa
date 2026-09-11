@@ -857,3 +857,16 @@ kbd {
 
 /* Логин — карточка с тенью по центру. */
 .login__card { box-shadow: var(--shadow); border: 1px solid var(--border); }
+
+/* Скидка. */
+.badge--sale { background: rgba(220, 38, 38, 0.15); color: var(--danger); margin-left: 8px; }
+.discount-box {
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.discount-box__head { display: flex; justify-content: space-between; align-items: center; font-size: 14px; color: var(--muted); }
+.price-old { text-decoration: line-through; color: var(--muted); }

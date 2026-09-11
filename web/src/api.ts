@@ -50,6 +50,8 @@ export const api = {
     reason?: string;
     shift_id?: string;
   }) => req<{ ret: any; duplicate?: boolean }>('/returns', { method: 'POST', body: JSON.stringify(payload) }),
+  setDiscount: (id: string, payload: { discount_price?: number; discount_limit?: number | null; clear?: boolean }) =>
+    req<Product>(`/products/${id}/discount`, { method: 'POST', body: JSON.stringify(payload) }),
   archiveProduct: (id: string, archive = true) =>
     req<Product>(`/products/${id}/archive`, { method: 'POST', body: JSON.stringify({ archive }) }),
   listArchived: () => req<Product[]>('/products/archived'),

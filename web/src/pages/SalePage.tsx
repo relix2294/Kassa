@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, type CartLine } from '../db';
-import { addToCart, cartTotal, clearCart, removeLine, setQty, formatQty } from '../cart';
+import { addToCart, cartTotal, clearCart, removeLine, setQty, formatQty, lineTotal, lineHasDiscount } from '../cart';
 import { completeSale } from '../sync';
 import { useCurrentUser } from '../session';
 import { useShift, refreshShift, openShift } from '../shift';
@@ -103,10 +103,22 @@ export default function SalePage() {
       {lines.map((l) => (
         <div key={l.key} className="cart-line">
           <div className="cart-line__main">
-            <div className="cart-line__name">{l.name}</div>
+            <div className="cart-line__name">
+              {l.name}
+              {lineHasDiscount(l) && <span className="badge badge--sale">скидка</span>}
+            </div>
             <div className="muted">
-              {l.unit_price}{l.unit === 'kg' ? ' /кг' : ''} × {formatQty(l)} ={' '}
-              <b>{Number((l.unit_price * l.qty).toFixed(2))}</b>
+              {lineHasDiscount(l) ? (
+                <>
+                  <s>{l.unit_price}</s> {l.discount_price}
+                  {l.unit === 'kg' ? ' /кг' : ''} × {formatQty(l)} = <b>{lineTotal(l)}</b>
+                </>
+              ) : (
+                <>
+                  {l.unit_price}
+                  {l.unit === 'kg' ? ' /кг' : ''} × {formatQty(l)} = <b>{lineTotal(l)}</b>
+                </>
+              )}
             </div>
           </div>
           <div className="qty-ctrl">

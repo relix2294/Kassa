@@ -77,7 +77,10 @@ export default function ProductsPage() {
           return (
             <button key={p.id} className="list-item" onClick={() => setEditing(p)}>
               <div className="list-item__main">
-                <div className="list-item__name">{p.name}</div>
+                <div className="list-item__name">
+                  {p.name}
+                  {p.discount_price != null && <span className="badge badge--sale">скидка</span>}
+                </div>
                 <div className="muted">
                   {p.barcode || 'без штрихкода'}
                   {p.category ? ` · ${p.category}` : ''}
@@ -88,7 +91,11 @@ export default function ProductsPage() {
                   {p.stock} {p.unit === 'kg' ? 'кг' : 'шт'}
                 </div>
                 <div className="muted">
-                  {p.sale_price}{p.unit === 'kg' ? ' /кг' : ''} прод.{p.cost_price != null ? ` · ${p.cost_price} закуп.` : ''}
+                  {p.discount_price != null ? (
+                    <><span className="price-old">{p.sale_price}</span> {p.discount_price}</>
+                  ) : (
+                    <>{p.sale_price}</>
+                  )}{p.unit === 'kg' ? ' /кг' : ''} прод.{p.cost_price != null ? ` · ${p.cost_price} закуп.` : ''}
                 </div>
               </div>
             </button>
@@ -249,6 +256,12 @@ function EditModal({
   const [busy, setBusy] = useState(false);
   const [askArchive, setAskArchive] = useState(false);
 
+  // Скидка на товар (только владелец). Отдельная кнопка — назначить/снять.
+  const [discPrice, setDiscPrice] = useState(product.discount_price != null ? String(product.discount_price) : '');
+  const [discLimit, setDiscLimit] = useState(product.discount_left != null ? String(product.discount_left) : '');
+  const [discErr, setDiscErr] = useState<string | null>(null);
+  const hasDiscount = product.discount_price != null;
+
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
@@ -291,6 +304,64 @@ function EditModal({
           <span>Мин. остаток{unit === 'kg' ? ', кг' : ', шт'}</span>
           <input inputMode="decimal" value={min} onChange={(e) => setMin(e.target.value)} />
         </label>
+
+        {/* Скидка. Задаёт только владелец; кассир при продаже её просто применяет. */}
+        <div className="discount-box">
+          <div className="discount-box__head">
+            <span>Скидка{hasDiscount ? ' (действует)' : ''}</span>
+            {hasDiscount && (
+              <button
+                className="btn btn--link"
+                disabled={busy}
+                onClick={async () => {
+                  setBusy(true);
+                  try {
+                    await api.setDiscount(product.id, { clear: true });
+                    await pullProducts();
+                    onSaved('Скидка снята');
+                  } finally {
+                    setBusy(false);
+                  }
+                }}
+              >
+                Снять
+              </button>
+            )}
+          </div>
+          <div className="row">
+            <label className="field">
+              <span>Акционная цена{unit === 'kg' ? ' за кг' : ''}</span>
+              <input inputMode="decimal" value={discPrice} onChange={(e) => setDiscPrice(e.target.value)} placeholder={`меньше ${sale}`} />
+            </label>
+            <label className="field">
+              <span>Лимит {unit === 'kg' ? 'кг' : 'шт'} — пусто без лимита</span>
+              <input inputMode="decimal" value={discLimit} onChange={(e) => setDiscLimit(e.target.value)} placeholder="напр. 20" />
+            </label>
+          </div>
+          {discErr && <div className="change change--neg">{discErr}</div>}
+          <button
+            className="btn"
+            disabled={busy || !discPrice}
+            onClick={async () => {
+              setBusy(true);
+              setDiscErr(null);
+              try {
+                await api.setDiscount(product.id, {
+                  discount_price: Number(discPrice),
+                  discount_limit: discLimit === '' ? null : Number(discLimit),
+                });
+                await pullProducts();
+                onSaved('Скидка назначена');
+              } catch (e: any) {
+                setDiscErr(e.message);
+              } finally {
+                setBusy(false);
+              }
+            }}
+          >
+            {hasDiscount ? 'Обновить скидку' : 'Назначить скидку'}
+          </button>
+        </div>
 
         <div className="row">
           <button className="btn" onClick={onClose} disabled={busy}>
