@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import NumberInput from '../components/NumberInput';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db';
 import { api } from '../api';
@@ -197,10 +198,10 @@ function AddProduct({ onClose, onDone }: { onClose: () => void; onDone: (name: s
 
         <label className="field">
           <span>Штрихкод — необязательно</span>
-          <input
-            inputMode="numeric"
+          <NumberInput
+            mode="int"
             value={barcode}
-            onChange={(e) => setBarcode(e.target.value)}
+            onValue={setBarcode}
             placeholder={unit === 'kg' ? 'у весового обычно нет' : 'если есть на упаковке'}
           />
         </label>
@@ -211,16 +212,16 @@ function AddProduct({ onClose, onDone }: { onClose: () => void; onDone: (name: s
         <div className="row">
           <label className="field">
             <span>Цена продажи{unit === 'kg' ? ' за кг' : ''}</span>
-            <input inputMode="decimal" value={sale} onChange={(e) => setSale(e.target.value)} />
+            <NumberInput value={sale} onValue={setSale} />
           </label>
           <label className="field">
             <span>Закупочная{unit === 'kg' ? ' за кг' : ''}</span>
-            <input inputMode="decimal" value={cost} onChange={(e) => setCost(e.target.value)} />
+            <NumberInput value={cost} onValue={setCost} />
           </label>
         </div>
         <label className="field">
           <span>Мин. остаток{unit === 'kg' ? ', кг' : ', шт'}</span>
-          <input inputMode="decimal" value={min} onChange={(e) => setMin(e.target.value)} />
+          <NumberInput value={min} onValue={setMin} />
         </label>
 
         {err && <div className="change change--neg">{err}</div>}
@@ -293,16 +294,16 @@ function EditModal({
         <div className="row">
           <label className="field">
             <span>Цена продажи{unit === 'kg' ? ' за кг' : ''}</span>
-            <input inputMode="decimal" value={sale} onChange={(e) => setSale(e.target.value)} />
+            <NumberInput value={sale} onValue={setSale} />
           </label>
           <label className="field">
             <span>Закупочная{unit === 'kg' ? ' за кг' : ''}</span>
-            <input inputMode="decimal" value={cost} onChange={(e) => setCost(e.target.value)} />
+            <NumberInput value={cost} onValue={setCost} />
           </label>
         </div>
         <label className="field">
           <span>Мин. остаток{unit === 'kg' ? ', кг' : ', шт'}</span>
-          <input inputMode="decimal" value={min} onChange={(e) => setMin(e.target.value)} />
+          <NumberInput value={min} onValue={setMin} />
         </label>
 
         {/* Скидка. Задаёт только владелец; кассир при продаже её просто применяет. */}
@@ -331,11 +332,11 @@ function EditModal({
           <div className="row">
             <label className="field">
               <span>Акционная цена{unit === 'kg' ? ' за кг' : ''}</span>
-              <input inputMode="decimal" value={discPrice} onChange={(e) => setDiscPrice(e.target.value)} placeholder={`меньше ${sale}`} />
+              <NumberInput value={discPrice} onValue={setDiscPrice} placeholder={`меньше ${sale}`} />
             </label>
             <label className="field">
               <span>Лимит {unit === 'kg' ? 'кг' : 'шт'} — пусто без лимита</span>
-              <input inputMode="decimal" value={discLimit} onChange={(e) => setDiscLimit(e.target.value)} placeholder="напр. 20" />
+              <NumberInput value={discLimit} onValue={setDiscLimit} placeholder="напр. 20" />
             </label>
           </div>
           {discErr && <div className="change change--neg">{discErr}</div>}

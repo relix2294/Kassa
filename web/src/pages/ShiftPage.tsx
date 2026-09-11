@@ -79,6 +79,11 @@ export default function ShiftPage() {
             {closed.difference > 0 && ' (излишек)'}
             {closed.difference === 0 && ' — сходится ✓'}
           </div>
+          {closed.difference !== 0 && (
+            <p className="hint">
+              Расхождение записано в журнал — владелец увидит его в кабинете и в списке смен.
+            </p>
+          )}
           <button className="btn" onClick={() => setClosed(null)}>ОК</button>
         </div>
       )}

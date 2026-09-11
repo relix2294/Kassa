@@ -102,6 +102,25 @@ returnsRouter.post('/', async (req, res) => {
 
       total = Number(total.toFixed(2));
 
+      // Нельзя выдать наличными больше, чем есть в кассе смены: иначе касса
+      // уходит в минус и вечерняя сверка показывает бессмыслицу. В кассе =
+      // размен + продажи наличными − уже сделанные возвраты.
+      const cashInRow = (
+        await client.query(
+          `SELECT (SELECT opening_cash FROM shifts WHERE id = $1)
+                + COALESCE((SELECT SUM(COALESCE(cash_amount, total)) FROM sales WHERE shift_id = $1), 0)
+                - COALESCE((SELECT SUM(total) FROM returns WHERE shift_id = $1), 0) AS cash`,
+          [shift.id],
+        )
+      ).rows[0];
+      const available = Number(cashInRow.cash);
+      if (total > available + 1e-9) {
+        throw {
+          status: 400,
+          message: `В кассе только ${available.toFixed(2)} — этого не хватает на возврат ${total.toFixed(2)}. Добавьте размен или уменьшите возврат.`,
+        };
+      }
+
       const retRow = (
         await client.query(
           `INSERT INTO returns (client_id, sale_id, total, reason, user_id, shift_id)

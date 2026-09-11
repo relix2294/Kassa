@@ -99,23 +99,19 @@ salesRouter.post('/', async (req, res) => {
           };
         }
 
-        // Скидка владельца применяется автоматически. Считает сервер — с учётом
-        // лимита количества, чтобы по акции ушло ровно столько, сколько назначено.
+        // Скидка владельца применяется автоматически ко всей позиции, пока
+        // акция активна — цена в чеке не «переключается» на середине.
+        // Лимит — это общий запас акции: он уменьшается на проданное количество
+        // и, когда исчерпан, акция заканчивается для следующих чеков.
         const discActive = p.discount_price != null && (p.discount_left == null || Number(p.discount_left) > 0);
-        let discUnits = 0;
-        if (discActive) {
-          discUnits = p.discount_left == null ? qty : Math.min(qty, Number(p.discount_left));
-        }
-        const discPrice = discActive ? Number(p.discount_price) : basePrice;
-        const lineTotal = Number((discUnits * discPrice + (qty - discUnits) * basePrice).toFixed(2));
-        // Средняя цена единицы в этой строке (для чека — цена может быть смешанной).
-        const unitPrice = Number((lineTotal / qty).toFixed(2));
+        const unitPrice = discActive ? Number(p.discount_price) : basePrice;
+        const lineTotal = Number((unitPrice * qty).toFixed(2));
 
         const unitCost = Number(p.cost_price);
         total += lineTotal;
         costTotal += Number((unitCost * qty).toFixed(2));
 
-        // Списываем остаток и уменьшаем остаток акции на проданное по скидке.
+        // Списываем остаток; если продали по акции — уменьшаем её запас.
         const upd = await client.query(
           `UPDATE products
               SET stock = stock - $2,
@@ -123,7 +119,7 @@ salesRouter.post('/', async (req, res) => {
                                        ELSE GREATEST(discount_left - $3, 0) END,
                   updated_at = now()
             WHERE id = $1 RETURNING *`,
-          [p.id, qty, discUnits],
+          [p.id, qty, discActive ? qty : 0],
         );
         changedProducts.push(upd.rows[0]);
         lineRows.push({ p, qty, unitPrice, unitCost, lineTotal });

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import NumberInput from '../components/NumberInput';
 import { api } from '../api';
 import { db } from '../db';
 import { useLiveQuery } from 'dexie-react-hooks';
@@ -100,7 +101,7 @@ export default function BulkPricePanel({ onClose, onDone }: { onClose: () => voi
 
         <label className="field">
           <span>{mode === 'percent' ? 'Процент (напр. 10 или −5)' : 'Новая цена'}</span>
-          <input inputMode="decimal" value={value} onChange={(e) => setValue(e.target.value)} placeholder={mode === 'percent' ? '10' : '15'} />
+          <NumberInput value={value} onValue={setValue} allowNegative={mode === 'percent'} placeholder={mode === 'percent' ? '10 или -5' : '15'} />
         </label>
 
         {preview.length > 0 && (

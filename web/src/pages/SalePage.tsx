@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import NumberInput from '../components/NumberInput';
 import { useNavigate } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, type CartLine } from '../db';
@@ -150,13 +151,13 @@ export default function SalePage() {
         onScan(barcode);
       }}
     >
-      <input
+      <NumberInput
         ref={scanRef}
+        mode="int"
         autoFocus
-        inputMode="numeric"
         placeholder="Скан штрихкода…"
         value={barcode}
-        onChange={(e) => setBarcode(e.target.value)}
+        onValue={setBarcode}
       />
     </form>
     {/* Весовой товар и выпечка — без штрихкода, сканером их не пробить. */}

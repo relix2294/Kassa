@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import NumberInput from '../components/NumberInput';
 import { db } from '../db';
 import { api } from '../api';
 import { useGuardedClose } from '../components/Confirm';
@@ -137,12 +138,12 @@ export default function InventoryPanel({ onClose, onDone }: { onClose: () => voi
             onScan(barcode);
           }}
         >
-          <input
+          <NumberInput
             ref={scanRef}
-            inputMode="numeric"
+            mode="int"
             placeholder="Скан товара…"
             value={barcode}
-            onChange={(e) => setBarcode(e.target.value)}
+            onValue={setBarcode}
           />
         </form>
 
@@ -170,12 +171,11 @@ export default function InventoryPanel({ onClose, onDone }: { onClose: () => voi
                     )}
                   </div>
                 </div>
-                <input
+                <NumberInput
                   className="count-input"
-                  inputMode="decimal"
                   value={l.counted}
-                  onChange={(e) =>
-                    setLines((prev) => prev.map((x) => (x.key === l.key ? { ...x, counted: e.target.value } : x)))
+                  onValue={(v) =>
+                    setLines((prev) => prev.map((x) => (x.key === l.key ? { ...x, counted: v } : x)))
                   }
                 />
                 <button

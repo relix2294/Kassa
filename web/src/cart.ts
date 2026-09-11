@@ -35,13 +35,11 @@ export async function addToCart(product: Product, qty = 1) {
   await db.cart.put(line);
 }
 
-// Сумма строки с учётом акции (совпадает с расчётом сервера). При лимите
-// количества часть единиц идёт по акции, часть — по обычной цене.
+// Сумма строки с учётом акции (совпадает с расчётом сервера). Пока акция
+// активна, вся позиция идёт по акционной цене — без «переключения» на середине.
 export function lineTotal(l: CartLine): number {
-  const active = l.discount_price != null && (l.discount_left == null || l.discount_left > 0);
-  if (!active) return Number((l.unit_price * l.qty).toFixed(2));
-  const dUnits = l.discount_left == null ? l.qty : Math.min(l.qty, l.discount_left);
-  return Number((dUnits * (l.discount_price as number) + (l.qty - dUnits) * l.unit_price).toFixed(2));
+  const price = lineHasDiscount(l) ? (l.discount_price as number) : l.unit_price;
+  return Number((price * l.qty).toFixed(2));
 }
 
 // Есть ли на строке действующая акция.

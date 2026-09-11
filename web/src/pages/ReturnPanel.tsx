@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import NumberInput from '../components/NumberInput';
 import { db } from '../db';
 import { completeReturn } from '../sync';
 import { useCurrentUser } from '../session';
@@ -99,7 +100,7 @@ export default function ReturnPanel({ onClose, onDone }: { onClose: () => void; 
             onScan(barcode);
           }}
         >
-          <input ref={scanRef} inputMode="numeric" placeholder="Скан возвращаемого товара…" value={barcode} onChange={(e) => setBarcode(e.target.value)} />
+          <NumberInput ref={scanRef} mode="int" placeholder="Скан возвращаемого товара…" value={barcode} onValue={setBarcode} />
         </form>
 
         {/* Весовой товар и выпечку сканером не вернуть — выбираем из списка. */}

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import NumberInput from '../components/NumberInput';
 import { db } from '../db';
 import { api } from '../api';
 import { createProduct, receiveGoods } from '../sync';
@@ -63,13 +64,13 @@ export default function ReceivingPage() {
         >
           <label className="field">
             <span>Отсканируйте или введите штрихкод</span>
-            <input
+            <NumberInput
               ref={scanRef}
-              inputMode="numeric"
+              mode="int"
               autoFocus
               placeholder="Штрихкод…"
               value={barcode}
-              onChange={(e) => setBarcode(e.target.value)}
+              onValue={setBarcode}
             />
           </label>
           <button className="btn btn--primary" type="submit">
@@ -174,14 +175,14 @@ function ReceiveExisting({
 
       <label className="field">
         <span>Сколько принято{product.unit === 'kg' ? ', кг' : ', шт'}</span>
-        <input inputMode="decimal" value={qty} onChange={(e) => setQty(e.target.value)} autoFocus />
+        <NumberInput value={qty} onValue={setQty} autoFocus />
       </label>
 
       {/* Закупочную цену видит и задаёт только владелец (п.4 ТЗ). */}
       {isOwner ? (
         <label className="field">
           <span>Закупочная цена за единицу</span>
-          <input inputMode="decimal" value={cost} onChange={(e) => setCost(e.target.value)} />
+          <NumberInput value={cost} onValue={setCost} />
         </label>
       ) : (
         <p className="hint">Закупочную цену задаёт владелец.</p>
@@ -289,21 +290,21 @@ function CreateProduct({
       <div className="row">
         <label className="field">
           <span>Цена продажи</span>
-          <input inputMode="decimal" value={salePrice} onChange={(e) => setSalePrice(e.target.value)} />
+          <NumberInput value={salePrice} onValue={setSalePrice} />
         </label>
         <label className="field">
           <span>Закупочная</span>
-          <input inputMode="decimal" value={costPrice} onChange={(e) => setCostPrice(e.target.value)} />
+          <NumberInput value={costPrice} onValue={setCostPrice} />
         </label>
       </div>
       <div className="row">
         <label className="field">
           <span>Мин. остаток</span>
-          <input inputMode="decimal" value={minStock} onChange={(e) => setMinStock(e.target.value)} />
+          <NumberInput value={minStock} onValue={setMinStock} />
         </label>
         <label className="field">
           <span>Принять сразу (шт)</span>
-          <input inputMode="decimal" value={qty} onChange={(e) => setQty(e.target.value)} />
+          <NumberInput value={qty} onValue={setQty} />
         </label>
       </div>
 

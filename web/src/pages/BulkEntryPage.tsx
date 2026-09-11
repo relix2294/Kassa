@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import NumberInput from '../components/NumberInput';
 import { db } from '../db';
 import { api } from '../api';
 import { createProduct, receiveGoods } from '../sync';
@@ -208,18 +209,18 @@ export default function BulkEntryPage() {
         {markupMode === 'percent' ? (
           <label className="field">
             <span>Процент</span>
-            <input inputMode="decimal" value={markup} onChange={(e) => setMarkup(e.target.value)} />
+            <NumberInput value={markup} onValue={setMarkup} />
           </label>
         ) : (
           <>
             <div className="row">
               <label className="field">
                 <span>Купили за</span>
-                <input inputMode="decimal" value={exCost} onChange={(e) => setExCost(e.target.value)} placeholder="3" />
+                <NumberInput value={exCost} onValue={setExCost} placeholder="3" />
               </label>
               <label className="field">
                 <span>Продаём за</span>
-                <input inputMode="decimal" value={exSale} onChange={(e) => setExSale(e.target.value)} placeholder="5" />
+                <NumberInput value={exSale} onValue={setExSale} placeholder="5" />
               </label>
             </div>
             <p className="hint">
@@ -252,11 +253,11 @@ export default function BulkEntryPage() {
 
         <label className="field">
           <span>Штрихкод — можно пропустить</span>
-          <input
+          <NumberInput
             ref={barcodeRef}
-            inputMode="numeric"
+            mode="int"
             value={barcode}
-            onChange={(e) => setBarcode(e.target.value)}
+            onValue={setBarcode}
             onKeyDown={(e) => onKey(e, nameRef)}
             placeholder="скан или Enter, если штрихкода нет"
           />
@@ -276,21 +277,19 @@ export default function BulkEntryPage() {
         <div className="row">
           <label className="field">
             <span>Закупочная{unit === 'kg' ? ' за кг' : ''}</span>
-            <input
+            <NumberInput
               ref={costRef}
-              inputMode="decimal"
               value={cost}
-              onChange={(e) => onCostChange(e.target.value)}
+              onValue={onCostChange}
               onKeyDown={(e) => onKey(e, saleRef)}
             />
           </label>
           <label className="field">
             <span>Продажа{unit === 'kg' ? ' за кг' : ''}</span>
-            <input
+            <NumberInput
               ref={saleRef}
-              inputMode="decimal"
               value={sale}
-              onChange={(e) => setSale(e.target.value)}
+              onValue={setSale}
               onKeyDown={(e) => onKey(e, qtyRef)}
               disabled={!!existing}
             />
@@ -299,11 +298,10 @@ export default function BulkEntryPage() {
 
         <label className="field">
           <span>Сколько принято{unit === 'kg' ? ', кг' : ', шт'} — можно пропустить</span>
-          <input
+          <NumberInput
             ref={qtyRef}
-            inputMode="decimal"
             value={qty}
-            onChange={(e) => setQty(e.target.value)}
+            onValue={setQty}
             onKeyDown={(e) => onKey(e)}
             placeholder="Enter — сохранить"
           />
