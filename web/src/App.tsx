@@ -1,4 +1,4 @@
-import { NavLink, Navigate, Route, Routes, useNavigate } from 'react-router-dom';
+import { NavLink, Navigate, Route, Routes, useNavigate, useLocation } from 'react-router-dom';
 import { useEffect, useRef, useState } from 'react';
 import { onOnlineChange, isOnline, pullProducts, reconnectRealtime } from './sync';
 import { refreshShift } from './shift';
@@ -14,6 +14,7 @@ import DashboardPage from './pages/DashboardPage';
 import AnalyticsPage from './pages/AnalyticsPage';
 import QueuePage, { QueueBadge } from './pages/QueuePage';
 import BulkEntryPage from './pages/BulkEntryPage';
+import CustomerDisplay from './pages/CustomerDisplay';
 
 function OnlineBadge() {
   const [online, setOnline] = useState(isOnline);
@@ -35,6 +36,11 @@ function ThemeButton() {
 export default function App() {
   const user = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+
+  // Экран покупателя — отдельное окно на втором мониторе. Без шапки, меню и
+  // без входа: он только читает локальный чек и показывает его клиенту.
+  if (location.pathname === '/customer') return <CustomerDisplay />;
 
   // После входа подтягиваем каталог, смену и переподключаем realtime
   // под новой ролью (сервер шлёт кассиру не то же, что владельцу).

@@ -13,6 +13,7 @@ import PaymentForm from '../components/PaymentForm';
 import ReturnPanel from './ReturnPanel';
 import ProductPicker from '../components/ProductPicker';
 import Confirm from '../components/Confirm';
+import { postCustomer } from '../customer';
 
 export default function SalePage() {
   const user = useCurrentUser();
@@ -63,6 +64,12 @@ export default function SalePage() {
     setTimeout(() => setToast(null), 2500);
   }
 
+  // Открыть экран покупателя во втором окне — кассир перетащит его на второй
+  // монитор терминала и развернёт на весь экран.
+  function openCustomer() {
+    window.open('/customer', 'kassaCustomer', 'width=1200,height=800');
+  }
+
   async function onScan(code: string) {
     const bc = code.trim();
     setBarcode('');
@@ -84,6 +91,8 @@ export default function SalePage() {
       const r = await completeSale(items, method, received, shift?.id, cardAmount);
       await clearCart();
       setPayOpen(false);
+      // Показываем покупателю на втором экране «спасибо» и сдачу.
+      postCustomer({ type: 'paid', change: due > 0 ? due : 0 });
       // Сдачу показываем крупно и держим на экране, пока кассир её отсчитывает.
       if (due > 0) setChangeDue(due);
       else flash(r.queued ? 'Нет сети — чек в очереди' : 'Оплачено ✓');
@@ -175,9 +184,14 @@ export default function SalePage() {
           <div className="sale-main">
             <div className="sale-head">
               <h1>Продажа</h1>
-              <button className="btn btn--ghost" onClick={() => setReturnOpen(true)}>
-                Возврат
-              </button>
+              <div className="head-actions">
+                <button className="btn btn--ghost" onClick={openCustomer} title="Открыть экран для покупателя">
+                  Экран клиента
+                </button>
+                <button className="btn btn--ghost" onClick={() => setReturnOpen(true)}>
+                  Возврат
+                </button>
+              </div>
             </div>
             {scanForm}
             {cart}
@@ -205,9 +219,14 @@ export default function SalePage() {
         <>
           <div className="sale-head">
             <h1>Продажа</h1>
-            <button className="btn btn--ghost" onClick={() => setReturnOpen(true)}>
-              Возврат
-            </button>
+            <div className="head-actions">
+              <button className="btn btn--ghost" onClick={openCustomer} title="Открыть экран для покупателя">
+                Экран клиента
+              </button>
+              <button className="btn btn--ghost" onClick={() => setReturnOpen(true)}>
+                Возврат
+              </button>
+            </div>
           </div>
           {scanForm}
           {cart}
