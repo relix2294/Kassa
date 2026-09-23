@@ -237,6 +237,29 @@ input:focus, .search:focus { outline: none; border-color: var(--primary); }
 .scan-row { margin-bottom: 12px; }
 .scan-row input { font-size: 18px; }
 
+/* Поле штрихкода с кнопкой камеры (телефон). */
+.scan-input { display: flex; gap: 8px; align-items: stretch; }
+.scan-input input { flex: 1; min-width: 0; }
+.scan-input__cam { flex: none; padding: 0 14px; font-size: 20px; }
+
+/* Камера поверх других окон (возврат, инвентаризация). */
+.modal-backdrop--top { z-index: 200; }
+.camera-box {
+  position: relative;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #000;
+  aspect-ratio: 4 / 3;
+}
+.camera-box video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.camera-box__frame {
+  position: absolute;
+  inset: 30% 10%;
+  border: 2px solid rgba(255, 255, 255, 0.85);
+  border-radius: 8px;
+  box-shadow: 0 0 0 999px rgba(0, 0, 0, 0.35);
+}
+
 .cart { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
 .cart-line {
   display: flex;

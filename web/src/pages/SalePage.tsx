@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import NumberInput from '../components/NumberInput';
+import ScanInput from '../components/ScanInput';
+import { findByScan, notFoundMessage, useScanCapture } from '../scan';
+import { beepError, beepOk } from '../beep';
 import { useNavigate } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, type CartLine } from '../db';
@@ -71,16 +73,24 @@ export default function SalePage() {
   }
 
   async function onScan(code: string) {
-    const bc = code.trim();
     setBarcode('');
-    if (!bc) return;
-    const product = await db.products.where('barcode').equals(bc).first();
-    if (!product) {
-      flash('Товара нет в базе — сначала приём');
+    const r = await findByScan(code);
+    if (!r) return;
+    if (r.kind !== 'product') {
+      beepError();
+      flash(notFoundMessage(r, 'Товара нет в базе — сначала приём'));
       return;
     }
-    await addToCart(product);
+    // С весовой этикетки приходит вес, иначе — одна штука.
+    await addToCart(r.product, r.qty ?? 1);
+    beepOk();
   }
+
+  // Скан, когда курсор ушёл из поля (кассир кликнул мышкой) — не теряем его.
+  useScanCapture(
+    onScan,
+    !!shift && !payOpen && !qtyEdit && !returnOpen && !pickerOpen && !askClear && changeDue == null,
+  );
 
   async function pay(method: 'cash' | 'card' | 'mixed', received?: number, cardAmount?: number) {
     // Сдача считается от наличной части: для смешанной это total минус карта.
@@ -160,13 +170,13 @@ export default function SalePage() {
         onScan(barcode);
       }}
     >
-      <NumberInput
+      <ScanInput
         ref={scanRef}
-        mode="int"
         autoFocus
         placeholder="Скан штрихкода…"
         value={barcode}
         onValue={setBarcode}
+        onCamera={onScan}
       />
     </form>
     {/* Весовой товар и выпечка — без штрихкода, сканером их не пробить. */}

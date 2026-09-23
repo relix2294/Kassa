@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import NumberInput from '../components/NumberInput';
-import { db } from '../db';
+import ScanInput from '../components/ScanInput';
+import { findByScan, notFoundMessage, useScanCapture } from '../scan';
+import { beepError, beepOk } from '../beep';
 import { completeReturn } from '../sync';
 import { useCurrentUser } from '../session';
 import { useShift } from '../shift';
@@ -60,17 +61,21 @@ export default function ReturnPanel({ onClose, onDone }: { onClose: () => void; 
   }
 
   async function onScan(code: string) {
-    const bc = code.trim();
     setBarcode('');
-    if (!bc) return;
-    const p = await db.products.where('barcode').equals(bc).first();
-    if (!p) {
-      setErr('Товара нет в базе');
-      setTimeout(() => setErr(null), 2000);
+    const r = await findByScan(code);
+    if (!r) return;
+    if (r.kind !== 'product') {
+      beepError();
+      setErr(notFoundMessage(r));
+      setTimeout(() => setErr(null), 3000);
       return;
     }
-    addLine(p, 1);
+    // Весовая этикетка несёт вес — возвращаем ровно его.
+    addLine(r.product, r.qty ?? 1);
+    beepOk();
   }
+
+  useScanCapture(onScan, !pickerOpen);
 
   async function confirm() {
     // Возврат идёт без чека — причина обязательна, это единственный след.
@@ -100,7 +105,13 @@ export default function ReturnPanel({ onClose, onDone }: { onClose: () => void; 
             onScan(barcode);
           }}
         >
-          <NumberInput ref={scanRef} mode="int" placeholder="Скан возвращаемого товара…" value={barcode} onValue={setBarcode} />
+          <ScanInput
+            ref={scanRef}
+            placeholder="Скан возвращаемого товара…"
+            value={barcode}
+            onValue={setBarcode}
+            onCamera={onScan}
+          />
         </form>
 
         {/* Весовой товар и выпечку сканером не вернуть — выбираем из списка. */}

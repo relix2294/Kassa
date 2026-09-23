@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import NumberInput from '../components/NumberInput';
-import { db } from '../db';
+import ScanInput from '../components/ScanInput';
+import { findByScan, notFoundMessage, useScanCapture } from '../scan';
+import { beepError, beepOk } from '../beep';
 import { api } from '../api';
 import { createProduct, receiveGoods } from '../sync';
 import { useCurrentUser } from '../session';
@@ -13,6 +15,8 @@ export default function ReceivingPage() {
   const [stage, setStage] = useState<Stage>('scan');
   const [barcode, setBarcode] = useState('');
   const [product, setProduct] = useState<Product | null>(null);
+  // Вес с весовой этикетки — подставляем как принятое количество.
+  const [scannedQty, setScannedQty] = useState<number | undefined>();
   const [toast, setToast] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -28,26 +32,38 @@ export default function ReceivingPage() {
 
   // Скан штрихкода: ищем товар локально, иначе — заведение нового.
   async function onScan(code: string) {
-    const bc = code.trim();
-    if (!bc) return;
-    setBarcode(bc);
-    const local = await db.products.where('barcode').equals(bc).first();
-    if (local) {
-      setProduct(local);
+    const r = await findByScan(code);
+    if (!r) return;
+    setBarcode(r.code);
+    if (r.kind === 'product') {
+      beepOk();
+      setProduct(r.product);
+      setScannedQty(r.qty);
       setStage('receive');
+    } else if (r.kind === 'weight_unknown') {
+      // Весовую этикетку нельзя заводить как штрихкод: в ней вес, он каждый раз новый.
+      beepError();
+      setBarcode('');
+      flash(notFoundMessage(r));
     } else if (user?.role === 'cashier') {
       // Кассир не заводит товар и не задаёт цены — это делает владелец.
+      beepError();
+      setBarcode('');
       flash('Товара нет. Завести новый может только владелец.');
     } else {
+      beepOk();
       setProduct(null);
       setStage('create');
     }
   }
 
+  useScanCapture(onScan, stage === 'scan');
+
   function reset() {
     setStage('scan');
     setBarcode('');
     setProduct(null);
+    setScannedQty(undefined);
   }
 
   return (
@@ -64,13 +80,13 @@ export default function ReceivingPage() {
         >
           <label className="field">
             <span>Отсканируйте или введите штрихкод</span>
-            <NumberInput
+            <ScanInput
               ref={scanRef}
-              mode="int"
               autoFocus
               placeholder="Штрихкод…"
               value={barcode}
               onValue={setBarcode}
+              onCamera={onScan}
             />
           </label>
           <button className="btn btn--primary" type="submit">
@@ -83,6 +99,7 @@ export default function ReceivingPage() {
       {stage === 'receive' && product && (
         <ReceiveExisting
           product={product}
+          initialQty={scannedQty}
           isOwner={user?.role === 'owner'}
           busy={busy}
           onCancel={reset}
@@ -142,18 +159,20 @@ export default function ReceivingPage() {
 
 function ReceiveExisting({
   product,
+  initialQty,
   isOwner,
   busy,
   onSubmit,
   onCancel,
 }: {
   product: Product;
+  initialQty?: number;
   isOwner: boolean;
   busy: boolean;
   onSubmit: (qty: number, cost: number) => void;
   onCancel: () => void;
 }) {
-  const [qty, setQty] = useState('1');
+  const [qty, setQty] = useState(String(initialQty ?? 1));
   const [cost, setCost] = useState(String(product.cost_price || ''));
 
   return (

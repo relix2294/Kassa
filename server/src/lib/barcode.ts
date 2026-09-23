@@ -10,6 +10,14 @@
 //   - она НИКОГДА не блокирует заведение товара: короткий таймаут,
 //     любая ошибка молча превращается в «названия нет».
 
+// Штрихкод в том виде, в каком храним: без пробелов и управляющих символов
+// (Tab/CR от сканера). Пустое — значит штрихкода нет.
+export function cleanBarcode(raw: unknown): string | null {
+  if (typeof raw !== 'string') return null;
+  const v = raw.replace(/[\s\x00-\x1f\x7f]/g, '');
+  return v || null;
+}
+
 interface BarcodeInfo {
   name: string | null;
   source: string | null;

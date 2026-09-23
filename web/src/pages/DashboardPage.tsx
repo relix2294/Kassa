@@ -338,6 +338,8 @@ function formatDetails(type: string, d: any): string {
       return `ожидалось ${d.expected}, посчитано ${d.counted} → ${d.difference > 0 ? '+' : ''}${d.difference}`;
     case 'product_create':
       return `${d.name} · ${d.sale_price}`;
+    case 'product_update':
+      return 'barcode_new' in d ? `штрихкод: ${d.barcode_old ?? 'нет'} → ${d.barcode_new ?? 'нет'}` : '';
     default:
       return '';
   }

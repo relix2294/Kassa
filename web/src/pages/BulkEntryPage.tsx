@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import NumberInput from '../components/NumberInput';
-import { db } from '../db';
+import ScanInput from '../components/ScanInput';
+import { findByScan, notFoundMessage, parseWeightLabel } from '../scan';
 import { api } from '../api';
 import { createProduct, receiveGoods } from '../sync';
 import type { Product } from '../types';
@@ -72,19 +73,19 @@ export default function BulkEntryPage() {
       return;
     }
     let alive = true;
-    db.products
-      .where('barcode')
-      .equals(bc)
-      .first()
-      .then((p) => {
-        if (!alive) return;
-        setExisting(p ?? null);
-        if (p) {
-          setName(p.name);
-          setSale(String(p.sale_price));
-          setUnit(p.unit === 'kg' ? 'kg' : 'pcs');
-        }
-      });
+    findByScan(bc).then((r) => {
+      if (!alive) return;
+      const p = r?.kind === 'product' ? r.product : null;
+      setExisting(p);
+      setErr(r?.kind === 'weight_unknown' ? notFoundMessage(r) : null);
+      if (p) {
+        setName(p.name);
+        setSale(String(p.sale_price));
+        setUnit(p.unit === 'kg' ? 'kg' : 'pcs');
+        // С весовой этикетки сразу знаем вес.
+        if (r?.kind === 'product' && r.qty) setQty(String(r.qty));
+      }
+    });
     return () => {
       alive = false;
     };
@@ -114,6 +115,12 @@ export default function BulkEntryPage() {
   async function save() {
     const bc = barcode.trim();
     const qtyNum = Number(qty) || 0;
+
+    // Весовая этикетка — не штрихкод товара: в ней вес, он каждый раз новый.
+    if (!existing && parseWeightLabel(bc)) {
+      setErr('Это весовая этикетка. Заведите товар без штрихкода и впишите в карточку код весов (PLU).');
+      return;
+    }
 
     if (!existing && !name.trim()) {
       setErr('Введите название');
@@ -253,11 +260,14 @@ export default function BulkEntryPage() {
 
         <label className="field">
           <span>Штрихкод — можно пропустить</span>
-          <NumberInput
+          <ScanInput
             ref={barcodeRef}
-            mode="int"
             value={barcode}
             onValue={setBarcode}
+            onCamera={(code) => {
+              setBarcode(code);
+              nameRef.current?.focus();
+            }}
             onKeyDown={(e) => onKey(e, nameRef)}
             placeholder="скан или Enter, если штрихкода нет"
           />
