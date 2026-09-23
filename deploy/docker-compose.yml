@@ -1,0 +1,37 @@
+name: kassa
+
+# Kassa целиком в контейнерах: приложение + своя база Postgres.
+# Ничего чужого на сервере не трогает — наружу торчит только один порт (HOST_PORT).
+# Секреты (DB_PASS, JWT_SECRET) и порт (HOST_PORT) берутся из deploy/.env,
+# который создаёт setup.sh.
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: kassa
+      POSTGRES_PASSWORD: ${DB_PASS:?нужен DB_PASS в deploy/.env}
+      POSTGRES_DB: kassa
+    volumes:
+      - kassa-db:/var/lib/postgresql/data
+    # Порт БД наружу НЕ публикуем: база доступна только контейнеру приложения.
+
+  app:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      - db
+    environment:
+      PORT: 4000
+      DATABASE_URL: postgres://kassa:${DB_PASS:?нужен DB_PASS в deploy/.env}@db:5432/kassa
+      JWT_SECRET: ${JWT_SECRET:?нужен JWT_SECRET в deploy/.env}
+      BARCODE_LOOKUP_URL: ""
+    ports:
+      # Слева — внешний порт сервера, справа — порт внутри контейнера.
+      - "${HOST_PORT:-8080}:4000"
+
+volumes:
+  kassa-db:
