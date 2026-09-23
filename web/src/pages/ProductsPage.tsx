@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import NumberInput from '../components/NumberInput';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db';
@@ -51,7 +52,7 @@ export default function ProductsPage() {
       <div className="sale-head">
         <h1>Товары</h1>
         <div className="staff-actions">
-          <a className="btn btn--ghost" href="/bulk">Быстрый завод</a>
+          <Link className="btn btn--ghost" to="/bulk">Быстрый завод</Link>
           <button className="btn btn--ghost" onClick={() => setAdding(true)}>
             + Товар
           </button>
@@ -256,6 +257,7 @@ function EditModal({
   const [unit, setUnit] = useState<'pcs' | 'kg'>(product.unit === 'kg' ? 'kg' : 'pcs');
   const [busy, setBusy] = useState(false);
   const [askArchive, setAskArchive] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
 
   // Скидка на товар (только владелец). Отдельная кнопка — назначить/снять.
   const [discPrice, setDiscPrice] = useState(product.discount_price != null ? String(product.discount_price) : '');
@@ -316,10 +318,13 @@ function EditModal({
                 disabled={busy}
                 onClick={async () => {
                   setBusy(true);
+                  setErr(null);
                   try {
                     await api.setDiscount(product.id, { clear: true });
                     await pullProducts();
                     onSaved('Скидка снята');
+                  } catch (e: any) {
+                    setErr(e.message || 'Не удалось снять скидку');
                   } finally {
                     setBusy(false);
                   }
@@ -364,6 +369,8 @@ function EditModal({
           </button>
         </div>
 
+        {err && <div className="change change--neg">{err}</div>}
+
         <div className="row">
           <button className="btn" onClick={onClose} disabled={busy}>
             Отмена
@@ -373,6 +380,7 @@ function EditModal({
             disabled={busy}
             onClick={async () => {
               setBusy(true);
+              setErr(null);
               try {
                 await updateProductRemote(product.id, {
                   name: name.trim(),
@@ -383,6 +391,8 @@ function EditModal({
                   min_stock: Number(min),
                 });
                 onSaved('Сохранено');
+              } catch (e: any) {
+                setErr(e.message || 'Не удалось сохранить');
               } finally {
                 setBusy(false);
               }
@@ -405,11 +415,14 @@ function EditModal({
             onConfirm={async () => {
               setAskArchive(false);
               setBusy(true);
+              setErr(null);
               try {
                 await api.archiveProduct(product.id, true);
                 await db.products.delete(product.id);
                 await pullProducts();
                 onSaved('Товар убран из работы');
+              } catch (e: any) {
+                setErr(e.message || 'Не удалось убрать товар');
               } finally {
                 setBusy(false);
               }

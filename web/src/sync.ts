@@ -1,6 +1,7 @@
 import { db, type OutboxItem } from './db';
 import { api } from './api';
 import { getToken, getUser } from './auth';
+import { genId } from './id';
 import type { Product } from './types';
 
 // Слой синхронизации между локальной кассой и сервером.
@@ -266,7 +267,7 @@ export async function completeSale(
   shiftId?: string,
   cardAmount?: number,
 ): Promise<{ queued: boolean }> {
-  const client_id = crypto.randomUUID();
+  const client_id = genId();
   // shift_id фиксируем на момент продажи: если чек уйдёт в очередь и доедет
   // после закрытия смены, он всё равно попадёт в свою смену.
   const payload = {
@@ -299,7 +300,7 @@ export async function completeReturn(
   reason: string | undefined,
   shiftId?: string,
 ): Promise<{ queued: boolean }> {
-  const client_id = crypto.randomUUID();
+  const client_id = genId();
   const payload = { client_id, items, reason, shift_id: shiftId };
   for (const it of items) await adjustLocalStock(it, Number(it.qty));
   try {

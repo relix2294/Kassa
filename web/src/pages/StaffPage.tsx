@@ -163,13 +163,17 @@ function AddCashier({ onClose, onDone }: { onClose: () => void; onDone: () => vo
 function ResetPin({ user, onClose, onDone }: { user: Staff; onClose: () => void; onDone: () => void }) {
   const [pin, setPin] = useState('');
   const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
 
   async function save() {
     if (pin.length < 4) return;
     setBusy(true);
+    setErr(null);
     try {
       await api.updateUser(user.id, { pin });
       onDone();
+    } catch (e: any) {
+      setErr(e.message || 'Не удалось сменить PIN');
     } finally {
       setBusy(false);
     }
@@ -182,6 +186,7 @@ function ResetPin({ user, onClose, onDone }: { user: Staff; onClose: () => void;
         <p className="muted">Минимум 4 цифры.</p>
         <PinDots pin={pin} />
         <Keypad value={pin} onChange={setPin} />
+        {err && <div className="change change--neg">{err}</div>}
         <div className="row">
           <button className="btn" onClick={onClose} disabled={busy}>
             Отмена

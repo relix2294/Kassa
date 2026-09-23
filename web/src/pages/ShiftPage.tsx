@@ -173,6 +173,7 @@ function OpenShifts({ meId, onDone }: { meId: string; onDone: () => void }) {
   const [closing, setClosing] = useState<any | null>(null);
   const [amount, setAmount] = useState('');
   const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
 
   const load = () => api.openShifts().then((r) => setRows(r.filter((s: any) => s.user_id !== meId))).catch(() => {});
   useEffect(() => { load(); }, []);
@@ -189,7 +190,7 @@ function OpenShifts({ meId, onDone }: { meId: string; onDone: () => void }) {
               <div className="list-item__name">{s.full_name || s.username}</div>
               <div className="muted">открыта {new Date(s.opened_at).toLocaleString('ru-RU')}</div>
             </div>
-            <button className="btn btn--ghost" onClick={() => { setClosing(s); setAmount(''); }}>
+            <button className="btn btn--ghost" onClick={() => { setClosing(s); setAmount(''); setErr(null); }}>
               Закрыть
             </button>
           </div>
@@ -205,6 +206,7 @@ function OpenShifts({ meId, onDone }: { meId: string; onDone: () => void }) {
               <div className="keypad-value">{amount || '0'}</div>
             </label>
             <Keypad value={amount} onChange={setAmount} allowDecimal />
+            {err && <div className="change change--neg">{err}</div>}
             <div className="row">
               <button className="btn" onClick={() => setClosing(null)} disabled={busy}>Отмена</button>
               <button
@@ -212,11 +214,14 @@ function OpenShifts({ meId, onDone }: { meId: string; onDone: () => void }) {
                 disabled={busy}
                 onClick={async () => {
                   setBusy(true);
+                  setErr(null);
                   try {
                     await closeShift(Number(amount) || 0, closing.user_id);
                     setClosing(null);
                     load();
                     onDone();
+                  } catch (e: any) {
+                    setErr(e.message || 'Не удалось закрыть смену');
                   } finally {
                     setBusy(false);
                   }
