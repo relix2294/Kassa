@@ -6,6 +6,7 @@ import { db } from '../db';
 import { api } from '../api';
 import { createProduct, updateProductRemote, pullProducts } from '../sync';
 import Confirm from '../components/Confirm';
+import ImportPanel from './ImportPanel';
 import type { Product } from '../types';
 
 // Сколько позиций рисуем сразу. ТЗ (п.10) предупреждает про первый завод
@@ -22,6 +23,7 @@ export default function ProductsPage() {
   const [query, setQuery] = useState(''); // отложенное значение поиска
   const [editing, setEditing] = useState<Product | null>(null);
   const [adding, setAdding] = useState(false);
+  const [importing, setImporting] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
 
   const products = useLiveQuery(() => db.products.orderBy('name').toArray(), [], [] as Product[]);
@@ -58,6 +60,9 @@ export default function ProductsPage() {
         <h1>Товары</h1>
         <div className="staff-actions">
           <a className="btn btn--ghost" href="/bulk">Быстрый завод</a>
+          <button className="btn btn--ghost" onClick={() => setImporting(true)}>
+            Прайс из Excel
+          </button>
           <button className="btn btn--ghost" onClick={() => setAdding(true)}>
             + Товар
           </button>
@@ -73,7 +78,8 @@ export default function ProductsPage() {
 
       {products.length === 0 && (
         <p className="hint">
-          Пока пусто. Заведите товар кнопкой «+ Товар» или отсканируйте новый штрихкод на вкладке «Приём».
+          Пока пусто. Загрузите прайс или накладную поставщика кнопкой «Прайс из Excel», заведите товар
+          кнопкой «+ Товар» или отсканируйте новый штрихкод на вкладке «Приём».
         </p>
       )}
       {products.length > 0 && filtered.length === 0 && <p className="hint">Ничего не нашлось.</p>}
@@ -114,6 +120,16 @@ export default function ProductsPage() {
         <p className="hint">
           Показано {shown.length} из {filtered.length}. Уточните поиск, чтобы найти нужный товар.
         </p>
+      )}
+
+      {importing && (
+        <ImportPanel
+          onClose={() => setImporting(false)}
+          onDone={(m) => {
+            setImporting(false);
+            flash(m);
+          }}
+        />
       )}
 
       {adding && (

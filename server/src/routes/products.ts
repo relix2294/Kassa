@@ -5,6 +5,7 @@ import { broadcast } from '../lib/realtime.js';
 import { cleanBarcode, lookupBarcode } from '../lib/barcode.js';
 import { requireOwner } from '../lib/auth.js';
 import { productFor, productsFor } from '../lib/sanitize.js';
+import { importProducts } from './productImport.js';
 
 export const productsRouter = Router();
 
@@ -28,6 +29,9 @@ productsRouter.get('/lookup/:barcode', async (req, res) => {
   const info = await lookupBarcode(req.params.barcode);
   res.json(info);
 });
+
+// Импорт прайса/накладной поставщика — только владелец.
+productsRouter.post('/import', requireOwner, importProducts);
 
 // Создать товар — только владелец (кассир не задаёт цены).
 productsRouter.post('/', requireOwner, async (req, res) => {

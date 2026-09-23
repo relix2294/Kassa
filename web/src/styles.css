@@ -959,3 +959,15 @@ kbd {
 .cust__change { margin-top: 3vh; }
 .cust__change span { display: block; font-size: 4vh; color: var(--muted); }
 .cust__change b { font-size: 12vh; font-weight: 800; color: var(--primary); line-height: 1; }
+
+/* Импорт прайса поставщика. */
+.modal--wide { max-width: 860px; max-height: 92vh; overflow-y: auto; }
+.import-file { align-self: flex-start; }
+.import-map { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; }
+.import-preview { overflow-x: auto; border-radius: 10px; border: 1px solid var(--border, rgba(127, 127, 127, 0.25)); }
+.import-preview table { border-collapse: collapse; width: 100%; font-size: 13px; }
+.import-preview th,
+.import-preview td { padding: 6px 8px; text-align: left; white-space: nowrap; border-bottom: 1px solid rgba(127, 127, 127, 0.15); }
+.import-preview th { color: var(--muted); font-weight: 600; }
+.import-stats { display: flex; flex-wrap: wrap; gap: 8px 20px; font-size: 16px; }
+.import-issues { margin: 6px 0 0; padding-left: 18px; font-size: 13px; max-height: 220px; overflow-y: auto; }

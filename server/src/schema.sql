@@ -194,3 +194,16 @@ CREATE TABLE IF NOT EXISTS inventory_items (
 
 CREATE INDEX IF NOT EXISTS idx_inv_items_inventory ON inventory_items(inventory_id);
 CREATE INDEX IF NOT EXISTS idx_inventories_created ON inventories(created_at);
+
+-- Справочник штрихкодов: подсказка названия при заведении товара.
+-- Это НЕ каталог магазина (тот — products): здесь «что это за товар вообще».
+-- Наполняется загрузкой открытых баз (npm run import-catalog), прайсами
+-- поставщиков и ответами внешних сервисов — чтобы второй раз не ходить в сеть.
+CREATE TABLE IF NOT EXISTS barcode_catalog (
+  barcode     text PRIMARY KEY,
+  name        text NOT NULL,
+  category    text,
+  brand       text,
+  source      text NOT NULL,               -- откуда: aioke, supplier, barcodes.tj, openfoodfacts…
+  updated_at  timestamptz NOT NULL DEFAULT now()
+);

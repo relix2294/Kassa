@@ -253,6 +253,7 @@ function CreateProduct({
       .then((r) => {
         if (alive && r.name) {
           setName(r.name);
+          if (r.category) setCategory((c) => c || r.category!);
           setSuggested(true);
         }
       })
@@ -298,7 +299,7 @@ function CreateProduct({
         />
         {suggested && (
           <span className="warn warn--inline">
-            Подставлено из внешней базы — сверьте с упаковкой, она часто ошибается.
+            Подставлено из справочника штрихкодов — сверьте с упаковкой, он бывает неточен.
           </span>
         )}
       </label>
