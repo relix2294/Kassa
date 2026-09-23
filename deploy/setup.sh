@@ -19,9 +19,8 @@ HOST_PORT="${HOST_PORT:-8080}"
 if [ "$(id -u)" != "0" ]; then
   echo "Запусти под root:  sudo -i , затем команду снова"; exit 1
 fi
-if [ -z "${GITHUB_TOKEN:-}" ]; then
-  echo "Нужен GITHUB_TOKEN — токен GitHub с доступом на чтение приватного репозитория."; exit 1
-fi
+# GITHUB_TOKEN нужен, только если репозиторий приватный. Если он публичный
+# (даже временно) — код качается без токена. Ниже сработает нужный вариант.
 
 # --- базовые утилиты ---
 command -v curl >/dev/null 2>&1 || { apt-get update -y && apt-get install -y curl; }
@@ -45,8 +44,20 @@ fi
 
 echo "==> 3/5 Забираю код в ${APP_DIR}"
 mkdir -p "$APP_DIR"
-curl -fsSL -H "Authorization: Bearer ${GITHUB_TOKEN}" \
-     "https://api.github.com/repos/${REPO}/tarball/${REF}" -o /tmp/kassa.tgz
+TARBALL_URL="https://api.github.com/repos/${REPO}/tarball/${REF}"
+if [ -n "${GITHUB_TOKEN:-}" ]; then
+  # Приватный репозиторий — с токеном.
+  curl -fsSL -H "Authorization: Bearer ${GITHUB_TOKEN}" "$TARBALL_URL" -o /tmp/kassa.tgz
+else
+  # Публичный репозиторий — без токена.
+  if ! curl -fsSL "$TARBALL_URL" -o /tmp/kassa.tgz; then
+    echo "!!  Не удалось скачать код без токена."
+    echo "    Значит репозиторий приватный. Два пути:"
+    echo "    1) Сделай репозиторий публичным на пару минут и запусти снова, ЛИБО"
+    echo "    2) запусти с токеном:  GITHUB_TOKEN=xxxx bash setup.sh"
+    exit 1
+  fi
+fi
 tar -xzf /tmp/kassa.tgz -C "$APP_DIR" --strip-components=1
 rm -f /tmp/kassa.tgz
 
