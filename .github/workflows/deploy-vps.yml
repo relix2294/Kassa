@@ -1,0 +1,63 @@
+# Автообновление кассы на VPS после каждого пуша в рабочую ветку.
+# Нужны секреты репозитория (Settings → Secrets and variables → Actions):
+#   VPS_HOST     — IP сервера
+#   VPS_USER     — пользователь SSH (обычно root)
+#   VPS_SSH_KEY  — закрытый SSH-ключ этого пользователя
+#   VPS_PORT     — порт SSH, если не 22 (необязательно)
+# Что делается на сервере — deploy/update-remote.sh: копия базы, новый код,
+# пересборка, проверка; не поднялось — откат на прежнюю версию.
+name: Обновить кассу на VPS
+
+on:
+  push:
+    branches: [claude/scanner-product-recognition-ujzd0v]
+  workflow_dispatch:
+
+# Два обновления одновременно не запускаем — второе ждёт первое.
+concurrency:
+  group: deploy-vps
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Проверка настроек
+        run: |
+          missing=""
+          [ -n "$VPS_HOST" ] || missing="$missing VPS_HOST"
+          [ -n "$VPS_USER" ] || missing="$missing VPS_USER"
+          [ -n "$VPS_SSH_KEY" ] || missing="$missing VPS_SSH_KEY"
+          if [ -n "$missing" ]; then
+            echo "::error::Не заданы секреты:$missing (Settings → Secrets and variables → Actions)"
+            exit 1
+          fi
+
+      - name: SSH-ключ
+        run: |
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/kassa_key
+          chmod 600 ~/.ssh/kassa_key
+
+      - name: Отправить код на сервер
+        run: |
+          git archive --format=tar.gz -o kassa-deploy.tgz HEAD
+          scp -i ~/.ssh/kassa_key -P "${VPS_PORT:-22}" -o StrictHostKeyChecking=accept-new \
+            kassa-deploy.tgz "$VPS_USER@$VPS_HOST:/tmp/kassa-deploy.tgz"
+
+      - name: Обновить кассу
+        run: |
+          ssh -i ~/.ssh/kassa_key -p "${VPS_PORT:-22}" -o StrictHostKeyChecking=accept-new \
+            "$VPS_USER@$VPS_HOST" 'bash -s' < deploy/update-remote.sh
+
+      - name: Убрать ключ
+        if: always()
+        run: rm -f ~/.ssh/kassa_key
