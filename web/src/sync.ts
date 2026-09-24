@@ -11,11 +11,32 @@ import type { Product } from './types';
 type Listener = () => void;
 const onlineListeners = new Set<Listener>();
 export let isOnline = navigator.onLine;
+// Когда пропала связь — чтобы плашка могла сказать, как давно её нет.
+export let offlineSince: number | null = isOnline ? null : Date.now();
 
 function setOnline(v: boolean) {
   if (isOnline !== v) {
     isOnline = v;
+    offlineSince = v ? null : Date.now();
     onlineListeners.forEach((l) => l());
+  }
+}
+
+// Проверка связи раз в несколько секунд. Без неё обрыв интернета может
+// остаться незамеченным: «мёртвый» WebSocket закрывается не сразу, а браузер
+// шлёт событие offline только когда отваливается сама сетевая карта.
+const PING_EVERY = 5000;
+const PING_TIMEOUT = 4000;
+async function ping() {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), PING_TIMEOUT);
+  try {
+    const res = await fetch('/api/health', { cache: 'no-store', signal: ctrl.signal });
+    setOnline(res.ok);
+  } catch {
+    setOnline(false);
+  } finally {
+    clearTimeout(timer);
   }
 }
 export function onOnlineChange(l: Listener) {
@@ -336,6 +357,7 @@ export function initSync() {
   });
   window.addEventListener('offline', () => setOnline(false));
   pullProducts();
+  setInterval(ping, PING_EVERY);
   connectRealtime();
   // Раз в секунду: разбираем очередь (п.8 — зеркалирование раз в секунду).
   setInterval(flushOutbox, 1000);

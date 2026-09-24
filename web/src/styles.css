@@ -936,3 +936,31 @@ kbd {
 .cust__change { margin-top: 3vh; }
 .cust__change span { display: block; font-size: 4vh; color: var(--muted); }
 .cust__change b { font-size: 12vh; font-weight: 800; color: var(--primary); line-height: 1; }
+
+/* ==========================================================================
+   Плашка «нет связи» — под шапкой, во всю ширину. Шапка переносит её
+   на отдельную строку, поэтому работает во всех раскладках.
+   ========================================================================== */
+.topbar { flex-wrap: wrap; }
+.net-banner {
+  flex-basis: calc(100% + 32px);
+  order: 10;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 12px -16px -14px;
+  padding: 12px 16px;
+  font-size: 15px;
+  line-height: 1.35;
+  color: #fff;
+  animation: net-banner-in 0.25s ease;
+}
+.net-banner--warn { background: #d97706; color: #1a1204; }
+.net-banner--danger { background: #dc2626; animation: net-banner-in 0.25s ease, net-banner-pulse 2s ease-in-out infinite; }
+.net-banner--ok { background: #059669; }
+.net-banner__icon { font-size: 26px; line-height: 1; flex: 0 0 auto; }
+.net-banner__text { display: flex; flex-direction: column; gap: 2px; }
+.net-banner__text b { font-size: 17px; }
+@keyframes net-banner-in { from { opacity: 0; transform: translateY(-6px); } }
+@keyframes net-banner-pulse { 50% { filter: brightness(1.15); } }
+@media (prefers-reduced-motion: reduce) { .net-banner { animation: none !important; } }
