@@ -276,6 +276,7 @@ const LOG_LABEL: Record<string, string> = {
   line_cancel: 'Отмена позиции',
   receiving: 'Приём товара',
   product_create: 'Новый товар',
+  product_import: 'Загружен прайс',
   product_update: 'Изменена карточка',
   price_change: 'Изменена цена',
   shift_open: 'Открыта смена',
@@ -339,6 +340,10 @@ function formatDetails(type: string, d: any): string {
       return `ожидалось ${d.expected}, посчитано ${d.counted} → ${d.difference > 0 ? '+' : ''}${d.difference}`;
     case 'product_create':
       return `${d.name} · ${d.sale_price}`;
+    case 'product_import':
+      return `строк ${d.rows} · новых ${d.created}${d.received ? ` · оприходовано ${d.received}` : ''}${d.prices_updated ? ` · цен ${d.prices_updated}` : ''}`;
+    case 'product_update':
+      return 'barcode_new' in d ? `штрихкод: ${d.barcode_old ?? 'нет'} → ${d.barcode_new ?? 'нет'}` : '';
     default:
       return '';
   }

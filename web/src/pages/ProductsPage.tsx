@@ -1,22 +1,30 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import NumberInput from '../components/NumberInput';
+import ScanInput from '../components/ScanInput';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db';
 import { api } from '../api';
 import { createProduct, updateProductRemote, pullProducts } from '../sync';
 import Confirm from '../components/Confirm';
+import ImportPanel from './ImportPanel';
 import type { Product } from '../types';
 
 // Сколько позиций рисуем сразу. ТЗ (п.10) предупреждает про первый завод
 // ~2000 товаров: рисовать их все — значит подвесить экран на слабом ноуте.
 const RENDER_LIMIT = 100;
 
+// Весы с печатью этикеток кодируют в штрихкоде номер товара на весах (PLU)
+// и вес. Касса узнаёт товар по этому номеру — его и надо вписать в карточку.
+const PLU_HINT =
+  'Номер товара, под которым он записан в весах. Этикетку с весов касса тогда пробьёт сама — вместе с весом.';
+
 export default function ProductsPage() {
   const [q, setQ] = useState('');
   const [query, setQuery] = useState(''); // отложенное значение поиска
   const [editing, setEditing] = useState<Product | null>(null);
   const [adding, setAdding] = useState(false);
+  const [importing, setImporting] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
 
   const products = useLiveQuery(() => db.products.orderBy('name').toArray(), [], [] as Product[]);
@@ -53,6 +61,9 @@ export default function ProductsPage() {
         <h1>Товары</h1>
         <div className="staff-actions">
           <Link className="btn btn--ghost" to="/bulk">Быстрый завод</Link>
+          <button className="btn btn--ghost" onClick={() => setImporting(true)}>
+            Прайс из Excel
+          </button>
           <button className="btn btn--ghost" onClick={() => setAdding(true)}>
             + Товар
           </button>
@@ -68,7 +79,8 @@ export default function ProductsPage() {
 
       {products.length === 0 && (
         <p className="hint">
-          Пока пусто. Заведите товар кнопкой «+ Товар» или отсканируйте новый штрихкод на вкладке «Приём».
+          Пока пусто. Загрузите прайс или накладную поставщика кнопкой «Прайс из Excel», заведите товар
+          кнопкой «+ Товар» или отсканируйте новый штрихкод на вкладке «Приём».
         </p>
       )}
       {products.length > 0 && filtered.length === 0 && <p className="hint">Ничего не нашлось.</p>}
@@ -109,6 +121,16 @@ export default function ProductsPage() {
         <p className="hint">
           Показано {shown.length} из {filtered.length}. Уточните поиск, чтобы найти нужный товар.
         </p>
+      )}
+
+      {importing && (
+        <ImportPanel
+          onClose={() => setImporting(false)}
+          onDone={(m) => {
+            setImporting(false);
+            flash(m);
+          }}
+        />
       )}
 
       {adding && (
@@ -198,13 +220,14 @@ function AddProduct({ onClose, onDone }: { onClose: () => void; onDone: (name: s
         </div>
 
         <label className="field">
-          <span>Штрихкод — необязательно</span>
-          <NumberInput
-            mode="int"
+          <span>{unit === 'kg' ? 'Код на весах (PLU) — необязательно' : 'Штрихкод — необязательно'}</span>
+          <ScanInput
             value={barcode}
             onValue={setBarcode}
-            placeholder={unit === 'kg' ? 'у весового обычно нет' : 'если есть на упаковке'}
+            onCamera={setBarcode}
+            placeholder={unit === 'kg' ? 'если весы печатают этикетку' : 'если есть на упаковке'}
           />
+          {unit === 'kg' && <span className="hint">{PLU_HINT}</span>}
         </label>
         <label className="field">
           <span>Категория</span>
@@ -255,9 +278,10 @@ function EditModal({
   const [cost, setCost] = useState(String(product.cost_price ?? ''));
   const [min, setMin] = useState(String(product.min_stock));
   const [unit, setUnit] = useState<'pcs' | 'kg'>(product.unit === 'kg' ? 'kg' : 'pcs');
+  const [barcode, setBarcode] = useState(product.barcode ?? '');
   const [busy, setBusy] = useState(false);
-  const [askArchive, setAskArchive] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [askArchive, setAskArchive] = useState(false);
 
   // Скидка на товар (только владелец). Отдельная кнопка — назначить/снять.
   const [discPrice, setDiscPrice] = useState(product.discount_price != null ? String(product.discount_price) : '');
@@ -293,6 +317,11 @@ function EditModal({
             </button>
           </div>
         </div>
+        <label className="field">
+          <span>{unit === 'kg' ? 'Код на весах (PLU) или штрихкод' : 'Штрихкод'} — пусто, если нет</span>
+          <ScanInput value={barcode} onValue={setBarcode} onCamera={setBarcode} />
+          {unit === 'kg' && <span className="hint">{PLU_HINT}</span>}
+        </label>
         <div className="row">
           <label className="field">
             <span>Цена продажи{unit === 'kg' ? ' за кг' : ''}</span>
@@ -389,6 +418,8 @@ function EditModal({
                   sale_price: Number(sale),
                   cost_price: Number(cost),
                   min_stock: Number(min),
+                  // Отправляем, только если меняли: пустая строка — «штрихкода нет».
+                  ...(barcode !== (product.barcode ?? '') ? { barcode } : {}),
                 });
                 onSaved('Сохранено');
               } catch (e: any) {

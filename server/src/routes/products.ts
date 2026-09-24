@@ -2,9 +2,10 @@ import { Router } from 'express';
 import { query } from '../db.js';
 import { writeLog } from '../lib/log.js';
 import { broadcast } from '../lib/realtime.js';
-import { lookupBarcode } from '../lib/barcode.js';
+import { cleanBarcode, lookupBarcode } from '../lib/barcode.js';
 import { requireOwner } from '../lib/auth.js';
 import { productFor, productsFor } from '../lib/sanitize.js';
+import { importProducts } from './productImport.js';
 
 export const productsRouter = Router();
 
@@ -29,6 +30,9 @@ productsRouter.get('/lookup/:barcode', async (req, res) => {
   res.json(info);
 });
 
+// Импорт прайса/накладной поставщика — только владелец.
+productsRouter.post('/import', requireOwner, importProducts);
+
 // Создать товар — только владелец (кассир не задаёт цены).
 productsRouter.post('/', requireOwner, async (req, res) => {
   const { barcode, name, category, sale_price, cost_price, min_stock, unit } = req.body ?? {};
@@ -37,14 +41,13 @@ productsRouter.post('/', requireOwner, async (req, res) => {
   if (!name) {
     return res.status(400).json({ error: 'Название обязательно' });
   }
-  const cleanBarcode = typeof barcode === 'string' && barcode.trim() ? barcode.trim() : null;
   const cleanUnit = unit === 'kg' ? 'kg' : 'pcs';
   try {
     const rows = await query(
       `INSERT INTO products (barcode, name, category, sale_price, cost_price, min_stock, unit)
        VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING *`,
-      [cleanBarcode, name, category ?? null, sale_price ?? 0, cost_price ?? 0, min_stock ?? 0, cleanUnit],
+      [cleanBarcode(barcode), name, category ?? null, sale_price ?? 0, cost_price ?? 0, min_stock ?? 0, cleanUnit],
     );
     const product = rows[0];
     await writeLog({
@@ -73,21 +76,34 @@ productsRouter.patch('/:id', requireOwner, async (req, res) => {
   const before = (await query(`SELECT * FROM products WHERE id = $1`, [id]))[0];
   if (!before) return res.status(404).json({ error: 'not_found' });
 
-  const rows = await query(
-    `UPDATE products SET
-        name       = COALESCE($2, name),
-        category   = COALESCE($3, category),
-        sale_price = COALESCE($4, sale_price),
-        cost_price = COALESCE($5, cost_price),
-        min_stock  = COALESCE($6, min_stock),
-        unit       = COALESCE($7, unit),
-        updated_at = now()
-      WHERE id = $1
-      RETURNING *`,
-    [id, name ?? null, category ?? null, sale_price ?? null, cost_price ?? null, min_stock ?? null,
-     unit === 'kg' || unit === 'pcs' ? unit : null],
-  );
+  // Штрихкод меняем, только если его прислали: пустая строка — «штрихкода нет»
+  // (у весового товара тут код весов, его вписывают позже).
+  const barcodeGiven = req.body != null && 'barcode' in req.body;
+  let rows;
+  try {
+    rows = await query(
+      `UPDATE products SET
+          name       = COALESCE($2, name),
+          category   = COALESCE($3, category),
+          sale_price = COALESCE($4, sale_price),
+          cost_price = COALESCE($5, cost_price),
+          min_stock  = COALESCE($6, min_stock),
+          unit       = COALESCE($7, unit),
+          barcode    = CASE WHEN $8::boolean THEN $9::text ELSE barcode END,
+          updated_at = now()
+        WHERE id = $1
+        RETURNING *`,
+      [id, name ?? null, category ?? null, sale_price ?? null, cost_price ?? null, min_stock ?? null,
+       unit === 'kg' || unit === 'pcs' ? unit : null, barcodeGiven, cleanBarcode(req.body?.barcode)],
+    );
+  } catch (err: any) {
+    if (err.code === '23505') {
+      return res.status(409).json({ error: 'Товар с таким штрихкодом уже есть' });
+    }
+    throw err;
+  }
   const after = rows[0];
+
 
   // Лог изменения цен (отдельным типом — важно для прозрачности).
   if (sale_price != null && Number(sale_price) !== Number(before.sale_price)) {
@@ -104,7 +120,11 @@ productsRouter.patch('/:id', requireOwner, async (req, res) => {
   }
   await writeLog({
     type: 'product_update', entity: 'product', entityId: id, userId: user_id ?? null,
-    details: { changed: Object.keys(req.body ?? {}).filter((k) => k !== 'user_id') },
+    details: {
+      changed: Object.keys(req.body ?? {}).filter((k) => k !== 'user_id'),
+      // Смена штрихкода — след в журнале: по нему товар пробивается на кассе.
+      ...(before.barcode !== after.barcode ? { barcode_old: before.barcode, barcode_new: after.barcode } : {}),
+    },
   });
 
   broadcast('product_upsert', after, 'all');

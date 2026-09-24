@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import NumberInput from '../components/NumberInput';
-import { db } from '../db';
+import ScanInput from '../components/ScanInput';
+import { findByScan, notFoundMessage, useScanCapture } from '../scan';
+import { beepError, beepOk } from '../beep';
 import { api } from '../api';
 import { useGuardedClose } from '../components/Confirm';
 import { useShift } from '../shift';
@@ -54,17 +56,20 @@ export default function InventoryPanel({ onClose, onDone }: { onClose: () => voi
   }
 
   async function onScan(code: string) {
-    const bc = code.trim();
     setBarcode('');
-    if (!bc) return;
-    const p = await db.products.where('barcode').equals(bc).first();
-    if (!p) {
-      setErr('Товара нет в базе');
-      setTimeout(() => setErr(null), 2000);
+    const r = await findByScan(code);
+    if (!r) return;
+    if (r.kind !== 'product') {
+      beepError();
+      setErr(notFoundMessage(r));
+      setTimeout(() => setErr(null), 3000);
       return;
     }
-    addProductLine(p);
+    addProductLine(r.product);
+    beepOk();
   }
+
+  useScanCapture(onScan, !pickerOpen && !result);
 
   async function save() {
     setBusy(true);
@@ -138,12 +143,12 @@ export default function InventoryPanel({ onClose, onDone }: { onClose: () => voi
             onScan(barcode);
           }}
         >
-          <NumberInput
+          <ScanInput
             ref={scanRef}
-            mode="int"
             placeholder="Скан товара…"
             value={barcode}
             onValue={setBarcode}
+            onCamera={onScan}
           />
         </form>
 

@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
+import { findByScan, notFoundMessage, useScanCapture } from '../scan';
+import { beepError, beepOk } from '../beep';
 import { useNavigate } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, type CartLine } from '../db';
@@ -119,21 +121,35 @@ export default function SalePage() {
   }
 
   async function onScan(code: string) {
-    const bc = code.trim();
     setBarcode('');
-    if (!bc) return;
-    const product = await db.products.where('barcode').equals(bc).first();
-    if (!product) {
-      flash('Товара нет в базе — сначала приём');
+    const r = await findByScan(code);
+    if (!r) return;
+    if (r.kind !== 'product') {
+      beepError();
+      flash(notFoundMessage(r, 'Товара нет в базе — сначала приём'));
       return;
     }
-    // Весовой товар со штрихкодом (редко, но бывает) — спросим вес.
-    if (product.unit === 'kg') {
+    const product = r.product;
+    // С весовой этикетки вес уже известен; весовой товар по своему
+    // штрихкоду (редко, но бывает) — спросим вес.
+    const qty = r.qty ?? 1;
+    if (r.qty == null && product.unit === 'kg') {
       setWeighing(product);
       return;
     }
-    if (withinStock(product, 1)) await addToCart(product);
+    if (!withinStock(product, qty)) {
+      beepError();
+      return;
+    }
+    await addToCart(product, qty);
+    beepOk();
   }
+
+  // Скан, когда курсор ушёл из поля (кассир кликнул мышкой) — не теряем его.
+  useScanCapture(
+    onScan,
+    !!shift && !payOpen && !qtyEdit && !returnOpen && !pickerOpen && !weighing && !calcOpen && !askClear && changeDue == null,
+  );
 
   // Ввод в верхней строке: буквы → выбираем первую подсказку; цифры → скан.
   function onEnter() {

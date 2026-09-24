@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import type { PoolClient } from 'pg';
 import { withTx } from '../db.js';
 import { writeLog } from '../lib/log.js';
 import { broadcast } from '../lib/realtime.js';
@@ -46,56 +47,13 @@ receivingRouter.post('/', async (req, res) => {
       if (found.rows.length === 0) {
         return { notFound: true as const };
       }
-      const product = found.rows[0];
-
-      const oldStock = Number(product.stock);
-      const oldCost = Number(product.cost_price);
-      const newStock = oldStock + qtyNum;
-
-      // Цена партии: владелец задаёт свою, у кассира — текущая средняя
-      // (тогда средняя не меняется, а закупочные цены ему не показываются).
-      const batchCost = costNum ?? oldCost;
-
-      // Средняя скользящая: взвешенное среднее старого остатка и новой партии.
-      const newCost =
-        newStock > 0
-          ? (oldStock * oldCost + qtyNum * batchCost) / newStock
-          : batchCost;
-
-      const upd = await client.query(
-        `UPDATE products
-            SET stock = $2, cost_price = $3, updated_at = now()
-          WHERE id = $1
-          RETURNING *`,
-        [product.id, newStock, Number(newCost.toFixed(2))],
-      );
-
-      const receipt = await client.query(
-        `INSERT INTO stock_receipts (product_id, qty, cost_price, user_id, shift_id)
-         VALUES ($1, $2, $3, $4, $5)
-         RETURNING *`,
-        [product.id, qtyNum, batchCost, user_id ?? null, openShift?.id ?? null],
-      );
-
-      await writeLog(
-        {
-          type: 'receiving',
-          entity: 'product',
-          entityId: product.id,
-          userId: user_id ?? null,
-          details: {
-            qty: qtyNum,
-            cost_price: batchCost,
-            cost_set_by_owner: isOwner,
-            old_stock: oldStock,
-            new_stock: newStock,
-            new_cost_avg: Number(newCost.toFixed(2)),
-          },
-        },
-        client,
-      );
-
-      return { product: upd.rows[0], receipt: receipt.rows[0] };
+      return receiveInTx(client, found.rows[0], {
+        qty: qtyNum,
+        cost: costNum,
+        userId: user_id,
+        shiftId: openShift?.id ?? null,
+        isOwner,
+      });
     });
 
     if ('notFound' in result) {
@@ -109,3 +67,62 @@ receivingRouter.post('/', async (req, res) => {
     res.status(500).json({ error: 'internal' });
   }
 });
+
+// Оприходовать партию на уже заблокированный (FOR UPDATE) товар.
+// Общая часть для приёма со сканера и импорта накладной поставщика.
+// cost = null — партия по текущей средней себестоимости (она не меняется).
+export async function receiveInTx(
+  client: PoolClient,
+  product: any,
+  o: { qty: number; cost: number | null; userId: string; shiftId: string | null; isOwner: boolean },
+) {
+  const qtyNum = o.qty;
+  const oldStock = Number(product.stock);
+  const oldCost = Number(product.cost_price);
+  const newStock = oldStock + qtyNum;
+
+  // Цена партии: владелец задаёт свою, у кассира — текущая средняя
+  // (тогда средняя не меняется, а закупочные цены ему не показываются).
+  const batchCost = o.cost ?? oldCost;
+
+  // Средняя скользящая: взвешенное среднее старого остатка и новой партии.
+  const newCost =
+    newStock > 0
+      ? (oldStock * oldCost + qtyNum * batchCost) / newStock
+      : batchCost;
+
+  const upd = await client.query(
+    `UPDATE products
+        SET stock = $2, cost_price = $3, updated_at = now()
+      WHERE id = $1
+      RETURNING *`,
+    [product.id, newStock, Number(newCost.toFixed(2))],
+  );
+
+  const receipt = await client.query(
+    `INSERT INTO stock_receipts (product_id, qty, cost_price, user_id, shift_id)
+     VALUES ($1, $2, $3, $4, $5)
+     RETURNING *`,
+    [product.id, qtyNum, batchCost, o.userId ?? null, o.shiftId],
+  );
+
+  await writeLog(
+    {
+      type: 'receiving',
+      entity: 'product',
+      entityId: product.id,
+      userId: o.userId ?? null,
+      details: {
+        qty: qtyNum,
+        cost_price: batchCost,
+        cost_set_by_owner: o.isOwner,
+        old_stock: oldStock,
+        new_stock: newStock,
+        new_cost_avg: Number(newCost.toFixed(2)),
+      },
+    },
+    client,
+  );
+
+  return { product: upd.rows[0], receipt: receipt.rows[0] };
+}

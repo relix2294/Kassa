@@ -30,3 +30,6 @@ Thumbs.db
 .vscode/
 .idea/
 *.swp
+
+# Скачанные базы штрихкодов (npm run import-catalog)
+server/data/

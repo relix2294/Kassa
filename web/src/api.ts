@@ -1,5 +1,14 @@
 import type { Product, User, LogRow } from './types';
 import { getToken, logout } from './auth';
+import type { ImportRow } from './importFile';
+
+export interface ImportResult {
+  created: number;
+  prices_updated: number;
+  received: number;
+  skipped: { line: number; reason: string }[];
+  warnings: { line: number; text: string }[];
+}
 
 // Тонкий клиент к серверному API. Базовый путь идёт через прокси Vite (/api).
 async function req<T>(path: string, options?: RequestInit): Promise<T> {
@@ -29,7 +38,16 @@ export const api = {
   listProducts: () => req<Product[]>('/products'),
   getByBarcode: (barcode: string) => req<Product>(`/products/barcode/${encodeURIComponent(barcode)}`),
   lookupBarcode: (barcode: string) =>
-    req<{ name: string | null; source: string | null }>(`/products/lookup/${encodeURIComponent(barcode)}`),
+    req<{ name: string | null; category?: string | null; brand?: string | null; source: string | null }>(
+      `/products/lookup/${encodeURIComponent(barcode)}`,
+    ),
+  importProducts: (payload: {
+    rows: ImportRow[];
+    markup?: number;
+    receive?: boolean;
+    update_prices?: boolean;
+    category?: string;
+  }) => req<ImportResult>('/products/import', { method: 'POST', body: JSON.stringify(payload) }),
   createProduct: (p: Partial<Product> & { user_id?: string }) =>
     req<Product>('/products', { method: 'POST', body: JSON.stringify(p) }),
   updateProduct: (id: string, p: Partial<Product> & { user_id?: string }) =>

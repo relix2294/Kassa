@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import NumberInput from '../components/NumberInput';
-import { db } from '../db';
+import ScanInput from '../components/ScanInput';
+import { findByScan, notFoundMessage, parseWeightLabel } from '../scan';
 import { api } from '../api';
 import { createProduct, receiveGoods } from '../sync';
 import type { Product } from '../types';
@@ -50,6 +51,8 @@ export default function BulkEntryPage() {
   })();
 
   const [existing, setExisting] = useState<Product | null>(null);
+  // Название подставлено из справочника — его надо сверить с упаковкой.
+  const [suggested, setSuggested] = useState(false);
   const [added, setAdded] = useState<Added[]>([]);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -72,21 +75,38 @@ export default function BulkEntryPage() {
       return;
     }
     let alive = true;
-    db.products
-      .where('barcode')
-      .equals(bc)
-      .first()
-      .then((p) => {
-        if (!alive) return;
-        setExisting(p ?? null);
-        if (p) {
-          setName(p.name);
-          setSale(String(p.sale_price));
-          setUnit(p.unit === 'kg' ? 'kg' : 'pcs');
-        }
-      });
+    let lookupTimer: ReturnType<typeof setTimeout> | undefined;
+    findByScan(bc).then((r) => {
+      if (!alive) return;
+      const p = r?.kind === 'product' ? r.product : null;
+      setExisting(p);
+      setErr(r?.kind === 'weight_unknown' ? notFoundMessage(r) : null);
+      if (p) {
+        setName(p.name);
+        setSale(String(p.sale_price));
+        setUnit(p.unit === 'kg' ? 'kg' : 'pcs');
+        // С весовой этикетки сразу знаем вес.
+        if (r?.kind === 'product' && r.qty) setQty(String(r.qty));
+      } else if (r?.kind === 'not_found' && /^(\d{8}|\d{12,14})$/.test(r.code)) {
+        // Новый код — подсказываем название из справочника штрихкодов,
+        // чтобы не набирать его руками. Ввести своё можно поверх.
+        // Пауза — чтобы не искать недонабранный руками код.
+        lookupTimer = setTimeout(() => {
+          api
+            .lookupBarcode(r.code)
+            .then((l) => {
+              // Своё название, если уже начали его набирать, не затираем.
+              if (!alive || !l.name || nameRef.current?.value) return;
+              setName(l.name);
+              setSuggested(true);
+            })
+            .catch(() => {});
+        }, 300);
+      }
+    });
     return () => {
       alive = false;
+      clearTimeout(lookupTimer);
     };
   }, [barcode]);
 
@@ -107,6 +127,7 @@ export default function BulkEntryPage() {
     setSale('');
     setQty('');
     setExisting(null);
+    setSuggested(false);
     setErr(null);
     if (keepFocus) setTimeout(() => barcodeRef.current?.focus(), 0);
   }
@@ -114,6 +135,12 @@ export default function BulkEntryPage() {
   async function save() {
     const bc = barcode.trim();
     const qtyNum = Number(qty) || 0;
+
+    // Весовая этикетка — не штрихкод товара: в ней вес, он каждый раз новый.
+    if (!existing && parseWeightLabel(bc)) {
+      setErr('Это весовая этикетка. Заведите товар без штрихкода и впишите в карточку код весов (PLU).');
+      return;
+    }
 
     if (!existing && !name.trim()) {
       setErr('Введите название');
@@ -253,11 +280,14 @@ export default function BulkEntryPage() {
 
         <label className="field">
           <span>Штрихкод — можно пропустить</span>
-          <NumberInput
+          <ScanInput
             ref={barcodeRef}
-            mode="int"
             value={barcode}
             onValue={setBarcode}
+            onCamera={(code) => {
+              setBarcode(code);
+              nameRef.current?.focus();
+            }}
             onKeyDown={(e) => onKey(e, nameRef)}
             placeholder="скан или Enter, если штрихкода нет"
           />
@@ -268,10 +298,16 @@ export default function BulkEntryPage() {
           <input
             ref={nameRef}
             value={name}
-            onChange={(e) => setName(e.target.value)}
+            onChange={(e) => {
+              setName(e.target.value);
+              setSuggested(false);
+            }}
             onKeyDown={(e) => onKey(e, costRef)}
             disabled={!!existing}
           />
+          {suggested && !existing && (
+            <span className="warn warn--inline">Из справочника штрихкодов — сверьте с упаковкой.</span>
+          )}
         </label>
 
         <div className="row">

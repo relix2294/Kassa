@@ -211,3 +211,16 @@ CREATE TABLE IF NOT EXISTS write_offs (
 );
 CREATE INDEX IF NOT EXISTS idx_write_offs_created ON write_offs(created_at);
 CREATE INDEX IF NOT EXISTS idx_write_offs_product ON write_offs(product_id);
+
+-- Справочник штрихкодов: подсказка названия при заведении товара.
+-- Это НЕ каталог магазина (тот — products): здесь «что это за товар вообще».
+-- Наполняется загрузкой открытых баз (npm run import-catalog), прайсами
+-- поставщиков и ответами внешних сервисов — чтобы второй раз не ходить в сеть.
+CREATE TABLE IF NOT EXISTS barcode_catalog (
+  barcode     text PRIMARY KEY,
+  name        text NOT NULL,
+  category    text,
+  brand       text,
+  source      text NOT NULL,               -- откуда: aioke, supplier, barcodes.tj, openfoodfacts…
+  updated_at  timestamptz NOT NULL DEFAULT now()
+);

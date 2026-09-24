@@ -17,12 +17,26 @@ export GITHUB_TOKEN=ВСТАВЬ_ТОКЕН
 export HOST_PORT=8080            # свой порт, если 8080 занят
 
 curl -fsSL -H "Authorization: Bearer $GITHUB_TOKEN" -H "Accept: application/vnd.github.raw" \
-  "https://api.github.com/repos/relix2294/Kassa/contents/deploy/setup.sh?ref=claude/test-9b7fiw" -o /tmp/setup.sh
+  "https://api.github.com/repos/relix2294/Kassa/contents/deploy/setup.sh?ref=claude/scanner-product-recognition-ujzd0v" -o /tmp/setup.sh
 bash /tmp/setup.sh
 ```
 
 После установки: `http://<IP-сервера>:<HOST_PORT>`, вход `owner` / `1234`
 (смените PIN на экране «Сотрудники»).
+
+## Справочник штрихкодов
+
+При первом запуске контейнер сам, в фоне, загружает справочник штрихкодов
+(открытая база: 1,8 млн строк, ~1,1 млн кодов, минута-две). После этого
+«Завод товара» и «Приём» по скану подставляют название и категорию —
+мгновенно и без интернета. Касса работает и во время загрузки.
+Если справочник уже в базе, повторно он не качается.
+
+Проверить, как идёт загрузка:
+
+```bash
+docker compose logs app | grep -i справочник
+```
 
 ## Управление
 

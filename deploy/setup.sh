@@ -12,7 +12,7 @@
 set -euo pipefail
 
 REPO="relix2294/Kassa"
-REF="claude/test-9b7fiw"
+REF="${REF:-claude/scanner-product-recognition-ujzd0v}"
 APP_DIR="${APP_DIR:-/opt/kassa}"
 HOST_PORT="${HOST_PORT:-8080}"
 
