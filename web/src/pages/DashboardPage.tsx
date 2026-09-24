@@ -45,7 +45,8 @@ export default function DashboardPage() {
   useEffect(
     () =>
       onRealtimeEvent((type) => {
-        if (type === 'sale' || type === 'return' || type === 'shift') load();
+        // data_updated — на зеркале прилетел свежий снимок из магазина.
+        if (type === 'sale' || type === 'return' || type === 'shift' || type === 'data_updated') load();
       }),
     [load],
   );
@@ -172,7 +173,7 @@ function ReturnsTab() {
   useEffect(() => {
     load();
   }, [load]);
-  useEffect(() => onRealtimeEvent((t) => t === 'return' && load()), [load]);
+  useEffect(() => onRealtimeEvent((t) => (t === 'return' || t === 'data_updated') && load()), [load]);
 
   if (rows.length === 0) return <p className="hint">Возвратов пока не было.</p>;
 
@@ -296,7 +297,7 @@ function LogTab() {
   useEffect(() => {
     load();
   }, [load]);
-  useEffect(() => onRealtimeEvent((type) => type === 'log' && load()), [load]);
+  useEffect(() => onRealtimeEvent((type) => (type === 'log' || type === 'data_updated') && load()), [load]);
 
   return (
     <div className="list">

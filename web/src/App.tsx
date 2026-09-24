@@ -1,6 +1,7 @@
 import { NavLink, Navigate, Route, Routes, useNavigate, useLocation } from 'react-router-dom';
 import { useEffect, useRef, useState } from 'react';
 import { onOnlineChange, isOnline, pullProducts, reconnectRealtime } from './sync';
+import { api } from './api';
 import { refreshShift } from './shift';
 import { useAuth, logout } from './auth';
 import { useThemeMode } from './theme';
@@ -38,6 +39,13 @@ export default function App() {
   const navigate = useNavigate();
   const location = useLocation();
 
+  // Роль сервера: 'mirror' — это VPS-витрина (только просмотр аналитики,
+  // данные приходят из магазина снимками). На кассе магазина роль 'store'.
+  const [mirror, setMirror] = useState(false);
+  useEffect(() => {
+    api.health().then((h) => setMirror(h.role === 'mirror')).catch(() => {});
+  }, []);
+
   // Экран покупателя — отдельное окно на втором мониторе. Без шапки, меню и
   // без входа: он только читает локальный чек и показывает его клиенту.
   if (location.pathname === '/customer') return <CustomerDisplay />;
@@ -59,7 +67,7 @@ export default function App() {
   useEffect(() => {
     const wasLoggedIn = prevUserId.current;
     prevUserId.current = user?.id ?? null;
-    if (user && !wasLoggedIn) navigate('/sale', { replace: true });
+    if (user && !wasLoggedIn) navigate(mirror ? '/dashboard' : '/sale', { replace: true });
   }, [user?.id]);
 
   if (!user) return <LoginPage />;
@@ -69,9 +77,9 @@ export default function App() {
   return (
     <div className="app">
       <header className="topbar">
-        <div className="brand">Kassa</div>
+        <div className="brand">Kassa{mirror ? ' · витрина' : ''}</div>
         <div className="topbar__right">
-          <QueueBadge onOpen={() => navigate('/queue')} />
+          {!mirror && <QueueBadge onOpen={() => navigate('/queue')} />}
           <OnlineBadge />
           <ThemeButton />
           <button className="user-chip" onClick={logout} title="Выйти">
@@ -81,19 +89,33 @@ export default function App() {
       </header>
 
       <main className="content">
-        <Routes>
-          <Route path="/" element={<Navigate to="/sale" replace />} />
-          <Route path="/dashboard" element={owner ? <DashboardPage /> : <Navigate to="/sale" replace />} />
-          <Route path="/sale" element={<SalePage />} />
-          <Route path="/shift" element={<ShiftPage />} />
-          <Route path="/queue" element={<QueuePage />} />
-          <Route path="/receiving" element={<ReceivingPage />} />
-          <Route path="/products" element={owner ? <ProductsPage /> : <Navigate to="/sale" replace />} />
-          <Route path="/bulk" element={owner ? <BulkEntryPage /> : <Navigate to="/sale" replace />} />
-          <Route path="/analytics" element={owner ? <AnalyticsPage /> : <Navigate to="/sale" replace />} />
-          <Route path="/staff" element={owner ? <StaffPage /> : <Navigate to="/sale" replace />} />
-          <Route path="*" element={<Navigate to="/sale" replace />} />
-        </Routes>
+        {mirror && (
+          <div className="mirror-banner">
+            👁️ Витрина руководителя — только просмотр. Данные приходят из магазина, обновляются каждые ~10 минут.
+          </div>
+        )}
+        {mirror ? (
+          // Зеркало: доступны только Кабинет и Аналитика, всё остальное сюда.
+          <Routes>
+            <Route path="/dashboard" element={owner ? <DashboardPage /> : <Navigate to="/dashboard" replace />} />
+            <Route path="/analytics" element={owner ? <AnalyticsPage /> : <Navigate to="/dashboard" replace />} />
+            <Route path="*" element={<Navigate to="/dashboard" replace />} />
+          </Routes>
+        ) : (
+          <Routes>
+            <Route path="/" element={<Navigate to="/sale" replace />} />
+            <Route path="/dashboard" element={owner ? <DashboardPage /> : <Navigate to="/sale" replace />} />
+            <Route path="/sale" element={<SalePage />} />
+            <Route path="/shift" element={<ShiftPage />} />
+            <Route path="/queue" element={<QueuePage />} />
+            <Route path="/receiving" element={<ReceivingPage />} />
+            <Route path="/products" element={owner ? <ProductsPage /> : <Navigate to="/sale" replace />} />
+            <Route path="/bulk" element={owner ? <BulkEntryPage /> : <Navigate to="/sale" replace />} />
+            <Route path="/analytics" element={owner ? <AnalyticsPage /> : <Navigate to="/sale" replace />} />
+            <Route path="/staff" element={owner ? <StaffPage /> : <Navigate to="/sale" replace />} />
+            <Route path="*" element={<Navigate to="/sale" replace />} />
+          </Routes>
+        )}
       </main>
 
       <nav className="tabbar">
@@ -103,25 +125,31 @@ export default function App() {
             <span>Кабинет</span>
           </NavLink>
         )}
-        <NavLink to="/sale" className="tab">
-          <span className="tab__icon">🧾</span>
-          <span>Продажа</span>
-        </NavLink>
-        <NavLink to="/shift" className="tab">
-          <span className="tab__icon">🕐</span>
-          <span>Смена</span>
-        </NavLink>
-        <NavLink to="/receiving" className="tab">
-          <span className="tab__icon">📦</span>
-          <span>Приём</span>
-        </NavLink>
-        {owner && (
+        {!mirror && (
+          <NavLink to="/sale" className="tab">
+            <span className="tab__icon">🧾</span>
+            <span>Продажа</span>
+          </NavLink>
+        )}
+        {!mirror && (
+          <NavLink to="/shift" className="tab">
+            <span className="tab__icon">🕐</span>
+            <span>Смена</span>
+          </NavLink>
+        )}
+        {!mirror && (
+          <NavLink to="/receiving" className="tab">
+            <span className="tab__icon">📦</span>
+            <span>Приём</span>
+          </NavLink>
+        )}
+        {owner && !mirror && (
           <NavLink to="/products" className="tab">
             <span className="tab__icon">🏷️</span>
             <span>Товары</span>
           </NavLink>
         )}
-        {owner && (
+        {owner && !mirror && (
           <NavLink to="/bulk" className="tab">
             <span className="tab__icon">⚡</span>
             <span>Завод</span>
@@ -133,7 +161,7 @@ export default function App() {
             <span>Аналитика</span>
           </NavLink>
         )}
-        {owner && (
+        {owner && !mirror && (
           <NavLink to="/staff" className="tab">
             <span className="tab__icon">👥</span>
             <span>Сотрудники</span>

@@ -9,6 +9,7 @@ import 'dotenv/config';
 
 import { attachRealtime } from './lib/realtime.js';
 import { requireAuth } from './lib/auth.js';
+import { mirrorRouter } from './routes/mirror.js';
 import { authRouter } from './routes/auth.js';
 import { productsRouter } from './routes/products.js';
 import { receivingRouter } from './routes/receiving.js';
@@ -20,11 +21,31 @@ import { analyticsRouter } from './routes/analytics.js';
 import { logsRouter } from './routes/logs.js';
 import { usersRouter } from './routes/users.js';
 
+// Роль процесса:
+//  'store'  — полноценная касса магазина (пишет данные, работает офлайн);
+//  'mirror' — зеркало на VPS: только чтение (кабинет владельца) + приём снимка.
+const ROLE = process.env.ROLE || 'store';
+
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-app.get('/api/health', (_req, res) => res.json({ ok: true, ts: Date.now() }));
+app.get('/api/health', (_req, res) => res.json({ ok: true, ts: Date.now(), role: ROLE }));
+
+// Приём снимка базы с кассы — до режима «только чтение» и без requireAuth
+// (защищён отдельным секретом). Работает только в роли mirror (проверка внутри).
+app.use('/api/mirror', mirrorRouter);
+
+// В роли зеркала блокируем любые изменения: наружу доступны только чтение
+// (кабинет/аналитика), вход и приём снимка. Единственный хозяин данных — магазин.
+if (ROLE === 'mirror') {
+  app.use('/api', (req, res, next) => {
+    if (req.method === 'GET') return next();
+    if (req.path.startsWith('/auth')) return next();   // вход владельца
+    if (req.path.startsWith('/mirror')) return next();  // приём снимка
+    return res.status(403).json({ error: 'mirror_read_only' });
+  });
+}
 
 app.use('/api/auth', authRouter);
 app.use('/api/products', requireAuth, productsRouter);
@@ -66,7 +87,7 @@ attachRealtime(server);
 
 // host 0.0.0.0 — чтобы касса была видна с телефона владельца в той же сети.
 server.listen(port, '0.0.0.0', () => {
-  console.log(`✓ Kassa: http://localhost:${port}`);
+  console.log(`✓ Kassa [${ROLE}]: http://localhost:${port}`);
   console.log(`  WebSocket: ws://localhost:${port}/ws`);
   console.log(
     hasBuild

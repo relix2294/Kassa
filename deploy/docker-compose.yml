@@ -29,9 +29,32 @@ services:
       DATABASE_URL: postgres://kassa:${DB_PASS:?нужен DB_PASS в deploy/.env}@db:5432/kassa
       JWT_SECRET: ${JWT_SECRET:?нужен JWT_SECRET в deploy/.env}
       BARCODE_LOOKUP_URL: ""
+      # Роль: 'store' (касса магазина, по умолчанию) или 'mirror' (VPS-витрина).
+      ROLE: ${ROLE:-store}
+      # Общий секрет магазина и зеркала для приёма снимков (нужен обеим сторонам).
+      MIRROR_SECRET: ${MIRROR_SECRET:-}
     ports:
       # Слева — внешний порт сервера, справа — порт внутри контейнера.
       - "${HOST_PORT:-8080}:4000"
+
+  # Синхронизация магазин → VPS-зеркало. Запускается ТОЛЬКО с профилем "store"
+  # (на кассе магазина). На VPS профиль не включают — сервис не поднимается.
+  sync:
+    profiles: ["store"]
+    build:
+      context: sync
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      - db
+    environment:
+      DB_HOST: db
+      DB_USER: kassa
+      DB_NAME: kassa
+      PGPASSWORD: ${DB_PASS:?нужен DB_PASS в deploy/.env}
+      MIRROR_URL: ${MIRROR_URL:-}
+      MIRROR_SECRET: ${MIRROR_SECRET:-}
+      SYNC_INTERVAL: ${SYNC_INTERVAL:-600}
 
 volumes:
   kassa-db:

@@ -80,6 +80,19 @@ body {
 
 .content { flex: 1; overflow-y: auto; padding: 16px; }
 
+/* Баннер режима «витрина» на VPS: липнет к верху области контента. */
+.mirror-banner {
+  position: sticky;
+  top: -16px;
+  margin: -16px -16px 12px;
+  padding: 10px 16px;
+  background: rgba(245, 158, 11, 0.15);
+  color: var(--off);
+  font-size: 13px;
+  font-weight: 600;
+  z-index: 5;
+}
+
 .page h1 { font-size: 22px; margin: 4px 0 16px; }
 
 .card {

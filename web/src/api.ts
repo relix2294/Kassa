@@ -25,7 +25,7 @@ async function req<T>(path: string, options?: RequestInit): Promise<T> {
 }
 
 export const api = {
-  health: () => req<{ ok: boolean }>('/health'),
+  health: () => req<{ ok: boolean; role?: string }>('/health'),
   listProducts: () => req<Product[]>('/products'),
   getByBarcode: (barcode: string) => req<Product>(`/products/barcode/${encodeURIComponent(barcode)}`),
   lookupBarcode: (barcode: string) =>
