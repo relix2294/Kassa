@@ -523,7 +523,7 @@ select:focus { outline: none; border-color: var(--primary); }
   /* --- Продажа: чек слева, оплата справа --- */
   .page--sale-desk {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 420px;
+    grid-template-columns: minmax(0, 1fr) 480px;
     gap: 24px;
     align-items: start;
     height: 100%;
@@ -775,7 +775,7 @@ kbd {
 .warn--inline { display: block; margin-top: 6px; font-size: 13px; }
 
 /* Кнопка выбора товара без штрихкода — под полем скана. */
-.btn--pick { width: 100%; margin-bottom: 12px; padding: 12px; }
+.btn--pick { width: 100%; margin-bottom: 12px; padding: 18px; font-size: 20px; font-weight: 700; }
 
 /* Конвейерный завод товаров. */
 .batch-settings { margin-bottom: 12px; background: var(--surface-2); }
