@@ -103,9 +103,9 @@ export default function ReturnPanel({ onClose, onDone }: { onClose: () => void; 
           <NumberInput ref={scanRef} mode="int" placeholder="Скан возвращаемого товара…" value={barcode} onValue={setBarcode} />
         </form>
 
-        {/* Весовой товар и выпечку сканером не вернуть — выбираем из списка. */}
+        {/* Поиск по названию — для весового, выпечки и всего, что неудобно сканировать. */}
         <button className="btn btn--ghost btn--pick" onClick={() => setPickerOpen(true)}>
-          Товар без штрихкода
+          🔎 Найти товар по названию
         </button>
 
         {err && <div className="change change--neg">{err}</div>}

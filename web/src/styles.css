@@ -523,7 +523,7 @@ select:focus { outline: none; border-color: var(--primary); }
   /* --- Продажа: чек слева, оплата справа --- */
   .page--sale-desk {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 360px;
+    grid-template-columns: minmax(0, 1fr) 420px;
     gap: 24px;
     align-items: start;
     height: 100%;

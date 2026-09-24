@@ -73,7 +73,7 @@ export default function ProductPicker({
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
-        <h2>Товар без штрихкода</h2>
+        <h2>Найти товар</h2>
         <input
           ref={searchRef}
           className="search"
