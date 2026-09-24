@@ -82,6 +82,28 @@ export const api = {
     req<{ id: string; total: number; payment_method: string; created_at: string; username: string | null; full_name: string | null; items: string }[]>(
       `/dashboard/recent-sales?limit=${limit}`,
     ),
+  salesHistory: (opts: { from?: string; to?: string; cashier?: string; limit?: number; offset?: number } = {}) => {
+    const q = new URLSearchParams();
+    if (opts.from) q.set('from', opts.from);
+    if (opts.to) q.set('to', opts.to);
+    if (opts.cashier) q.set('cashier', opts.cashier);
+    q.set('limit', String(opts.limit ?? 30));
+    q.set('offset', String(opts.offset ?? 0));
+    return req<{
+      id: string;
+      created_at: string;
+      total: number;
+      cost_total: number;
+      payment_method: 'cash' | 'card' | 'mixed';
+      cash_amount: number;
+      card_amount: number;
+      cash_received: number | null;
+      change_given: number | null;
+      username: string | null;
+      full_name: string | null;
+      items: { name: string; barcode: string; qty: number; unit_price: number; line_total: number }[];
+    }[]>(`/sales/history?${q.toString()}`);
+  },
   logEvent: (type: string, details: any) =>
     req('/logs/event', { method: 'POST', body: JSON.stringify({ type, details }) }),
   login: (username: string, pin: string) =>

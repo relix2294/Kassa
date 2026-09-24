@@ -949,3 +949,19 @@ kbd {
 .cust__change { margin-top: 3vh; }
 .cust__change span { display: block; font-size: 4vh; color: var(--muted); }
 .cust__change b { font-size: 12vh; font-weight: 800; color: var(--primary); line-height: 1; }
+
+/* Хронология чеков (экран «Чеки») */
+.receipt { border: 1px solid var(--border); border-radius: 10px; margin-bottom: 8px; overflow: hidden; }
+.receipt__head {
+  width: 100%; display: flex; justify-content: space-between; align-items: center;
+  gap: 12px; padding: 12px; background: var(--surface); color: var(--text);
+  border: 0; cursor: pointer; text-align: left;
+}
+.receipt__main { min-width: 0; }
+.receipt__title { font-weight: 600; }
+.receipt__sum { font-weight: 700; font-size: 18px; white-space: nowrap; }
+.receipt__body { padding: 8px 12px 12px; border-top: 1px solid var(--border); }
+.receipt__line { display: flex; justify-content: space-between; gap: 12px; padding: 4px 0; }
+.receipt__name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.receipt__foot { margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--border); }
+.receipt__row { display: flex; justify-content: space-between; padding: 2px 0; }
