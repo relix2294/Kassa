@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { api } from '../api';
 import { onRealtimeEvent } from '../sync';
 import InventoryPanel from './InventoryPanel';
+import WriteOffPanel from './WriteOffPanel';
 import BulkPricePanel from './BulkPricePanel';
 
 type Tab = 'restock' | 'stale' | 'tools';
@@ -128,11 +129,13 @@ function StaleTab() {
 }
 
 function ToolsTab({ onDone }: { onDone: (m: string) => void }) {
-  const [panel, setPanel] = useState<'none' | 'inventory' | 'price'>('none');
+  const [panel, setPanel] = useState<'none' | 'inventory' | 'price' | 'writeoff'>('none');
   const [history, setHistory] = useState<any[]>([]);
+  const [writeOffs, setWriteOffs] = useState<any[]>([]);
 
   const loadHistory = useCallback(() => {
     api.listInventories(10).then(setHistory).catch(() => {});
+    api.listWriteOffs(10).then(setWriteOffs).catch(() => {});
   }, []);
   useEffect(() => {
     loadHistory();
@@ -145,6 +148,14 @@ function ToolsTab({ onDone }: { onDone: (m: string) => void }) {
         <p className="hint">Пересчитайте товар — система покажет недостачу и её стоимость.</p>
         <button className="btn btn--primary" onClick={() => setPanel('inventory')}>
           Начать пересчёт
+        </button>
+      </div>
+
+      <div className="card" style={{ marginTop: 12 }}>
+        <div className="product-name">Списание товара</div>
+        <p className="hint">Бой, порча, просрочка — уменьшить остаток и учесть как потерю.</p>
+        <button className="btn btn--primary" onClick={() => setPanel('writeoff')}>
+          Списать товар
         </button>
       </div>
 
@@ -180,8 +191,40 @@ function ToolsTab({ onDone }: { onDone: (m: string) => void }) {
         </>
       )}
 
+      {writeOffs.length > 0 && (
+        <>
+          <h2 className="sect">Последние списания</h2>
+          <div className="list">
+            {writeOffs.map((w) => (
+              <div key={w.id} className="list-item list-item--static">
+                <div className="list-item__main">
+                  <div className="list-item__name">
+                    {w.name} · −{Number(w.qty)}
+                  </div>
+                  <div className="muted">
+                    {new Date(w.created_at).toLocaleDateString('ru-RU')} · {w.reason}
+                    {w.full_name || w.username ? ` · ${w.full_name || w.username}` : ''}
+                  </div>
+                </div>
+                <div className="stock stock--low">−{Number(w.loss_value).toFixed(2)}</div>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+
       {panel === 'inventory' && (
         <InventoryPanel
+          onClose={() => setPanel('none')}
+          onDone={(msg) => {
+            onDone(msg);
+            setPanel('none');
+            loadHistory();
+          }}
+        />
+      )}
+      {panel === 'writeoff' && (
+        <WriteOffPanel
           onClose={() => setPanel('none')}
           onDone={(msg) => {
             onDone(msg);

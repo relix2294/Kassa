@@ -148,7 +148,7 @@ export default function InventoryPanel({ onClose, onDone }: { onClose: () => voi
         </form>
 
         <button className="btn btn--ghost btn--pick" onClick={() => setPickerOpen(true)}>
-          Товар без штрихкода
+          🔎 Найти товар по названию
         </button>
 
         {err && <div className="change change--neg">{err}</div>}

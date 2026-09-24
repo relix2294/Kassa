@@ -13,6 +13,7 @@ import PaymentForm from '../components/PaymentForm';
 import ReturnPanel from './ReturnPanel';
 import ProductPicker from '../components/ProductPicker';
 import Confirm from '../components/Confirm';
+import Calculator from '../components/Calculator';
 import { postCustomer } from '../customer';
 
 export default function SalePage() {
@@ -29,6 +30,7 @@ export default function SalePage() {
   const [askClear, setAskClear] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [weighing, setWeighing] = useState<Product | null>(null);
+  const [calcOpen, setCalcOpen] = useState(false);
   const scanRef = useRef<HTMLInputElement>(null);
 
   const lines = useLiveQuery(() => db.cart.toArray(), [], [] as CartLine[]);
@@ -402,6 +404,12 @@ export default function SalePage() {
           onCancel={() => setAskClear(false)}
         />
       )}
+
+      {/* Калькулятор — доп-опция, всегда под рукой. */}
+      <button className="calc-fab" onClick={() => setCalcOpen(true)} title="Калькулятор">
+        🧮
+      </button>
+      {calcOpen && <Calculator onClose={() => setCalcOpen(false)} />}
 
       {toast && <div className="toast">{toast}</div>}
     </div>

@@ -983,3 +983,33 @@ kbd {
 .scan-suggest__item:last-child { border-bottom: 0; }
 .scan-suggest__item:hover { background: var(--surface-2); }
 .scan-suggest__name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+
+/* Плавающая кнопка калькулятора на экране продажи */
+.calc-fab {
+  position: fixed; right: 16px; bottom: 88px; z-index: 30;
+  width: 56px; height: 56px; border-radius: 50%; border: none;
+  background: var(--primary); color: var(--primary-ink);
+  font-size: 26px; cursor: pointer; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.28);
+}
+.calc-fab:hover { filter: brightness(1.05); }
+@media (min-width: 1000px) { .calc-fab { bottom: 24px; } }
+
+/* Калькулятор */
+.modal.calc { max-width: 340px; }
+.calc__head { display: flex; justify-content: space-between; align-items: center; }
+.calc__display {
+  background: var(--surface-2); border-radius: var(--radius);
+  padding: 14px 16px; margin: 8px 0 12px; text-align: right; min-height: 64px;
+}
+.calc__op { color: var(--muted); font-size: 14px; display: block; min-height: 18px; }
+.calc__value { font-size: 34px; font-weight: 800; line-height: 1.1; overflow-wrap: anywhere; }
+.calc__grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.calc__btn {
+  padding: 18px 0; font-size: 22px; font-weight: 600; cursor: pointer;
+  border: none; border-radius: 12px; background: var(--surface-2); color: var(--text);
+}
+.calc__btn:hover { filter: brightness(1.08); }
+.calc__btn--wide { grid-column: span 2; }
+.calc__btn--fn { background: var(--surface); color: var(--muted); }
+.calc__btn--op { background: var(--surface); color: var(--primary); font-weight: 800; }
+.calc__btn--eq { background: var(--primary); color: var(--primary-ink); font-weight: 800; }

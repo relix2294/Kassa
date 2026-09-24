@@ -194,3 +194,20 @@ CREATE TABLE IF NOT EXISTS inventory_items (
 
 CREATE INDEX IF NOT EXISTS idx_inv_items_inventory ON inventory_items(inventory_id);
 CREATE INDEX IF NOT EXISTS idx_inventories_created ON inventories(created_at);
+
+-- Списание товара: бой, порча, просрочка. Уменьшает остаток и учитывается
+-- как потеря по себестоимости. Отдельно от инвентаризации — быстрый разовый акт.
+CREATE TABLE IF NOT EXISTS write_offs (
+  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  product_id  uuid NOT NULL REFERENCES products(id),
+  barcode     text NOT NULL DEFAULT '',
+  name        text NOT NULL,
+  qty         numeric(12,3) NOT NULL,     -- сколько списано
+  unit_cost   numeric(12,2) NOT NULL,     -- себестоимость на момент списания
+  loss_value  numeric(12,2) NOT NULL,     -- qty * unit_cost (замороженные потери)
+  reason      text NOT NULL,              -- причина (бой/порча/просрочка/…)
+  user_id     uuid REFERENCES users(id),
+  created_at  timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_write_offs_created ON write_offs(created_at);
+CREATE INDEX IF NOT EXISTS idx_write_offs_product ON write_offs(product_id);

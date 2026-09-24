@@ -158,8 +158,11 @@ analyticsRouter.post('/inventory', async (req, res) => {
         const counted = Number(item.counted_qty);
         if (!Number.isFinite(counted) || counted < 0) throw { status: 400, message: 'counted_qty >= 0' };
 
-        const found = await client.query(`SELECT * FROM products WHERE barcode = $1 FOR UPDATE`, [item.barcode]);
-        if (found.rows.length === 0) throw { status: 400, message: `Товар не найден: ${item.barcode}` };
+        // По product_id (весовой/без штрихкода) либо по штрихкоду (скан).
+        const found = item.product_id
+          ? await client.query(`SELECT * FROM products WHERE id = $1 FOR UPDATE`, [item.product_id])
+          : await client.query(`SELECT * FROM products WHERE barcode = $1 FOR UPDATE`, [item.barcode]);
+        if (found.rows.length === 0) throw { status: 400, message: `Товар не найден: ${item.barcode ?? item.product_id}` };
         const p = found.rows[0];
 
         const expected = Number(p.stock);
@@ -203,6 +206,75 @@ analyticsRouter.post('/inventory', async (req, res) => {
     if (err?.status === 400) return res.status(400).json({ error: err.message });
     throw err;
   }
+});
+
+// Списание товара (бой/порча/просрочка). Уменьшает остаток (не ниже нуля),
+// пишет потерю по себестоимости и запись в журнал. Только владелец.
+// Тело: { product_id? , barcode?, qty, reason }
+analyticsRouter.post('/write-off', async (req, res) => {
+  const { product_id, barcode, qty, reason } = req.body ?? {};
+  const qtyNum = Number(qty);
+  if (!(qtyNum > 0)) return res.status(400).json({ error: 'Количество должно быть больше нуля' });
+  if (!product_id && !barcode) return res.status(400).json({ error: 'Нужен товар' });
+  if (!reason || String(reason).trim().length < 2) return res.status(400).json({ error: 'Укажите причину списания' });
+
+  try {
+    const result = await withTx(async (client) => {
+      const found = product_id
+        ? await client.query(`SELECT * FROM products WHERE id = $1 FOR UPDATE`, [product_id])
+        : await client.query(`SELECT * FROM products WHERE barcode = $1 FOR UPDATE`, [barcode]);
+      if (found.rows.length === 0) throw { status: 400, message: 'Товар не найден' };
+      const p = found.rows[0];
+
+      if (Number(p.stock) < qtyNum) {
+        throw { status: 400, message: `На складе только ${Number(p.stock)} — нельзя списать ${qtyNum}` };
+      }
+
+      const unitCost = Number(p.cost_price);
+      const loss = Number((qtyNum * unitCost).toFixed(2));
+
+      const upd = await client.query(
+        `UPDATE products SET stock = stock - $2, updated_at = now() WHERE id = $1 RETURNING *`,
+        [p.id, qtyNum],
+      );
+
+      const row = (
+        await client.query(
+          `INSERT INTO write_offs (product_id, barcode, name, qty, unit_cost, loss_value, reason, user_id)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
+          [p.id, p.barcode ?? '', p.name, qtyNum, unitCost, loss, String(reason).trim(), req.user!.id],
+        )
+      ).rows[0];
+
+      await writeLog(
+        {
+          type: 'write_off', entity: 'product', entityId: p.id, userId: req.user!.id,
+          details: { qty: qtyNum, reason: String(reason).trim(), loss, name: p.name },
+        },
+        client,
+      );
+
+      return { write_off: row, product: upd.rows[0] };
+    });
+
+    broadcast('product_upsert', result.product, 'all');
+    res.status(201).json(result);
+  } catch (err: any) {
+    if (err?.status === 400) return res.status(400).json({ error: err.message });
+    throw err;
+  }
+});
+
+// История списаний.
+analyticsRouter.get('/write-offs', async (req, res) => {
+  const limit = Math.min(Number(req.query.limit) || 50, 200);
+  const rows = await query(
+    `SELECT w.*, u.username, u.full_name
+       FROM write_offs w LEFT JOIN users u ON u.id = w.user_id
+      ORDER BY w.created_at DESC LIMIT $1`,
+    [limit],
+  );
+  res.json(rows);
 });
 
 // История инвентаризаций.

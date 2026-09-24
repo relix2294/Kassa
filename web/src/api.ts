@@ -140,4 +140,15 @@ export const api = {
       body: JSON.stringify(payload),
     }),
   listInventories: (limit = 50) => req<any[]>(`/analytics/inventory?limit=${limit}`),
+  writeOff: (payload: { product_id?: string; barcode?: string; qty: number; reason: string }) =>
+    req<{ write_off: any; product: Product }>('/analytics/write-off', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  listWriteOffs: (limit = 50) =>
+    req<{
+      id: string; name: string; barcode: string; qty: number; unit_cost: number;
+      loss_value: number; reason: string; created_at: string;
+      username: string | null; full_name: string | null;
+    }[]>(`/analytics/write-offs?limit=${limit}`),
 };
