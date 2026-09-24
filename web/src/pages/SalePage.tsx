@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-import NumberInput from '../components/NumberInput';
 import { useNavigate } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, type CartLine } from '../db';
+import type { Product } from '../types';
 import { addToCart, cartTotal, clearCart, removeLine, setQty, formatQty, lineTotal, lineHasDiscount } from '../cart';
 import { completeSale } from '../sync';
 import { useCurrentUser } from '../session';
@@ -28,10 +28,56 @@ export default function SalePage() {
   const [changeDue, setChangeDue] = useState<number | null>(null);
   const [askClear, setAskClear] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [weighing, setWeighing] = useState<Product | null>(null);
   const scanRef = useRef<HTMLInputElement>(null);
 
   const lines = useLiveQuery(() => db.cart.toArray(), [], [] as CartLine[]);
+  const products = useLiveQuery(() => db.products.orderBy('name').toArray(), [], [] as Product[]);
   const total = cartTotal(lines);
+
+  // В верхней строке можно и сканировать, и искать по названию. Отличаем по
+  // содержимому: буквы → это поиск (штрихкоды всегда цифровые). Так живые
+  // подсказки не мигают, пока сканер быстро «печатает» цифры кода.
+  const queryText = barcode.trim();
+  const isSearch = /\D/.test(queryText);
+  const suggests = isSearch
+    ? products
+        .filter(
+          (p) =>
+            p.name.toLowerCase().includes(queryText.toLowerCase()) ||
+            (p.category ?? '').toLowerCase().includes(queryText.toLowerCase()),
+        )
+        .slice(0, 8)
+    : [];
+
+  // Сколько этого товара уже в чеке (для контроля остатка при добавлении).
+  function inCart(p: Product): number {
+    const key = p.barcode || p.id;
+    return lines.find((l) => l.key === key)?.qty ?? 0;
+  }
+
+  // Не даём набрать в чек больше, чем есть на складе: иначе кассир соберёт
+  // чек, а на оплате получит отказ. Предупреждаем сразу.
+  function withinStock(p: Product, addQty: number): boolean {
+    if (inCart(p) + addQty > Number(p.stock) + 1e-9) {
+      const unit = p.unit === 'kg' ? ' кг' : ' шт';
+      const have = inCart(p);
+      flash(`«${p.name}»: на складе ${Number(p.stock)}${unit}${have ? `, в чеке уже ${have}` : ''}`);
+      return false;
+    }
+    return true;
+  }
+
+  // Выбор товара из подсказки/поиска: весовой спрашивает вес, штучный — сразу в чек.
+  async function pickProduct(p: Product) {
+    setBarcode('');
+    if (p.unit === 'kg') {
+      setWeighing(p);
+      return;
+    }
+    if (withinStock(p, 1)) await addToCart(p, 1);
+    scanRef.current?.focus();
+  }
 
   useEffect(() => {
     refreshShift();
@@ -39,8 +85,8 @@ export default function SalePage() {
 
   // Фокус всегда в поле скана — сканер печатает «вслепую».
   useEffect(() => {
-    if (shift && !payOpen && !qtyEdit && !returnOpen) scanRef.current?.focus();
-  }, [payOpen, qtyEdit, returnOpen, lines.length, shift]);
+    if (shift && !payOpen && !qtyEdit && !returnOpen && !pickerOpen && !weighing) scanRef.current?.focus();
+  }, [payOpen, qtyEdit, returnOpen, pickerOpen, weighing, lines.length, shift]);
 
   // Горячие клавиши кассы (десктоп): F2 — оплата, Esc — закрыть/очистить.
   useEffect(() => {
@@ -79,7 +125,30 @@ export default function SalePage() {
       flash('Товара нет в базе — сначала приём');
       return;
     }
-    await addToCart(product);
+    // Весовой товар со штрихкодом (редко, но бывает) — спросим вес.
+    if (product.unit === 'kg') {
+      setWeighing(product);
+      return;
+    }
+    if (withinStock(product, 1)) await addToCart(product);
+  }
+
+  // Ввод в верхней строке: буквы → выбираем первую подсказку; цифры → скан.
+  function onEnter() {
+    if (isSearch) {
+      if (suggests.length > 0) pickProduct(suggests[0]);
+    } else {
+      onScan(barcode);
+    }
+  }
+
+  // Липкий фокус: если кассир кликнул по пустому месту, возвращаем курсор
+  // в поле скана, чтобы следующий скан не «ушёл в никуда». Кнопки/поля не трогаем.
+  function stickyRefocus() {
+    setTimeout(() => {
+      if (payOpen || qtyEdit || returnOpen || pickerOpen || weighing) return;
+      if (document.activeElement === document.body) scanRef.current?.focus();
+    }, 60);
   }
 
   async function pay(method: 'cash' | 'card' | 'mixed', received?: number, cardAmount?: number) {
@@ -153,24 +222,48 @@ export default function SalePage() {
 
   const scanForm = (
     <>
-    <form
-      className="scan-row"
-      onSubmit={(e) => {
-        e.preventDefault();
-        onScan(barcode);
-      }}
-    >
-      <NumberInput
-        ref={scanRef}
-        mode="int"
-        autoFocus
-        placeholder="Скан штрихкода…"
-        value={barcode}
-        onValue={setBarcode}
-      />
-    </form>
-    {/* Поиск товара по названию — для весового, выпечки и всего, что неудобно
-        или нечем сканировать. Ищет любой товар, не только без штрихкода. */}
+    <div className="scan-wrap">
+      <form
+        className="scan-row"
+        onSubmit={(e) => {
+          e.preventDefault();
+          onEnter();
+        }}
+      >
+        {/* Одно поле на скан и на поиск: цифры — штрихкод, буквы — поиск по
+            названию. type=text, чтобы можно было ввести название. */}
+        <input
+          ref={scanRef}
+          type="text"
+          autoFocus
+          autoComplete="off"
+          placeholder="Скан штрихкода или название товара…"
+          value={barcode}
+          onChange={(e) => setBarcode(e.target.value)}
+          onBlur={stickyRefocus}
+        />
+      </form>
+
+      {/* Живые подсказки при вводе названия. */}
+      {suggests.length > 0 && (
+        <div className="scan-suggest">
+          {suggests.map((p) => (
+            <button key={p.id} className="scan-suggest__item" onClick={() => pickProduct(p)}>
+              <span className="scan-suggest__name">
+                {p.name}
+                {!p.barcode && <span className="muted"> · без штрихкода</span>}
+              </span>
+              <span className="muted">
+                {p.sale_price}{p.unit === 'kg' ? ' /кг' : ''} · ост. {Number(p.stock)}{p.unit === 'kg' ? ' кг' : ' шт'}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+      {isSearch && suggests.length === 0 && <div className="scan-suggest scan-suggest--empty">Ничего не нашлось</div>}
+    </div>
+
+    {/* Большой поиск товара (весовой, выпечка, выбор из списка) — как было. */}
     <button className="btn btn--ghost btn--pick" onClick={() => setPickerOpen(true)}>
       🔎 Найти товар по названию
     </button>
@@ -267,8 +360,20 @@ export default function SalePage() {
         <ProductPicker
           onClose={() => setPickerOpen(false)}
           onPick={async (product, qty) => {
-            await addToCart(product, qty);
+            if (withinStock(product, qty)) await addToCart(product, qty);
             setPickerOpen(false);
+          }}
+        />
+      )}
+
+      {weighing && (
+        <WeightModal
+          product={weighing}
+          onClose={() => setWeighing(null)}
+          onAdd={async (kg) => {
+            if (withinStock(weighing, kg)) await addToCart(weighing, kg);
+            setWeighing(null);
+            scanRef.current?.focus();
           }}
         />
       )}
@@ -348,6 +453,36 @@ function StartShift({ onDone }: { onDone: (msg: string) => void }) {
         <button className="btn btn--link" disabled={busy} onClick={() => start(0)}>
           Размена нет, начать с нуля
         </button>
+      </div>
+    </div>
+  );
+}
+
+// Ввод веса для весового товара, выбранного поиском/сканом.
+function WeightModal({ product, onClose, onAdd }: { product: Product; onClose: () => void; onAdd: (kg: number) => void }) {
+  const [val, setVal] = useState('');
+  const kg = Number(val) || 0;
+  const sum = Number((kg * Number(product.sale_price)).toFixed(2));
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <h2>{product.name}</h2>
+        <div className="muted">{product.sale_price} за кг · на складе {Number(product.stock)} кг</div>
+        <div className="field">
+          <span>Вес, кг</span>
+          <div className="keypad-value">{val || '0'}</div>
+        </div>
+        <Keypad value={val} onChange={setVal} allowDecimal />
+        <div className="change-box change-box--ok">
+          <div className="change-box__label">Сумма</div>
+          <div className="change-box__sum">{sum.toFixed(2)}</div>
+        </div>
+        <div className="row">
+          <button className="btn" onClick={onClose}>Отмена</button>
+          <button className="btn btn--primary" disabled={!(kg > 0)} onClick={() => onAdd(kg)}>
+            В чек
+          </button>
+        </div>
       </div>
     </div>
   );
