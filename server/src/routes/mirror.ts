@@ -32,10 +32,14 @@ mirrorRouter.post('/upload', express.text({ type: '*/*', limit: '256mb' }), asyn
   if (!secretOk(req.header('x-mirror-secret'))) {
     return res.status(403).json({ error: 'bad_secret' });
   }
-  const sql = typeof req.body === 'string' ? req.body : '';
-  if (!sql.trim()) {
+  const raw = typeof req.body === 'string' ? req.body : '';
+  if (!raw.trim()) {
     return res.status(400).json({ error: 'empty_dump' });
   }
+  // Свежий pg_dump добавляет psql-команды \restrict / \unrestrict — это не SQL,
+  // и драйвер на них падает. Выполняем дамп напрямую (не через psql), поэтому
+  // эти строки убираем. Данных они не касаются.
+  const sql = raw.replace(/^\\(un)?restrict\b.*$/gm, '');
 
   const client = await pool.connect();
   try {

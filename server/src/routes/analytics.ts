@@ -174,7 +174,7 @@ analyticsRouter.post('/inventory', async (req, res) => {
             `INSERT INTO inventory_items
                (inventory_id, product_id, barcode, name, expected_qty, counted_qty, difference, unit_cost, loss_value)
              VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
-            [inv.id, p.id, p.barcode, p.name, expected, counted, diff, p.cost_price, loss],
+            [inv.id, p.id, p.barcode ?? '', p.name, expected, counted, diff, p.cost_price, loss],
           )
         ).rows[0];
         lines.push(line);
