@@ -220,7 +220,8 @@ function CreateProduct({
   const [salePrice, setSalePrice] = useState('');
   const [costPrice, setCostPrice] = useState('');
   const [minStock, setMinStock] = useState('0');
-  const [qty, setQty] = useState('0');
+  const [qty, setQty] = useState('');
+  const [err, setErr] = useState<string | null>(null);
   const [looking, setLooking] = useState(true);
   // Название подставлено из внешней базы — его обязательно надо проверить
   // глазами: база может вернуть чужой товар (проверено на выдуманном коде).
@@ -248,6 +249,13 @@ function CreateProduct({
       className="card"
       onSubmit={(e) => {
         e.preventDefault();
+        // Новый товар заводим только с полными данными: без них себестоимость,
+        // маржа и остаток посчитаются неверно.
+        if (!name.trim()) return setErr('Введите название');
+        if (!(Number(costPrice) > 0)) return setErr('Укажите закупочную цену');
+        if (!(Number(salePrice) > 0)) return setErr('Укажите цену продажи');
+        if (!(Number(qty) > 0)) return setErr('Укажите принятое количество');
+        setErr(null);
         onSubmit(
           {
             name: name.trim(),
@@ -289,11 +297,11 @@ function CreateProduct({
       </label>
       <div className="row">
         <label className="field">
-          <span>Цена продажи</span>
+          <span>Цена продажи — обязательно</span>
           <NumberInput value={salePrice} onValue={setSalePrice} />
         </label>
         <label className="field">
-          <span>Закупочная</span>
+          <span>Закупочная — обязательно</span>
           <NumberInput value={costPrice} onValue={setCostPrice} />
         </label>
       </div>
@@ -303,20 +311,18 @@ function CreateProduct({
           <NumberInput value={minStock} onValue={setMinStock} />
         </label>
         <label className="field">
-          <span>Принять сразу (шт)</span>
-          <NumberInput value={qty} onValue={setQty} />
+          <span>Принять (шт) — обязательно</span>
+          <NumberInput value={qty} onValue={setQty} placeholder="сколько пришло" />
         </label>
       </div>
+
+      {err && <div className="change change--neg">{err}</div>}
 
       <div className="row">
         <button type="button" className="btn" onClick={onCancel} disabled={busy}>
           Отмена
         </button>
-        <button
-          type="submit"
-          className="btn btn--primary"
-          disabled={busy || !name.trim() || !(Number(salePrice) >= 0)}
-        >
+        <button type="submit" className="btn btn--primary" disabled={busy}>
           Завести товар
         </button>
       </div>

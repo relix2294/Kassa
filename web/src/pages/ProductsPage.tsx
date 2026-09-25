@@ -154,6 +154,11 @@ function AddProduct({ onClose, onDone }: { onClose: () => void; onDone: (name: s
       setErr('Название обязательно');
       return;
     }
+    // Цена продажи обязательна: без неё товар продастся за 0.
+    if (!(Number(sale) > 0)) {
+      setErr('Укажите цену продажи');
+      return;
+    }
     setBusy(true);
     setErr(null);
     try {
@@ -212,7 +217,7 @@ function AddProduct({ onClose, onDone }: { onClose: () => void; onDone: (name: s
         </label>
         <div className="row">
           <label className="field">
-            <span>Цена продажи{unit === 'kg' ? ' за кг' : ''}</span>
+            <span>Цена продажи{unit === 'kg' ? ' за кг' : ''} — обязательно</span>
             <NumberInput value={sale} onValue={setSale} />
           </label>
           <label className="field">
@@ -387,6 +392,8 @@ function EditModal({
             className="btn btn--primary"
             disabled={busy}
             onClick={async () => {
+              if (!name.trim()) { setErr('Название обязательно'); return; }
+              if (!(Number(sale) > 0)) { setErr('Цена продажи должна быть больше 0'); return; }
               setBusy(true);
               setErr(null);
               try {
