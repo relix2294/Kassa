@@ -11,7 +11,8 @@
 //      (открытые базы, прайсы поставщиков, прошлые ответы сервисов);
 //   2. barcodes.tj — реестр GS1 Таджикистана, для местных кодов 488;
 //   3. своя база по BARCODE_LOOKUP_URL, если владелец её настроил;
-//   4. Open Food Facts — помогает в основном на импорте.
+//   4. Open Food / Beauty / Products Facts — мировые открытые базы еды,
+//      косметики и бытовой химии.
 // Подсказка НИКОГДА не блокирует заведение товара: короткий таймаут,
 // любая ошибка молча превращается в «названия нет».
 
@@ -137,14 +138,30 @@ async function fromCustom(code: string): Promise<string | null> {
   return pickName(await fetchJson(custom.replace('{barcode}', encodeURIComponent(code))));
 }
 
-async function fromOpenFoodFacts(code: string): Promise<{ name: string; brand: string | null } | null> {
+// Open Food Facts и его «братья» на том же движке: Open Beauty Facts —
+// косметика и гигиена (шампуни, дезодоранты), Open Products Facts — бытовая
+// химия и прочее (порошки). Базы мировые, в том числе турецкие, польские,
+// казахские коды — те, под которыми товар приходит к нам, а не в Россию.
+const OPEN_FACTS = [
+  { host: 'world.openfoodfacts.org', source: 'openfoodfacts' },
+  { host: 'world.openbeautyfacts.org', source: 'openbeautyfacts' },
+  { host: 'world.openproductsfacts.org', source: 'openproductsfacts' },
+];
+
+async function fromOpenFacts(
+  host: string,
+  code: string,
+): Promise<{ name: string; brand: string | null } | null> {
   const data = await fetchJson(
-    `https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(code)}?fields=product_name,product_name_ru,generic_name,generic_name_ru,brands`,
+    `https://${host}/api/v2/product/${encodeURIComponent(code)}?fields=product_name,product_name_ru,generic_name,generic_name_ru,brands`,
   );
   const name = pickName(data);
   if (!name) return null;
   const brands = data?.product?.brands;
-  return { name, brand: typeof brands === 'string' && brands.trim() ? brands.split(',')[0].trim() : null };
+  const brand = typeof brands === 'string' && brands.trim() ? brands.split(',')[0].trim() : null;
+  // «Шампунь» без марки мало что говорит — добавим марку, если её нет в названии.
+  const full = brand && !name.toLowerCase().includes(brand.toLowerCase()) ? `${brand} ${name}` : name;
+  return { name: full, brand };
 }
 
 // Запомнить найденное в справочнике: следующий такой скан — без сети.
@@ -184,13 +201,18 @@ export async function lookupBarcode(barcode: string): Promise<BarcodeInfo> {
 
   // 2–4. Внешние источники спрашиваем одновременно, чтобы уложиться в таймаут,
   // а берём ответ по старшинству.
-  const [tj, custom, off] = await Promise.all([fromBarcodesTj(code), fromCustom(code), fromOpenFoodFacts(code)]);
+  const [tj, custom, ...open] = await Promise.all([
+    fromBarcodesTj(code),
+    fromCustom(code),
+    ...OPEN_FACTS.map((o) => fromOpenFacts(o.host, code)),
+  ]);
+  const i = open.findIndex(Boolean);
   const found: BarcodeInfo | null = tj
     ? { name: tj, source: 'barcodes.tj' }
     : custom
       ? { name: custom, source: 'custom' }
-      : off
-        ? { name: off.name, brand: off.brand, source: 'openfoodfacts' }
+      : i >= 0
+        ? { name: open[i]!.name, brand: open[i]!.brand, source: OPEN_FACTS[i].source }
         : null;
   if (!found?.name) return { name: null, source: null };
 
