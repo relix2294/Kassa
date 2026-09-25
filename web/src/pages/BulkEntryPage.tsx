@@ -121,16 +121,19 @@ export default function BulkEntryPage() {
       return;
     }
 
+    // Количество обязательно: в «Заводе» товар и заводят, и сразу приходуют.
+    // Пропуск количества оставлял бы остаток 0 — это и была частая ошибка.
+    if (qtyNum <= 0) {
+      setErr('Укажите принятое количество');
+      qtyRef.current?.focus();
+      return;
+    }
+
     setBusy(true);
     setErr(null);
     try {
       if (existing) {
         // Товар уже есть — не заводим заново, а приходуем.
-        if (qtyNum <= 0) {
-          setErr('Введите количество для прихода');
-          qtyRef.current?.focus();
-          return;
-        }
         await receiveGoods({
           product_id: existing.id,
           qty: qtyNum,
@@ -146,7 +149,7 @@ export default function BulkEntryPage() {
           sale_price: Number(sale) || 0,
           cost_price: Number(cost) || 0,
         });
-        if (res.product && qtyNum > 0) {
+        if (res.product) {
           await receiveGoods({ product_id: res.product.id, qty: qtyNum, cost_price: Number(cost) || undefined });
         }
         setAdded((a) => [{ name: name.trim(), qty: qtyNum, isReceipt: false }, ...a].slice(0, 8));
@@ -297,13 +300,14 @@ export default function BulkEntryPage() {
         </div>
 
         <label className="field">
-          <span>Сколько принято{unit === 'kg' ? ', кг' : ', шт'} — можно пропустить</span>
+          <span>Сколько принято{unit === 'kg' ? ', кг' : ', шт'} — обязательно</span>
           <NumberInput
             ref={qtyRef}
             value={qty}
             onValue={setQty}
+            mode={unit === 'kg' ? 'decimal' : 'int'}
             onKeyDown={(e) => onKey(e)}
-            placeholder="Enter — сохранить"
+            placeholder="сколько пришло на склад"
           />
         </label>
 
