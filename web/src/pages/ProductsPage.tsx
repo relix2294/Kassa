@@ -254,6 +254,7 @@ function EditModal({
   const [sale, setSale] = useState(String(product.sale_price));
   const [cost, setCost] = useState(String(product.cost_price ?? ''));
   const [min, setMin] = useState(String(product.min_stock));
+  const [stock, setStock] = useState(String(product.stock));
   const [unit, setUnit] = useState<'pcs' | 'kg'>(product.unit === 'kg' ? 'kg' : 'pcs');
   const [busy, setBusy] = useState(false);
   const [askArchive, setAskArchive] = useState(false);
@@ -303,10 +304,17 @@ function EditModal({
             <NumberInput value={cost} onValue={setCost} />
           </label>
         </div>
-        <label className="field">
-          <span>Мин. остаток{unit === 'kg' ? ', кг' : ', шт'}</span>
-          <NumberInput value={min} onValue={setMin} />
-        </label>
+        <div className="row">
+          <label className="field">
+            <span>Остаток сейчас{unit === 'kg' ? ', кг' : ', шт'}</span>
+            <NumberInput value={stock} onValue={setStock} mode={unit === 'kg' ? 'decimal' : 'int'} />
+          </label>
+          <label className="field">
+            <span>Мин. остаток{unit === 'kg' ? ', кг' : ', шт'}</span>
+            <NumberInput value={min} onValue={setMin} />
+          </label>
+        </div>
+        <p className="hint">Остаток — только для исправления ошибок. Правка попадёт в журнал.</p>
 
         {/* Скидка. Задаёт только владелец; кассир при продаже её просто применяет. */}
         <div className="discount-box">
@@ -389,6 +397,7 @@ function EditModal({
                   sale_price: Number(sale),
                   cost_price: Number(cost),
                   min_stock: Number(min),
+                  stock: Number(stock),
                 });
                 onSaved('Сохранено');
               } catch (e: any) {

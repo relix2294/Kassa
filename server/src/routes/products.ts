@@ -67,8 +67,18 @@ productsRouter.post('/', requireOwner, async (req, res) => {
 // Обновить карточку — только владелец. Изменения цен фиксируем в журнале отдельно.
 productsRouter.patch('/:id', requireOwner, async (req, res) => {
   const { id } = req.params;
-  const { name, category, sale_price, cost_price, min_stock, unit } = req.body ?? {};
+  const { name, category, sale_price, cost_price, min_stock, unit, stock } = req.body ?? {};
   const user_id = req.user!.id;
+
+  // Остаток правит только владелец (это ручная корректировка, напр. ошибка приёма).
+  // Отрицательным быть не может.
+  let stockNum: number | null = null;
+  if (stock !== undefined && stock !== null && stock !== '') {
+    stockNum = Number(stock);
+    if (!Number.isFinite(stockNum) || stockNum < 0) {
+      return res.status(400).json({ error: 'Остаток не может быть отрицательным' });
+    }
+  }
 
   const before = (await query(`SELECT * FROM products WHERE id = $1`, [id]))[0];
   if (!before) return res.status(404).json({ error: 'not_found' });
@@ -81,13 +91,22 @@ productsRouter.patch('/:id', requireOwner, async (req, res) => {
         cost_price = COALESCE($5, cost_price),
         min_stock  = COALESCE($6, min_stock),
         unit       = COALESCE($7, unit),
+        stock      = COALESCE($8, stock),
         updated_at = now()
       WHERE id = $1
       RETURNING *`,
     [id, name ?? null, category ?? null, sale_price ?? null, cost_price ?? null, min_stock ?? null,
-     unit === 'kg' || unit === 'pcs' ? unit : null],
+     unit === 'kg' || unit === 'pcs' ? unit : null, stockNum],
   );
   const after = rows[0];
+
+  // Ручная правка остатка — отдельным типом в журнал (прозрачность: кто, было→стало).
+  if (stockNum != null && Number(stockNum) !== Number(before.stock)) {
+    await writeLog({
+      type: 'stock_adjust', entity: 'product', entityId: id, userId: user_id ?? null,
+      details: { name: before.name, old: Number(before.stock), new: Number(after.stock) },
+    });
+  }
 
   // Лог изменения цен (отдельным типом — важно для прозрачности).
   if (sale_price != null && Number(sale_price) !== Number(before.sale_price)) {
