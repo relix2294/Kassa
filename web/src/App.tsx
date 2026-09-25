@@ -1,6 +1,6 @@
 import { NavLink, Navigate, Route, Routes, useNavigate, useLocation } from 'react-router-dom';
 import { useEffect, useRef, useState } from 'react';
-import { onOnlineChange, isOnline, pullProducts, reconnectRealtime } from './sync';
+import { pullProducts, reconnectRealtime } from './sync';
 import { api } from './api';
 import { refreshShift } from './shift';
 import { useAuth, logout } from './auth';
@@ -17,10 +17,10 @@ import HistoryPage from './pages/HistoryPage';
 import QueuePage, { QueueBadge } from './pages/QueuePage';
 import BulkEntryPage from './pages/BulkEntryPage';
 import CustomerDisplay from './pages/CustomerDisplay';
+import OfflineBanner, { useOnline } from './components/OfflineBanner';
 
 function OnlineBadge() {
-  const [online, setOnline] = useState(isOnline);
-  useEffect(() => onOnlineChange(() => setOnline(isOnline)), []);
+  const online = useOnline();
   return (
     <span className={`badge ${online ? 'badge--ok' : 'badge--off'}`}>{online ? 'онлайн' : 'нет сети'}</span>
   );
@@ -87,6 +87,7 @@ export default function App() {
             {user.full_name || user.username} ⏻
           </button>
         </div>
+        <OfflineBanner />
       </header>
 
       <main className="content">
