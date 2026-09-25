@@ -129,6 +129,15 @@ export default function BulkEntryPage() {
       return;
     }
 
+    // Закупочная цена обязательна для нового товара: от неё считаются
+    // себестоимость и цена продажи по наценке. Для прихода уже заведённого
+    // пустое поле означает «по прежней цене» — там не требуем.
+    if (!existing && !(Number(cost) > 0)) {
+      setErr('Укажите закупочную цену');
+      costRef.current?.focus();
+      return;
+    }
+
     setBusy(true);
     setErr(null);
     try {
@@ -279,7 +288,7 @@ export default function BulkEntryPage() {
 
         <div className="row">
           <label className="field">
-            <span>Закупочная{unit === 'kg' ? ' за кг' : ''}</span>
+            <span>Закупочная{unit === 'kg' ? ' за кг' : ''}{!existing ? ' — обязательно' : ''}</span>
             <NumberInput
               ref={costRef}
               value={cost}
