@@ -162,6 +162,21 @@ CREATE TABLE IF NOT EXISTS shifts (
   status        text NOT NULL DEFAULT 'open'        -- 'open' | 'closed'
 );
 
+-- Приём кассы: сколько по системе должно было остаться от прошлой смены.
+-- Если размен на открытии не совпал — расхождение при приёме, видно владельцу.
+ALTER TABLE shifts ADD COLUMN IF NOT EXISTS opening_expected numeric(12,2);
+
+-- Изъятие наличных из кассы (инкассация владельцем). Уменьшает ожидаемое.
+CREATE TABLE IF NOT EXISTS cash_withdrawals (
+  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  shift_id    uuid REFERENCES shifts(id) ON DELETE CASCADE,
+  amount      numeric(12,2) NOT NULL,
+  note        text,
+  user_id     uuid REFERENCES users(id),
+  created_at  timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_cash_wd_shift ON cash_withdrawals(shift_id);
+
 CREATE INDEX IF NOT EXISTS idx_shifts_user ON shifts(user_id);
 CREATE INDEX IF NOT EXISTS idx_shifts_opened ON shifts(opened_at);
 -- Не более одной открытой смены на пользователя.

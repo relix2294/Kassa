@@ -12,6 +12,25 @@ export async function getOpenShift(userId: string) {
   return rows[0] ?? null;
 }
 
+// Любая открытая смена на точке (касса одна — активная смена одна).
+async function getAnyOpenShift() {
+  const rows = await query(
+    `SELECT s.*, u.username, u.full_name FROM shifts s JOIN users u ON u.id = s.user_id
+      WHERE s.status = 'open' ORDER BY s.opened_at LIMIT 1`,
+  );
+  return rows[0] ?? null;
+}
+
+// Сколько наличных осталось в кассе по прошлой закрытой смене — это ожидаемый
+// размен для следующей смены (деньги физически остаются в ящике).
+async function getLastClosingCash(): Promise<number> {
+  const rows = await query(
+    `SELECT counted_cash FROM shifts WHERE status = 'closed' AND counted_cash IS NOT NULL
+      ORDER BY closed_at DESC LIMIT 1`,
+  );
+  return rows.length ? Number(rows[0].counted_cash) : 0;
+}
+
 // Пересчёт итогов уже закрытой смены — если в неё «доехал» отложенный чек
 // после закрытия. Иначе сверка кассы осталась бы неверной.
 export async function recomputeClosedShift(shiftId: string) {
@@ -43,7 +62,11 @@ async function computeExpected(shift: any): Promise<number> {
   const refunds = (
     await query<{ sum: number }>(`SELECT COALESCE(SUM(total),0) AS sum FROM returns WHERE shift_id = $1`, [shift.id])
   )[0].sum;
-  return Number((Number(shift.opening_cash) + Number(cashSales) - Number(refunds)).toFixed(2));
+  // Изъятия наличных (инкассация) уменьшают ожидаемое в кассе.
+  const withdrawals = (
+    await query<{ sum: number }>(`SELECT COALESCE(SUM(amount),0) AS sum FROM cash_withdrawals WHERE shift_id = $1`, [shift.id])
+  )[0].sum;
+  return Number((Number(shift.opening_cash) + Number(cashSales) - Number(refunds) - Number(withdrawals)).toFixed(2));
 }
 
 // Текущая смена + промежуточный расчёт «ожидается в кассе».
@@ -57,32 +80,83 @@ shiftsRouter.get('/current', async (req, res) => {
          (SELECT COUNT(*) FROM sales WHERE shift_id = $1) AS sales_count,
          (SELECT COALESCE(SUM(COALESCE(cash_amount, total)),0) FROM sales WHERE shift_id = $1) AS cash_sales,
          (SELECT COALESCE(SUM(COALESCE(card_amount, 0)),0) FROM sales WHERE shift_id = $1) AS card_sales,
-         (SELECT COALESCE(SUM(total),0) FROM returns WHERE shift_id = $1) AS refunds`,
+         (SELECT COALESCE(SUM(total),0) FROM returns WHERE shift_id = $1) AS refunds,
+         (SELECT COALESCE(SUM(amount),0) FROM cash_withdrawals WHERE shift_id = $1) AS withdrawn`,
       [shift.id],
     )
   )[0];
   res.json({ shift, expected, stats });
 });
 
+// Сколько должно быть в кассе на старте смены (остаток от прошлой). Для приёма.
+shiftsRouter.get('/expected-opening', async (_req, res) => {
+  res.json({ expected: await getLastClosingCash() });
+});
+
 // Открыть смену.
 shiftsRouter.post('/open', async (req, res) => {
   const opening = Number(req.body?.opening_cash ?? 0);
-  const existing = await getOpenShift(req.user!.id);
-  if (existing) return res.status(409).json({ error: 'already_open', shift: existing });
+
+  // Касса одна — вторую смену открыть нельзя, пока не закрыта текущая.
+  // Иначе двое «владеют» одним ящиком и концов не найти.
+  const anyOpen = await getAnyOpenShift();
+  if (anyOpen) {
+    return res.status(409).json({
+      error: 'shift_already_open',
+      message: `Смена уже открыта (${anyOpen.full_name || anyOpen.username}). Сначала закройте её.`,
+      shift: anyOpen,
+    });
+  }
+
+  // Приём кассы: ожидаемый размен = остаток от прошлой смены.
+  const expectedOpening = await getLastClosingCash();
+
   try {
     const shift = (
       await query(
-        `INSERT INTO shifts (user_id, opening_cash) VALUES ($1, $2) RETURNING *`,
-        [req.user!.id, opening],
+        `INSERT INTO shifts (user_id, opening_cash, opening_expected) VALUES ($1, $2, $3) RETURNING *`,
+        [req.user!.id, opening, expectedOpening],
       )
     )[0];
-    await writeLog({ type: 'shift_open', entity: 'shift', entityId: shift.id, userId: req.user!.id, details: { opening_cash: opening } });
+    await writeLog({
+      type: 'shift_open', entity: 'shift', entityId: shift.id, userId: req.user!.id,
+      details: { opening_cash: opening, expected: expectedOpening },
+    });
+    // Расхождение при приёме кассы: принял не столько, сколько осталось.
+    const diff = Number((opening - expectedOpening).toFixed(2));
+    if (diff !== 0) {
+      await writeLog({
+        type: 'handover_discrepancy', entity: 'shift', entityId: shift.id, userId: req.user!.id,
+        details: { expected: expectedOpening, counted: opening, difference: diff },
+      });
+    }
     broadcast('shift', shift);
-    res.status(201).json({ shift });
+    res.status(201).json({ shift, expected_opening: expectedOpening, handover_diff: diff });
   } catch (err: any) {
     if (err.code === '23505') return res.status(409).json({ error: 'already_open' });
     throw err;
   }
+});
+
+// Изъятие наличных из кассы (инкассация) — только владелец. Уменьшает ожидаемое.
+shiftsRouter.post('/withdraw', requireOwner, async (req, res) => {
+  const amount = Number(req.body?.amount);
+  const note = String(req.body?.note ?? '').trim() || null;
+  if (!(amount > 0)) return res.status(400).json({ error: 'Сумма изъятия должна быть больше нуля' });
+
+  const shift = await getAnyOpenShift();
+  if (!shift) return res.status(409).json({ error: 'no_open_shift', message: 'Нет открытой смены' });
+
+  const expected = await computeExpected(shift);
+  if (amount > expected + 1e-9) {
+    return res.status(400).json({ error: `В кассе только ${expected.toFixed(2)} — нельзя изъять ${amount.toFixed(2)}` });
+  }
+
+  await query(`INSERT INTO cash_withdrawals (shift_id, amount, note, user_id) VALUES ($1,$2,$3,$4)`,
+    [shift.id, amount, note, req.user!.id]);
+  await writeLog({ type: 'cash_withdraw', entity: 'shift', entityId: shift.id, userId: req.user!.id, details: { amount, note } });
+  broadcast('shift', shift);
+  res.status(201).json({ ok: true, expected: Number((expected - amount).toFixed(2)) });
 });
 
 // Закрыть смену: считаем ожидаемое, сравниваем с фактически сданным.

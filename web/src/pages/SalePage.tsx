@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, type CartLine } from '../db';
+import { api } from '../api';
 import type { Product } from '../types';
 import { addToCart, cartTotal, clearCart, removeLine, setQty, formatQty, lineTotal, lineHasDiscount } from '../cart';
 import { completeSale } from '../sync';
@@ -421,45 +422,68 @@ export default function SalePage() {
 // сколько денег должно остаться.
 function StartShift({ onDone }: { onDone: (msg: string) => void }) {
   const [amount, setAmount] = useState('');
+  const [expected, setExpected] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+
+  // Приём кассы: сколько должно остаться от прошлой смены. Предзаполняем —
+  // кассир пересчитывает и подтверждает; расхождение запишется на него.
+  useEffect(() => {
+    api
+      .expectedOpening()
+      .then((r) => {
+        setExpected(r.expected);
+        setAmount(r.expected > 0 ? String(r.expected) : '');
+      })
+      .catch(() => setExpected(0));
+  }, []);
 
   async function start(opening: number) {
     setBusy(true);
     setErr(null);
     try {
       await openShift(opening);
-      onDone('Смена открыта — можно продавать');
+      onDone('Касса принята — можно продавать');
     } catch (e: any) {
-      setErr(e.message || 'Не удалось открыть смену');
+      setErr(e.body?.message || e.message || 'Не удалось открыть смену');
     } finally {
       setBusy(false);
     }
   }
 
+  const entered = Number(amount) || 0;
+  const mismatch = expected !== null && expected > 0 && entered !== expected;
+
   return (
     <div className="page">
-      <h1>Начало работы</h1>
+      <h1>Приём кассы</h1>
       <div className="card start-shift">
-        <p className="hint">
-          Пересчитайте деньги в кассе и введите сумму. В конце дня система сверит,
-          сколько должно остаться.
-        </p>
+        {expected !== null && expected > 0 ? (
+          <div className="warn">
+            От прошлой смены в кассе должно быть <b>{expected.toFixed(2)}</b>.
+            Пересчитайте деньги и подтвердите сумму.
+          </div>
+        ) : (
+          <p className="hint">Пересчитайте деньги в кассе (размен) и введите сумму.</p>
+        )}
 
         <label className="field">
-          <span>Размен в кассе</span>
+          <span>Сейчас в кассе (пересчитано)</span>
           <div className="keypad-value">{amount || '0'}</div>
         </label>
 
         <Keypad value={amount} onChange={setAmount} allowDecimal />
 
+        {mismatch && (
+          <div className="change change--neg" style={{ textAlign: 'left' }}>
+            Не сходится с остатком прошлой смены ({expected!.toFixed(2)}). Расхождение{' '}
+            {(entered - expected!).toFixed(2)} запишется на вас.
+          </div>
+        )}
         {err && <div className="change change--neg">{err}</div>}
 
-        <button className="btn btn--primary btn--big" disabled={busy} onClick={() => start(Number(amount) || 0)}>
-          Начать работу
-        </button>
-        <button className="btn btn--link" disabled={busy} onClick={() => start(0)}>
-          Размена нет, начать с нуля
+        <button className="btn btn--primary btn--big" disabled={busy} onClick={() => start(entered)}>
+          Принять кассу и начать
         </button>
       </div>
     </div>

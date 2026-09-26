@@ -13,6 +13,7 @@ export default function ShiftPage() {
   const [closed, setClosed] = useState<any | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [withdrawOpen, setWithdrawOpen] = useState(false);
 
   // Промежуточный расчёт по открытой смене.
   async function loadStats() {
@@ -30,6 +31,10 @@ export default function ShiftPage() {
   useEffect(() => {
     if (shift) loadStats();
   }, [shift]);
+  // При открытии смены подставляем остаток от прошлой (деньги в кассе не менялись).
+  useEffect(() => {
+    if (mode === 'open') api.expectedOpening().then((r) => setAmount(r.expected > 0 ? String(r.expected) : '')).catch(() => {});
+  }, [mode]);
 
   async function doOpen() {
     setBusy(true);
@@ -40,7 +45,7 @@ export default function ShiftPage() {
       setAmount('');
     } catch (e: any) {
       // Раньше ошибка гасилась молча: кассир жал кнопку, и ничего не происходило.
-      setErr(e?.message || 'Не удалось открыть смену');
+      setErr(e?.body?.message || e?.message || 'Не удалось открыть смену');
     } finally {
       setBusy(false);
     }
@@ -98,11 +103,12 @@ export default function ShiftPage() {
         </div>
       )}
 
-      {/* Открытие смены */}
+      {/* Открытие смены (приём кассы) */}
       {mode === 'open' && (
         <div className="card">
+          <p className="hint">Пересчитайте деньги в кассе и подтвердите. Должно совпасть с остатком прошлой смены.</p>
           <label className="field">
-            <span>Размен в кассе на старте</span>
+            <span>Сейчас в кассе (пересчитано)</span>
             <div className="keypad-value">{amount || '0'}</div>
           </label>
           <Keypad value={amount} onChange={setAmount} allowDecimal />
@@ -124,15 +130,29 @@ export default function ShiftPage() {
               <Row label="Продажи наличными" value={stats.stats.cash_sales} />
               <Row label="Продажи картой" value={stats.stats.card_sales} />
               <Row label="Возвраты" value={stats.stats.refunds} />
+              {Number(stats.stats.withdrawn) > 0 && <Row label="Изъято из кассы" value={stats.stats.withdrawn} />}
               <div className="shift-expected">
                 Ожидается в кассе: <b>{stats.expected}</b>
               </div>
             </>
           )}
+          {user?.role === 'owner' && (
+            <button className="btn btn--ghost" onClick={() => setWithdrawOpen(true)}>
+              Изъять наличные
+            </button>
+          )}
           <button className="btn btn--primary btn--big" onClick={() => setMode('close')}>
             Закрыть смену
           </button>
         </div>
+      )}
+
+      {withdrawOpen && (
+        <WithdrawModal
+          max={stats?.expected ?? 0}
+          onClose={() => setWithdrawOpen(false)}
+          onDone={() => { setWithdrawOpen(false); loadStats(); }}
+        />
       )}
 
       {/* Закрытие смены */}
@@ -153,6 +173,45 @@ export default function ShiftPage() {
       {/* Владелец: чужие незакрытые смены и история */}
       {user?.role === 'owner' && <OpenShifts meId={user.id} onDone={() => setErr(null)} />}
       {user?.role === 'owner' && <OwnerShifts />}
+    </div>
+  );
+}
+
+function WithdrawModal({ max, onClose, onDone }: { max: number; onClose: () => void; onDone: () => void }) {
+  const [amount, setAmount] = useState('');
+  const [note, setNote] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function save() {
+    const a = Number(amount) || 0;
+    if (!(a > 0)) { setErr('Укажите сумму'); return; }
+    if (a > max) { setErr(`В кассе только ${max.toFixed(2)}`); return; }
+    setBusy(true); setErr(null);
+    try {
+      await api.withdrawCash(a, note.trim() || undefined);
+      onDone();
+    } catch (e: any) {
+      setErr(e?.body?.message || e?.message || 'Не удалось изъять');
+    } finally { setBusy(false); }
+  }
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <h2>Изъятие наличных</h2>
+        <p className="muted">В кассе сейчас: <b>{max.toFixed(2)}</b>. Изъятое уменьшит ожидаемую сумму.</p>
+        <label className="field"><span>Сколько изъять</span><div className="keypad-value">{amount || '0'}</div></label>
+        <Keypad value={amount} onChange={setAmount} allowDecimal />
+        <label className="field"><span>Причина</span>
+          <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="напр. инкассация" />
+        </label>
+        {err && <div className="change change--neg">{err}</div>}
+        <div className="row">
+          <button className="btn" onClick={onClose} disabled={busy}>Отмена</button>
+          <button className="btn btn--primary" onClick={save} disabled={busy}>Изъять</button>
+        </div>
+      </div>
     </div>
   );
 }

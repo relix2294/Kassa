@@ -78,8 +78,14 @@ export const api = {
       items: { name: string; qty: number; line_total: number }[];
     }[]>(`/returns?limit=${limit}`),
   currentShift: () => req<{ shift: any | null; expected?: number; stats?: any }>('/shifts/current'),
+  expectedOpening: () => req<{ expected: number }>('/shifts/expected-opening'),
   openShift: (opening_cash: number) =>
-    req<{ shift: any }>('/shifts/open', { method: 'POST', body: JSON.stringify({ opening_cash }) }),
+    req<{ shift: any; expected_opening?: number; handover_diff?: number }>('/shifts/open', {
+      method: 'POST',
+      body: JSON.stringify({ opening_cash }),
+    }),
+  withdrawCash: (amount: number, note?: string) =>
+    req<{ ok: boolean; expected: number }>('/shifts/withdraw', { method: 'POST', body: JSON.stringify({ amount, note }) }),
   closeShift: (counted_cash: number, user_id?: string) =>
     req<{ shift: any }>('/shifts/close', { method: 'POST', body: JSON.stringify({ counted_cash, user_id }) }),
   openShifts: () => req<any[]>('/shifts/open'),
