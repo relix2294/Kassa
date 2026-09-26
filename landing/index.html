@@ -4,72 +4,74 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Касса для магазина у дома</title>
-<meta name="description" content="Касса и учёт для маленького магазина: кассир пробивает сканером, склад считается сам, владелец видит продажи, остатки и недостачи с телефона в реальном времени.">
+<meta name="description" content="Система учёта и контроля для небольших магазинов: продажи через сканер, автоматический склад, сверка смен и кабинет владельца в реальном времени.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700&family=Golos+Text:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <style>
 :root {
   color-scheme: light;
-  --ground: #eef1f6;
-  --paper: #ffffff;
-  --paper-2: #f5f7fb;
-  --line: #d9dfe9;
-  --ink: #0f1b2d;
-  --ink-2: #44516a;
-  --muted: #6b7890;
-  --accent: #2459e0;
+  --ground: #ffffff;
+  --ground-2: #f4f5f7;
+  --line: #e3e6eb;
+  --line-2: #cfd4dc;
+  --text: #111418;
+  --text-2: #4a5361;
+  --muted: #7a8391;
+  --accent: #1f4fd6;
   --accent-ink: #ffffff;
-  --accent-soft: #e2eafc;
-  --mark: #f2b632;
-  --ok: #0f8a5f;
-  --bad: #c9362b;
-  --receipt: #fbfbf8;
-  --receipt-ink: #1c2230;
-  --shadow: 0 18px 40px rgba(20, 40, 80, 0.14);
-  --display: "Unbounded", "Arial Black", system-ui, sans-serif;
-  --body: "Golos Text", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  --mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Consolas, monospace;
+  --ok: #117a4f;
+  --bad: #b42318;
+  --bad-soft: #fdf0ee;
+
+  /* Тёмная полоса первого экрана и финального блока — одинакова в обеих темах */
+  --band: #0c1017;
+  --band-2: #141a24;
+  --band-3: #1c2431;
+  --band-line: #273142;
+  --band-text: #eef1f6;
+  --band-text-2: #a7b0c0;
+  --band-muted: #6f7a8c;
+  --band-accent: #6d93ff;
+  --band-ok: #3cc38a;
+  --band-bad: #ff7b6b;
+
+  --sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Consolas, monospace;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     color-scheme: dark;
-    --ground: #0a111d;
-    --paper: #121b2b;
-    --paper-2: #182336;
-    --line: #26334a;
-    --ink: #e9eef7;
-    --ink-2: #b4c0d4;
-    --muted: #8595ae;
-    --accent: #6f9bff;
-    --accent-ink: #081228;
-    --accent-soft: #1b2a4a;
-    --mark: #f2b632;
-    --ok: #3fcf98;
-    --bad: #ff7a6e;
-    --receipt: #f1f1ec;
-    --receipt-ink: #1c2230;
-    --shadow: 0 18px 40px rgba(0, 0, 0, 0.45);
+    --ground: #0f1319;
+    --ground-2: #151a22;
+    --line: #242b36;
+    --line-2: #323b49;
+    --text: #eef1f6;
+    --text-2: #b0b8c6;
+    --muted: #7d8797;
+    --accent: #7b9dff;
+    --accent-ink: #0b1226;
+    --ok: #3cc38a;
+    --bad: #ff7b6b;
+    --bad-soft: #2a1715;
+    --band: #080b10;
   }
 }
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --ground: #0a111d;
-  --paper: #121b2b;
-  --paper-2: #182336;
-  --line: #26334a;
-  --ink: #e9eef7;
-  --ink-2: #b4c0d4;
-  --muted: #8595ae;
-  --accent: #6f9bff;
-  --accent-ink: #081228;
-  --accent-soft: #1b2a4a;
-  --mark: #f2b632;
-  --ok: #3fcf98;
-  --bad: #ff7a6e;
-  --receipt: #f1f1ec;
-  --receipt-ink: #1c2230;
-  --shadow: 0 18px 40px rgba(0, 0, 0, 0.45);
+  --ground: #0f1319;
+  --ground-2: #151a22;
+  --line: #242b36;
+  --line-2: #323b49;
+  --text: #eef1f6;
+  --text-2: #b0b8c6;
+  --muted: #7d8797;
+  --accent: #7b9dff;
+  --accent-ink: #0b1226;
+  --ok: #3cc38a;
+  --bad: #ff7b6b;
+  --bad-soft: #2a1715;
+  --band: #080b10;
 }
 
 * { box-sizing: border-box; }
@@ -78,558 +80,562 @@ html { scroll-behavior: smooth; }
 body {
   margin: 0;
   background: var(--ground);
-  color: var(--ink);
-  font: 400 17px/1.6 var(--body);
+  color: var(--text);
+  font: 400 16px/1.6 var(--sans);
   -webkit-font-smoothing: antialiased;
 }
-img { max-width: 100%; }
-a { color: var(--accent); }
-:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; border-radius: 6px; }
-
-.wrap { max-width: 1120px; margin: 0 auto; padding-inline: 20px; }
-section { padding-block: 72px; }
-h1, h2, h3 { text-wrap: balance; margin: 0; }
-h2 { font: 700 clamp(26px, 3.6vw, 38px)/1.15 var(--display); letter-spacing: -0.01em; }
-h3 { font: 600 19px/1.3 var(--body); }
+h1, h2, h3 { margin: 0; text-wrap: balance; font-weight: 600; }
 p { margin: 0; }
-.eyebrow {
-  font: 600 12px/1 var(--mono);
-  text-transform: uppercase;
-  letter-spacing: 0.14em;
-  color: var(--accent);
-}
-.lead { color: var(--ink-2); font-size: 19px; max-width: 60ch; }
-.head { display: grid; gap: 14px; margin-bottom: 40px; }
+a { color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 
-/* ---------- top bar ---------- */
-.top {
-  position: sticky; top: env(safe-area-inset-top, 0px); z-index: 10;
-  background: color-mix(in srgb, var(--ground) 88%, transparent);
-  backdrop-filter: blur(10px);
-  border-bottom: 1px solid var(--line);
+.wrap { max-width: 1160px; margin: 0 auto; padding-inline: 24px; }
+@media (max-width: 560px) { .wrap { padding-inline: 16px; } }
+
+.label {
+  font: 500 12px/1.4 var(--mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
 }
-.top .wrap { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-block: 12px; }
-.logo { display: flex; align-items: center; gap: 10px; font: 700 18px/1 var(--display); color: var(--ink); text-decoration: none; }
-.logo i {
-  width: 30px; height: 30px; border-radius: 9px; background: var(--accent);
-  display: grid; place-items: center; font: 700 15px/1 var(--mono); color: var(--accent-ink); font-style: normal;
-}
-.top nav { display: flex; gap: 22px; }
-.top nav a { color: var(--ink-2); text-decoration: none; font-weight: 500; font-size: 15px; }
-.top nav a:hover { color: var(--ink); }
-@media (max-width: 820px) { .top nav { display: none; } }
+h2 { font-size: clamp(26px, 3vw, 34px); line-height: 1.2; letter-spacing: -0.015em; }
+.sub { color: var(--text-2); font-size: 18px; max-width: 62ch; }
 
 .btn {
-  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
-  padding: 14px 22px; border-radius: 12px; border: 1px solid transparent;
-  font: 600 16px/1 var(--body); text-decoration: none; cursor: pointer;
-  transition: transform .15s ease, background-color .15s ease;
+  display: inline-flex; align-items: center; justify-content: center;
+  height: 48px; padding: 0 22px; border-radius: 6px;
+  font: 500 15px/1 var(--sans); text-decoration: none;
+  border: 1px solid transparent; transition: background-color .15s, border-color .15s;
 }
-.btn:hover { transform: translateY(-1px); }
-.btn-main { background: var(--accent); color: var(--accent-ink); }
-.btn-ghost { background: transparent; color: var(--ink); border-color: var(--line); }
-.btn-sm { padding: 10px 16px; font-size: 14px; }
+.btn-primary { background: var(--band-accent); color: #0b1226; }
+.btn-primary:hover { background: #8aa8ff; }
+.btn-line { border-color: var(--band-line); color: var(--band-text); }
+.btn-line:hover { border-color: var(--band-text-2); }
+
+/* ---------- header ---------- */
+.top {
+  position: sticky; top: env(safe-area-inset-top, 0px); z-index: 20;
+  background: var(--band); border-bottom: 1px solid var(--band-line);
+}
+.top .wrap { display: flex; align-items: center; justify-content: space-between; gap: 20px; height: 64px; }
+.logo { display: flex; align-items: center; gap: 10px; color: var(--band-text); text-decoration: none; font-weight: 600; font-size: 17px; letter-spacing: -0.01em; }
+.logo svg { display: block; }
+.top nav { display: flex; gap: 28px; }
+.top nav a { color: var(--band-text-2); text-decoration: none; font-size: 14px; }
+.top nav a:hover { color: var(--band-text); }
+.top .btn { height: 38px; padding: 0 16px; font-size: 14px; }
+@media (max-width: 860px) { .top nav { display: none; } }
 
 /* ---------- hero ---------- */
-.hero { padding-block: 64px 80px; }
-.hero .wrap { display: grid; grid-template-columns: 1.05fr 0.95fr; gap: 48px; align-items: center; }
-@media (max-width: 920px) { .hero .wrap { grid-template-columns: 1fr; } }
+.hero { background: var(--band); color: var(--band-text); padding-block: 72px 0; overflow: hidden; }
+.hero-text { display: grid; grid-template-columns: 1.15fr 0.85fr; gap: 48px; align-items: end; }
+@media (max-width: 900px) { .hero-text { grid-template-columns: 1fr; gap: 24px; } }
+.hero .label { color: var(--band-muted); }
 .hero h1 {
-  font: 700 clamp(34px, 5.4vw, 60px)/1.05 var(--display);
-  letter-spacing: -0.02em;
+  margin-top: 18px;
+  font-size: clamp(34px, 5vw, 58px); line-height: 1.06; letter-spacing: -0.025em;
 }
-.hero h1 .hl {
-  background: linear-gradient(transparent 62%, var(--mark) 62%, var(--mark) 90%, transparent 90%);
-  padding-inline: 2px;
-}
-.hero .lead { margin-top: 22px; }
-.hero .actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 30px; }
-.facts { display: flex; flex-wrap: wrap; gap: 8px 22px; margin-top: 30px; color: var(--muted); font-size: 14px; }
-.facts span::before { content: "✓"; color: var(--ok); font-weight: 700; margin-right: 6px; }
+.hero h1 em { font-style: normal; color: var(--band-text-2); }
+.hero-side { display: grid; gap: 24px; }
+.hero-side p { color: var(--band-text-2); font-size: 18px; }
+.actions { display: flex; flex-wrap: wrap; gap: 12px; }
 
-/* stage: receipt + phone */
-.stage { position: relative; min-height: 470px; }
-@media (max-width: 920px) { .stage { min-height: 0; display: grid; gap: 20px; justify-items: center; } }
-.receipt {
-  position: relative; z-index: 2; width: min(262px, 100%);
-  background: var(--receipt); color: var(--receipt-ink);
-  font: 400 13px/1.55 var(--mono);
-  padding: 22px 20px 30px;
-  box-shadow: var(--shadow);
-  transform: rotate(-2.5deg);
-  margin-top: 30px;
+/* dashboard mock */
+.app {
+  margin-top: 56px;
+  background: var(--band-2);
+  border: 1px solid var(--band-line); border-bottom: 0;
+  border-radius: 10px 10px 0 0;
+  overflow: hidden;
 }
-.receipt::after {
-  content: ""; position: absolute; left: 0; right: 0; bottom: -10px; height: 10px;
-  background:
-    linear-gradient(-45deg, transparent 7px, var(--receipt) 0) 0 0 / 14px 10px repeat-x,
-    linear-gradient(45deg, transparent 7px, var(--receipt) 0) 0 0 / 14px 10px repeat-x;
+.app-bar {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 12px 18px; border-bottom: 1px solid var(--band-line);
+  font: 400 12px/1 var(--mono); color: var(--band-muted);
 }
-.receipt .c { text-align: center; }
-.receipt .t { font-weight: 600; letter-spacing: .08em; }
-.receipt hr { border: 0; border-top: 1px dashed #9aa3b5; margin: 10px 0; }
-.receipt .row { display: flex; justify-content: space-between; gap: 10px; font-variant-numeric: tabular-nums; }
-.receipt .sub { color: #5d677c; font-size: 12px; }
-.receipt .old { text-decoration: line-through; color: #8a93a6; margin-right: 6px; }
-.receipt .tag { background: #1c2230; color: #fbfbf8; font-size: 10px; padding: 1px 5px; border-radius: 3px; margin-left: 4px; }
-.receipt .big { font-weight: 600; font-size: 17px; }
+.app-bar .dots { display: flex; gap: 6px; }
+.app-bar .dots i { width: 10px; height: 10px; border-radius: 50%; background: var(--band-line); }
+.app-bar .live { color: var(--band-ok); display: inline-flex; align-items: center; gap: 6px; }
+.app-bar .live::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--band-ok); }
+.app-body { padding: 20px; display: grid; gap: 16px; }
+.kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--band-line); border: 1px solid var(--band-line); border-radius: 8px; overflow: hidden; }
+@media (max-width: 700px) { .kpis { grid-template-columns: repeat(2, 1fr); } }
+.kpi { background: var(--band-2); padding: 14px 16px; display: grid; gap: 4px; }
+.kpi small { font: 400 12px/1.3 var(--sans); color: var(--band-muted); }
+.kpi b { font: 500 22px/1.2 var(--mono); font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+.kpi span { font: 400 12px/1.3 var(--mono); color: var(--band-text-2); }
+.panels { display: grid; grid-template-columns: 1.35fr 1fr; gap: 16px; }
+@media (max-width: 900px) { .panels { grid-template-columns: 1fr; } }
+.panel { border: 1px solid var(--band-line); border-radius: 8px; padding: 16px; min-width: 0; }
+.panel h4 { margin: 0 0 12px; font: 500 13px/1.3 var(--sans); color: var(--band-text-2); display: flex; justify-content: space-between; gap: 10px; }
+.panel h4 span { font: 400 12px/1.3 var(--mono); color: var(--band-muted); }
+.chart { width: 100%; height: auto; display: block; }
+.chart .grid { stroke: var(--band-line); stroke-width: 1; }
+.chart .ax { fill: var(--band-muted); font: 400 10px var(--mono); }
+.chart .bar { fill: #3a4d78; }
+.chart .bar.hi { fill: var(--band-accent); }
+.mini { width: 100%; border-collapse: collapse; font-size: 13px; }
+.mini td { padding: 8px 0; border-top: 1px solid var(--band-line); font-variant-numeric: tabular-nums; }
+.mini tr:first-child td { border-top: 0; }
+.mini td.r { text-align: right; font-family: var(--mono); }
+.mini td.m { color: var(--band-muted); font-family: var(--mono); font-size: 12px; width: 44px; }
+.mini .bad { color: var(--band-bad); }
+.mini .ok { color: var(--band-ok); }
+.stack { display: grid; gap: 16px; }
 
-.phone {
-  position: absolute; right: 0; top: 0; width: 238px;
-  background: #0d1422; border-radius: 34px; padding: 10px;
-  box-shadow: var(--shadow);
-  border: 1px solid #2a3650;
+/* ---------- facts ---------- */
+.facts { border-bottom: 1px solid var(--line); }
+.facts .wrap { display: grid; grid-template-columns: repeat(4, 1fr); }
+@media (max-width: 900px) { .facts .wrap { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 520px) { .facts .wrap { grid-template-columns: 1fr; } }
+.fact { padding: 28px 24px 28px 0; display: grid; gap: 6px; align-content: start; }
+.fact + .fact { padding-left: 24px; border-left: 1px solid var(--line); }
+@media (max-width: 900px) {
+  .fact, .fact + .fact { padding: 22px 0; border-left: 0; border-top: 1px solid var(--line); }
+  .fact:nth-child(-n+2) { border-top: 0; }
+  .fact:nth-child(even) { padding-left: 20px; border-left: 1px solid var(--line); }
 }
-@media (max-width: 920px) { .phone { position: static; } }
-.screen { background: #111a2b; border-radius: 26px; padding: 16px 14px 18px; color: #eaf0f8; min-height: 400px; }
-.screen .bar { display: flex; justify-content: space-between; font: 600 11px/1 var(--mono); color: #8ea0ba; margin-bottom: 14px; }
-.screen .live { color: #34d399; }
-.screen .live::before { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #34d399; margin-right: 6px; animation: pulse 1.6s ease-in-out infinite; }
-@keyframes pulse { 50% { opacity: .3; } }
-.kpis { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.kpi { background: #1a2438; border-radius: 12px; padding: 10px; }
-.kpi small { display: block; font: 500 10px/1.2 var(--body); color: #8ea0ba; text-transform: uppercase; letter-spacing: .08em; }
-.kpi b { font: 600 18px/1.4 var(--mono); font-variant-numeric: tabular-nums; }
-.feed { list-style: none; margin: 14px 0 0; padding: 0; display: grid; gap: 7px; }
-.feed li {
-  background: #1a2438; border-radius: 10px; padding: 8px 10px;
-  font-size: 12px; line-height: 1.35; display: grid; grid-template-columns: auto 1fr; gap: 8px;
+@media (max-width: 520px) {
+  .fact:nth-child(even) { padding-left: 0; border-left: 0; }
+  .fact:nth-child(2) { border-top: 1px solid var(--line); }
 }
-.feed time { font: 600 11px/1.35 var(--mono); color: #8ea0ba; }
-.feed li.warn { box-shadow: inset 3px 0 0 #fbbf24; }
-.feed li.new { animation: slidein .5s ease; }
-@keyframes slidein { from { transform: translateY(-6px); opacity: .4; } to { transform: none; opacity: 1; } }
-@media (prefers-reduced-motion: reduce) {
-  .feed li.new, .screen .live::before { animation: none; }
-  .btn:hover { transform: none; }
-}
+.fact b { font-weight: 600; font-size: 15px; }
+.fact span { color: var(--text-2); font-size: 14px; }
 
-/* ---------- problems ---------- */
-.problems { background: var(--paper); border-block: 1px solid var(--line); }
-.pgrid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0; border-top: 1px solid var(--line); }
-@media (max-width: 760px) { .pgrid { grid-template-columns: 1fr; } }
-.pitem { padding: 28px 28px 30px 0; border-bottom: 1px solid var(--line); display: grid; gap: 10px; align-content: start; }
-.pitem:nth-child(odd) { border-right: 1px solid var(--line); }
-.pitem:nth-child(even) { padding-left: 28px; padding-right: 0; }
-@media (max-width: 760px) {
-  .pitem, .pitem:nth-child(even) { padding: 24px 0; border-right: 0; }
-  .pitem:nth-child(odd) { border-right: 0; }
-}
-.pitem .q { font: 600 20px/1.35 var(--body); }
-.pitem .q::before { content: "«"; color: var(--muted); }
-.pitem .q::after { content: "»"; color: var(--muted); }
-.pitem .a { color: var(--ink-2); }
-.pitem .a b { color: var(--ink); font-weight: 600; }
+/* ---------- sections ---------- */
+section.block { padding-block: 88px; border-bottom: 1px solid var(--line); }
+section.alt { background: var(--ground-2); }
+.split { display: grid; grid-template-columns: 300px 1fr; gap: 56px; }
+@media (max-width: 900px) { .split { grid-template-columns: 1fr; gap: 28px; } }
+.split-head { display: grid; gap: 14px; align-content: start; }
+.split-head p { color: var(--text-2); }
 
-/* ---------- steps ---------- */
-.steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; counter-reset: s; list-style: none; padding: 0; margin: 0; }
-@media (max-width: 920px) { .steps { grid-template-columns: repeat(2, 1fr); } }
+/* problems */
+.rows { border-top: 1px solid var(--text); }
+.row { display: grid; grid-template-columns: 0.9fr 1.1fr; gap: 32px; padding-block: 22px; border-bottom: 1px solid var(--line); }
+@media (max-width: 700px) { .row { grid-template-columns: 1fr; gap: 8px; } }
+.row h3 { font-size: 17px; line-height: 1.4; }
+.row p { color: var(--text-2); }
+
+/* steps */
+.steps { list-style: none; margin: 48px 0 0; padding: 0; display: grid; grid-template-columns: repeat(4, 1fr); counter-reset: st; }
+@media (max-width: 900px) { .steps { grid-template-columns: repeat(2, 1fr); row-gap: 32px; } }
 @media (max-width: 560px) { .steps { grid-template-columns: 1fr; } }
-.steps li { counter-increment: s; display: grid; gap: 10px; align-content: start; padding-top: 18px; border-top: 3px solid var(--ink); }
-.steps li::before { content: "Шаг " counter(s); font: 600 12px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
-.steps p { color: var(--ink-2); font-size: 16px; }
+.steps li { counter-increment: st; padding: 20px 24px 0 0; border-top: 1px solid var(--text); display: grid; gap: 10px; align-content: start; }
+.steps li::before { content: counter(st, decimal-leading-zero); font: 500 13px/1 var(--mono); color: var(--accent); }
+.steps h3 { font-size: 17px; }
+.steps p { color: var(--text-2); font-size: 15px; }
 
-/* ---------- features ---------- */
-.features { background: var(--paper); border-block: 1px solid var(--line); }
-.fgrid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; }
-@media (max-width: 820px) { .fgrid { grid-template-columns: 1fr; } }
-.fcard { background: var(--paper-2); border: 1px solid var(--line); border-radius: 18px; padding: 26px; display: grid; gap: 16px; align-content: start; }
-.fcard header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
-.fcard header span { font: 600 12px/1 var(--mono); color: var(--muted); letter-spacing: .1em; text-transform: uppercase; }
-.fcard ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
-.fcard li { display: grid; grid-template-columns: 18px 1fr; gap: 10px; font-size: 16px; color: var(--ink-2); }
-.fcard li::before { content: ""; width: 8px; height: 8px; margin-top: 9px; border-radius: 2px; background: var(--accent); }
-.fcard li b { color: var(--ink); font-weight: 600; }
+/* features */
+.cols { display: grid; grid-template-columns: repeat(4, 1fr); gap: 32px; margin-top: 48px; }
+@media (max-width: 1000px) { .cols { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 560px) { .cols { grid-template-columns: 1fr; } }
+.col { border-top: 1px solid var(--text); padding-top: 18px; display: grid; gap: 14px; align-content: start; }
+.col h3 { font-size: 17px; }
+.col ul { list-style: none; margin: 0; padding: 0; display: grid; }
+.col li { padding-block: 10px; border-bottom: 1px solid var(--line); font-size: 15px; color: var(--text-2); line-height: 1.45; }
+.col li:first-child { padding-top: 0; }
+.col li b { color: var(--text); font-weight: 500; display: block; }
 
-/* ---------- journal ---------- */
-.journal .wrap { display: grid; grid-template-columns: 0.9fr 1.1fr; gap: 48px; align-items: center; }
-@media (max-width: 920px) { .journal .wrap { grid-template-columns: 1fr; } }
-.journal .text { display: grid; gap: 18px; }
-.log {
-  background: var(--paper); border: 1px solid var(--line); border-radius: 18px; overflow: hidden;
-  font: 400 14px/1.5 var(--mono);
-}
-.log .cap { display: flex; justify-content: space-between; gap: 10px; padding: 12px 18px; border-bottom: 1px solid var(--line); color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .1em; }
-.log ol { list-style: none; margin: 0; padding: 0; }
-.log li { display: grid; grid-template-columns: 52px 92px 1fr; gap: 12px; padding: 10px 18px; border-bottom: 1px solid var(--line); }
-.log li:last-child { border-bottom: 0; }
-.log time { color: var(--muted); font-variant-numeric: tabular-nums; }
-.log .who { color: var(--ink-2); }
-.log .what { color: var(--ink); font-family: var(--body); }
-.log li.flag { background: color-mix(in srgb, var(--mark) 16%, transparent); }
-.log li.flag .what b { color: var(--bad); }
-@media (max-width: 560px) {
-  .log li { grid-template-columns: 48px 1fr; }
-  .log .what { grid-column: 1 / -1; }
-}
-.note { font-size: 13px; color: var(--muted); }
+/* control: journal + roles */
+.control { display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 32px; margin-top: 48px; }
+.control > * { min-width: 0; }
+@media (max-width: 1000px) { .control { grid-template-columns: 1fr; } }
+.card { border: 1px solid var(--line); border-radius: 8px; background: var(--ground); overflow: hidden; min-width: 0; }
+.card-head { display: flex; justify-content: space-between; gap: 12px; padding: 14px 18px; border-bottom: 1px solid var(--line); }
+.card-head b { font-weight: 500; font-size: 14px; }
+.card-head span { font: 400 12px/1.6 var(--mono); color: var(--muted); }
+.scroll { overflow-x: auto; }
+table.t { width: 100%; border-collapse: collapse; font-size: 14px; }
+table.t th { text-align: left; font: 500 11px/1.3 var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); padding: 10px 18px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+table.t td { padding: 11px 18px; border-bottom: 1px solid var(--line); vertical-align: top; }
+table.t tr:last-child td { border-bottom: 0; }
+table.t td.m { font-family: var(--mono); font-size: 13px; color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+table.t td.who { color: var(--text-2); white-space: nowrap; }
+table.t tr.flag td { background: var(--bad-soft); }
+table.t tr.flag b { color: var(--bad); font-weight: 600; }
+.log { min-width: 560px; }
+.roles td.c, .roles th.c { text-align: center; width: 96px; }
+.yes { color: var(--ok); font-weight: 500; }
+.no { color: var(--muted); }
+.fine { margin-top: 12px; font-size: 13px; color: var(--muted); }
 
-/* ---------- roles table ---------- */
-.tablebox { overflow-x: auto; border: 1px solid var(--line); border-radius: 18px; background: var(--paper); }
-table { width: 100%; border-collapse: collapse; min-width: 520px; }
-th, td { text-align: left; padding: 14px 20px; border-bottom: 1px solid var(--line); font-size: 16px; }
-tr:last-child td { border-bottom: 0; }
-thead th { font: 600 12px/1 var(--mono); text-transform: uppercase; letter-spacing: .1em; color: var(--muted); background: var(--paper-2); }
-td.y, td.n { text-align: center; font-weight: 700; width: 130px; }
-th.c { text-align: center; }
-td.y { color: var(--ok); }
-td.n { color: var(--muted); }
+/* requirements */
+.req { display: grid; grid-template-columns: repeat(4, 1fr); border-top: 1px solid var(--text); margin-top: 48px; }
+@media (max-width: 900px) { .req { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 520px) { .req { grid-template-columns: 1fr; } }
+.req div { padding: 20px 20px 20px 0; border-bottom: 1px solid var(--line); display: grid; gap: 4px; }
+.req b { font-weight: 500; }
+.req span { color: var(--text-2); font-size: 14px; }
+.req .opt b::after { content: "по желанию"; margin-left: 8px; font: 400 11px/1 var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
 
-/* ---------- setup ---------- */
-.need { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
-@media (max-width: 920px) { .need { grid-template-columns: repeat(2, 1fr); } }
-@media (max-width: 460px) { .need { grid-template-columns: 1fr; } }
-.need div { border: 1px solid var(--line); border-radius: 16px; padding: 20px; background: var(--paper); display: grid; gap: 6px; align-content: start; }
-.need b { font-weight: 600; }
-.need span { color: var(--ink-2); font-size: 15px; }
-.need .opt { border-style: dashed; background: transparent; }
-
-/* ---------- faq ---------- */
-.faq { background: var(--paper); border-block: 1px solid var(--line); }
-.faq .list { display: grid; gap: 0; border-top: 1px solid var(--line); max-width: 820px; }
-details { border-bottom: 1px solid var(--line); padding-block: 4px; }
-summary {
-  cursor: pointer; list-style: none; padding: 18px 40px 18px 0; position: relative;
-  font: 600 18px/1.4 var(--body);
-}
+/* faq */
+.faq { border-top: 1px solid var(--text); }
+details { border-bottom: 1px solid var(--line); }
+summary { cursor: pointer; list-style: none; position: relative; padding: 20px 40px 20px 0; font-weight: 500; font-size: 17px; }
 summary::-webkit-details-marker { display: none; }
-summary::after { content: "+"; position: absolute; right: 4px; top: 14px; font: 500 26px/1 var(--mono); color: var(--accent); }
-details[open] summary::after { content: "−"; }
-details p { padding-bottom: 20px; color: var(--ink-2); max-width: 68ch; }
+summary::after { content: ""; position: absolute; right: 6px; top: 27px; width: 9px; height: 9px; border-right: 1.5px solid var(--muted); border-bottom: 1.5px solid var(--muted); transform: rotate(45deg); transition: transform .2s; }
+details[open] summary::after { transform: rotate(-135deg); top: 31px; }
+details p { padding-bottom: 22px; color: var(--text-2); max-width: 70ch; }
 
-/* ---------- cta ---------- */
-.cta .box {
-  background: var(--ink); color: var(--ground); border-radius: 28px;
-  padding: clamp(28px, 5vw, 56px);
-  display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 36px; align-items: center;
-}
-@media (max-width: 820px) { .cta .box { grid-template-columns: 1fr; } }
-.cta h2 { color: var(--ground); }
-.cta p { color: color-mix(in srgb, var(--ground) 78%, var(--ink)); margin-top: 14px; max-width: 52ch; }
-.contacts { display: grid; gap: 12px; }
-.contact {
-  display: grid; gap: 2px; padding: 16px 18px; border-radius: 14px;
-  background: color-mix(in srgb, var(--ground) 10%, var(--ink));
-}
-.contact small { font: 600 11px/1.2 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: color-mix(in srgb, var(--ground) 60%, var(--ink)); }
-.contact span { font: 600 19px/1.4 var(--mono); user-select: all; color: var(--ground); }
+/* cta */
+.cta { background: var(--band); color: var(--band-text); padding-block: 88px; }
+.cta .wrap { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 56px; align-items: start; }
+@media (max-width: 900px) { .cta .wrap { grid-template-columns: 1fr; gap: 32px; } }
+.cta .label { color: var(--band-muted); }
+.cta h2 { margin-top: 14px; }
+.cta p { margin-top: 18px; color: var(--band-text-2); font-size: 17px; max-width: 54ch; }
+.contacts { border-top: 1px solid var(--band-line); }
+.contact { display: grid; grid-template-columns: 150px 1fr; gap: 16px; padding-block: 18px; border-bottom: 1px solid var(--band-line); align-items: baseline; }
+@media (max-width: 420px) { .contact { grid-template-columns: 1fr; gap: 4px; } }
+.contact small { font: 500 12px/1.4 var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--band-muted); }
+.contact span { font: 500 20px/1.3 var(--mono); user-select: all; }
+.steps-cta { margin-top: 28px; display: grid; gap: 10px; color: var(--band-text-2); font-size: 15px; }
+.steps-cta div { display: grid; grid-template-columns: 28px 1fr; }
+.steps-cta i { font: 500 13px/1.6 var(--mono); font-style: normal; color: var(--band-accent); }
 
-footer { padding-block: 32px 48px; color: var(--muted); font-size: 14px; }
-footer .wrap { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; }
+footer { background: var(--band); color: var(--band-muted); border-top: 1px solid var(--band-line); font-size: 13px; }
+footer .wrap { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; padding-block: 24px; }
 </style>
 </head>
 <body>
 
 <header class="top">
   <div class="wrap">
-    <a class="logo" href="#top"><i>К</i>Касса</a>
+    <a class="logo" href="#top">
+      <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><rect x="1" y="1" width="22" height="22" rx="5" fill="none" stroke="#6d93ff" stroke-width="2"/><path d="M7 8h10M7 12h10M7 16h6" stroke="#eef1f6" stroke-width="2" stroke-linecap="round"/></svg>
+      Касса
+    </a>
     <nav aria-label="Разделы">
-      <a href="#problems">Проблемы</a>
+      <a href="#tasks">Задачи</a>
       <a href="#how">Как работает</a>
       <a href="#features">Возможности</a>
+      <a href="#control">Контроль</a>
       <a href="#faq">Вопросы</a>
     </nav>
-    <a class="btn btn-main btn-sm" href="#contact">Подключить магазин</a>
+    <a class="btn btn-primary" href="#contact">Связаться</a>
   </div>
 </header>
 
 <main id="top">
 
-<!-- HERO -->
 <section class="hero">
   <div class="wrap">
-    <div>
-      <p class="eyebrow">Касса и учёт для магазина у дома</p>
-      <h1 style="margin-top:16px">Вы видите каждую продажу, <span class="hl">даже когда</span> вас нет в&nbsp;магазине</h1>
-      <p class="lead">Кассир пробивает товар сканером, склад считается сам, а вы в телефоне видите выручку, маржу, остатки и недостачу по кассе. Можно спокойно нанять продавца, а не держать за прилавком родственника.</p>
-      <div class="actions">
-        <a class="btn btn-main" href="#contact">Хочу такую кассу</a>
-        <a class="btn btn-ghost" href="#features">Что она умеет</a>
+    <div class="hero-text">
+      <div>
+        <p class="label">Учёт и контроль для магазинов 10–40 м²</p>
+        <h1>Магазин под контролем, <em>даже когда вас нет за&nbsp;прилавком</em></h1>
       </div>
-      <div class="facts">
-        <span>Работает в браузере</span>
-        <span>Ваш ноутбук и сканер</span>
-        <span>Чек не теряется без интернета</span>
+      <div class="hero-side">
+        <p>Продажи через сканер, автоматический учёт склада, сверка кассы по каждой смене. Выручка, маржа и остатки у владельца в телефоне в реальном времени.</p>
+        <div class="actions">
+          <a class="btn btn-primary" href="#contact">Запросить демонстрацию</a>
+          <a class="btn btn-line" href="#features">Возможности</a>
+        </div>
       </div>
     </div>
 
-    <div class="stage" aria-label="Пример чека и кабинета владельца">
-      <div class="receipt" aria-hidden="true">
-        <div class="c t">МАГАЗИН «ОРЗУ»</div>
-        <div class="c sub">смена №41 · кассир Алишер</div>
-        <hr>
-        <div class="row"><span>Курут, на вес</span><span>18.00</span></div>
-        <div class="sub">45.00 /кг × 0.400 кг</div>
-        <div class="row"><span>Молоко 1 л <span class="tag">скидка</span></span><span><span class="old">14.00</span>11.00</span></div>
-        <div class="row"><span>Лепёшка ×2</span><span>8.00</span></div>
-        <div class="row"><span>Чай зелёный 100 г</span><span>16.00</span></div>
-        <hr>
-        <div class="row big"><span>ИТОГО</span><span>53.00</span></div>
-        <div class="row sub"><span>Карта</span><span>20.00</span></div>
-        <div class="row sub"><span>Наличные</span><span>40.00</span></div>
-        <div class="row"><span>Сдача</span><span>7.00</span></div>
-        <hr>
-        <div class="c sub">остатки списаны автоматически</div>
+    <div class="app" role="img" aria-label="Кабинет владельца: выручка, маржа, выручка по часам, смены и товары, которые пора закупить">
+      <div class="app-bar">
+        <span class="dots"><i></i><i></i><i></i></span>
+        <span>Кабинет владельца · Сегодня</span>
+        <span class="live">онлайн</span>
       </div>
-
-      <div class="phone" aria-hidden="true">
-        <div class="screen">
-          <div class="bar"><span>Кабинет · сегодня</span><span class="live">онлайн</span></div>
-          <div class="kpis">
-            <div class="kpi"><small>Выручка</small><b id="rev">4 812</b></div>
-            <div class="kpi"><small>Маржа</small><b id="mar">1 127</b></div>
-            <div class="kpi"><small>Чеков</small><b id="chk">96</b></div>
-            <div class="kpi"><small>Возвраты</small><b>1</b></div>
+      <div class="app-body">
+        <div class="kpis">
+          <div class="kpi"><small>Выручка</small><b>4 812.00</b><span>нал 3 106 · карта 1 706</span></div>
+          <div class="kpi"><small>Маржа</small><b>1 127.00</b><span>23.4% от выручки</span></div>
+          <div class="kpi"><small>Чеков</small><b>96</b><span>средний 50.13</span></div>
+          <div class="kpi"><small>Возвраты</small><b>1</b><span>на 14.00</span></div>
+        </div>
+        <div class="panels">
+          <div class="panel">
+            <h4>Выручка по часам <span>пик 18:00 · 560</span></h4>
+            <svg class="chart" viewBox="0 0 560 172" aria-hidden="true">
+<line x1="40" x2="552" y1="150.0" y2="150.0" class="grid"/><text x="32" y="154.0" class="ax" text-anchor="end">0</text>
+<line x1="40" x2="552" y1="104.7" y2="104.7" class="grid"/><text x="32" y="108.7" class="ax" text-anchor="end">200</text>
+<line x1="40" x2="552" y1="59.3" y2="59.3" class="grid"/><text x="32" y="63.3" class="ax" text-anchor="end">400</text>
+<line x1="40" x2="552" y1="14.0" y2="14.0" class="grid"/><text x="32" y="18.0" class="ax" text-anchor="end">600</text>
+<rect x="48.3" y="122.8" width="20" height="27.2" rx="2" class="bar"/>
+<text x="58.3" y="166" class="ax" text-anchor="middle">8:00</text>
+<rect x="84.9" y="91.1" width="20" height="58.9" rx="2" class="bar"/>
+<rect x="121.4" y="79.7" width="20" height="70.3" rx="2" class="bar"/>
+<text x="131.4" y="166" class="ax" text-anchor="middle">10:00</text>
+<rect x="158.0" y="84.3" width="20" height="65.7" rx="2" class="bar"/>
+<rect x="194.6" y="54.8" width="20" height="95.2" rx="2" class="bar"/>
+<text x="204.6" y="166" class="ax" text-anchor="middle">12:00</text>
+<rect x="231.1" y="41.2" width="20" height="108.8" rx="2" class="bar"/>
+<rect x="267.7" y="61.6" width="20" height="88.4" rx="2" class="bar"/>
+<text x="277.7" y="166" class="ax" text-anchor="middle">14:00</text>
+<rect x="304.3" y="75.2" width="20" height="74.8" rx="2" class="bar"/>
+<rect x="340.9" y="70.7" width="20" height="79.3" rx="2" class="bar"/>
+<text x="350.9" y="166" class="ax" text-anchor="middle">16:00</text>
+<rect x="377.4" y="43.5" width="20" height="106.5" rx="2" class="bar"/>
+<rect x="414.0" y="23.1" width="20" height="126.9" rx="2" class="bar hi"/>
+<text x="424.0" y="166" class="ax" text-anchor="middle">18:00</text>
+<rect x="450.6" y="34.4" width="20" height="115.6" rx="2" class="bar"/>
+<rect x="487.1" y="100.1" width="20" height="49.9" rx="2" class="bar"/>
+<text x="497.1" y="166" class="ax" text-anchor="middle">20:00</text>
+<rect x="523.7" y="126.9" width="20" height="23.1" rx="2" class="bar"/>
+            </svg>
           </div>
-          <ul class="feed" id="feed">
-            <li><time>14:32</time><span>Чек на 53.00 · Алишер</span></li>
-            <li class="warn"><time>14:05</time><span>Пора закупить: молоко 1 л, осталось 3</span></li>
-            <li><time>13:48</time><span>Приём: вода 0.5 л +24 шт</span></li>
-            <li><time>13:20</time><span>Чек на 27.50 · Алишер</span></li>
-          </ul>
+          <div class="stack">
+            <div class="panel">
+              <h4>Смены <span>ожидалось / сдано</span></h4>
+              <table class="mini">
+                <tr><td class="m">№41</td><td>2 340.00 / 2 328.00</td><td class="r bad">−12.00</td></tr>
+                <tr><td class="m">№40</td><td>2 105.50 / 2 105.50</td><td class="r ok">0.00</td></tr>
+                <tr><td class="m">№39</td><td>1 980.00 / 1 980.00</td><td class="r ok">0.00</td></tr>
+              </table>
+            </div>
+            <div class="panel">
+              <h4>Пора закупить <span>остаток · хватит на</span></h4>
+              <table class="mini">
+                <tr><td>Молоко 1 л</td><td class="r">3 шт · 1 дн</td></tr>
+                <tr><td>Курут</td><td class="r">0.75 кг · 2 дн</td></tr>
+                <tr><td>Вода 0.5 л</td><td class="r">6 шт · 2 дн</td></tr>
+              </table>
+            </div>
+          </div>
         </div>
       </div>
     </div>
   </div>
 </section>
 
-<!-- PROBLEMS -->
-<section class="problems" id="problems">
+<div class="facts">
   <div class="wrap">
-    <div class="head">
-      <p class="eyebrow">Знакомо?</p>
-      <h2>Проблемы, которые решает касса</h2>
+    <div class="fact"><b>Полный журнал действий</b><span>Каждая продажа, отмена и возврат с именем сотрудника и временем</span></div>
+    <div class="fact"><b>Разграничение доступа</b><span>Кассир не видит закупочные цены, выручку и чужие смены</span></div>
+    <div class="fact"><b>Работа без интернета</b><span>Чеки сохраняются на кассе и отправляются после восстановления связи</span></div>
+    <div class="fact"><b>Ежедневное резервное копирование</b><span>С проверкой, что копию можно восстановить</span></div>
+  </div>
+</div>
+
+<section class="block" id="tasks">
+  <div class="wrap split">
+    <div class="split-head">
+      <p class="label">Задачи</p>
+      <h2>Что решает система</h2>
+      <p>Типичные проблемы небольшого магазина и то, как касса их закрывает.</p>
     </div>
-    <div class="pgrid">
-      <div class="pitem">
-        <p class="q">За кассу могу поставить только своих</p>
-        <p class="a">Каждая продажа, отмена и возврат записываются с именем кассира и временем. Кассир не видит закупочные цены и выручку, не меняет цены и не удаляет чек бесследно. <b>Чужому человеку можно доверить кассу, потому что всё видно.</b></p>
+    <div class="rows">
+      <div class="row">
+        <h3>За кассу можно поставить только родственника</h3>
+        <p>Все операции записываются за конкретным сотрудником. Кассир не меняет цены, не делает скидок и не удаляет чеки. Нанять продавца со стороны становится безопасно.</p>
       </div>
-      <div class="pitem">
-        <p class="q">Вечером в кассе меньше, чем должно быть</p>
-        <p class="a">Кассир открывает смену с разменом и закрывает, пересчитав деньги. Система сама считает, сколько должно быть по чекам. <b>Недостача или излишек сразу попадают вам в журнал.</b></p>
+      <div class="row">
+        <h3>Вечером в кассе не сходятся деньги</h3>
+        <p>Смена открывается с разменом и закрывается пересчётом. Система считает ожидаемую сумму по чекам и фиксирует расхождение в журнале.</p>
       </div>
-      <div class="pitem">
-        <p class="q">Товар кончается внезапно, а другой годами лежит</p>
-        <p class="a">Раздел «Пора закупить» показывает, что на исходе и на сколько дней хватит остатка. «Залежалый товар» показывает, что не продаётся 14, 30, 60 или 90 дней <b>и сколько денег в нём заморожено.</b></p>
+      <div class="row">
+        <h3>Неясно, сколько магазин зарабатывает</h3>
+        <p>Себестоимость пересчитывается при каждом приёме товара. Выручка и маржа видны по дню, неделе и месяцу, отдельно наличные и безналичные.</p>
       </div>
-      <div class="pitem">
-        <p class="q">Не понимаю, сколько на самом деле зарабатываю</p>
-        <p class="a">Себестоимость считается при каждом приёме товара, поэтому по каждому чеку видна маржа. <b>Выручка, маржа, наличные и карта за день, неделю или месяц — в телефоне.</b></p>
+      <div class="row">
+        <h3>Ходовой товар заканчивается, неходовой лежит</h3>
+        <p>Отчёт «Пора закупить» показывает расход за 30 дней и запас в днях. Отчёт «Залежалый товар» показывает позиции без продаж и сумму замороженных в них денег.</p>
       </div>
-      <div class="pitem">
-        <p class="q">Пропал интернет, и касса встала</p>
-        <p class="a">Открытый чек хранится на самой кассе. Продажи, сделанные без связи, отправятся на сервер, когда связь вернётся. <b>Ни один чек не удаляется молча.</b></p>
+      <div class="row">
+        <h3>Учёт ведётся в тетради</h3>
+        <p>Приход увеличивает остаток, продажа списывает. Инвентаризация проводится сканером, недостача считается в штуках и в деньгах.</p>
       </div>
-      <div class="pitem">
-        <p class="q">Учёт в тетради, а инвентаризация занимает день</p>
-        <p class="a">Приход прибавляет остаток, продажа списывает. Для пересчёта сканируете товар и вводите, сколько его на полке. <b>Касса покажет недостачу по каждой позиции и в деньгах.</b></p>
+      <div class="row">
+        <h3>Пропадает интернет и касса останавливается</h3>
+        <p>Открытый чек хранится на компьютере кассы. Операции, не отправленные на сервер, не удаляются и уходят после восстановления связи.</p>
       </div>
     </div>
   </div>
 </section>
 
-<!-- HOW -->
-<section id="how">
+<section class="block alt" id="how">
   <div class="wrap">
-    <div class="head">
-      <p class="eyebrow">Как это работает</p>
-      <h2>От коробки на складе до цифры в вашем телефоне</h2>
+    <div class="split-head">
+      <p class="label">Как работает</p>
+      <h2>Четыре шага от поставки до отчёта</h2>
     </div>
     <ol class="steps">
-      <li>
-        <h3>Заводите товар</h3>
-        <p>Скан, закупочная цена, и цена продажи посчитается по вашей наценке. Наценку можно задать процентом или примером: «купили за 3, продаём за 5». Весовой товар и выпечку можно завести без штрихкода.</p>
-      </li>
-      <li>
-        <h3>Кассир продаёт</h3>
-        <p>Скан, и товар уже в чеке. Курут взвешивается прямо в чеке. Оплата наличными, картой или вперемешку, сдача считается сама. Покупатель видит свой чек на втором экране.</p>
-      </li>
-      <li>
-        <h3>Смена закрывается</h3>
-        <p>Кассир пересчитывает деньги в ящике. Касса сверяет их с чеками и записывает расхождение в журнал, если оно есть.</p>
-      </li>
-      <li>
-        <h3>Вы всё видите</h3>
-        <p>В телефоне выручка, маржа, остатки, что пора закупить и что лежит без движения. Всё обновляется само, страницу перезагружать не нужно.</p>
-      </li>
+      <li><h3>Приём товара</h3><p>Скан штрихкода и закупочная цена. Цена продажи рассчитывается по заданной наценке. Весовой товар заводится без штрихкода.</p></li>
+      <li><h3>Продажа</h3><p>Товар попадает в чек по скану. Оплата наличными, картой или смешанная, сдача считается автоматически.</p></li>
+      <li><h3>Закрытие смены</h3><p>Кассир вводит сумму в денежном ящике. Система сверяет её с чеками и записывает расхождение.</p></li>
+      <li><h3>Отчётность</h3><p>Владелец видит выручку, маржу, остатки и журнал с телефона. Данные обновляются без перезагрузки страницы.</p></li>
     </ol>
   </div>
 </section>
 
-<!-- FEATURES -->
-<section class="features" id="features">
+<section class="block" id="features">
   <div class="wrap">
-    <div class="head">
-      <p class="eyebrow">Возможности</p>
-      <h2>Всё, что нужно маленькому магазину, и ничего лишнего</h2>
+    <div class="split-head">
+      <p class="label">Возможности</p>
+      <h2>Функциональность</h2>
     </div>
-    <div class="fgrid">
-      <article class="fcard">
-        <header><h3>Продажа</h3><span>касса</span></header>
+    <div class="cols">
+      <div class="col">
+        <h3>Продажа</h3>
         <ul>
-          <li><span><b>Сканер штрихкодов</b>: товар сразу попадает в чек</span></li>
-          <li><span><b>Весовой товар</b>: цена за килограмм, вес вводится в чеке</span></li>
-          <li><span><b>Товар без штрихкода</b>: поиск по названию, для выпечки и развеса</span></li>
-          <li><span><b>Наличные, карта или смешанная оплата</b>, быстрые суммы и расчёт сдачи</span></li>
-          <li><span><b>Экран покупателя</b> на втором мониторе: чек в реальном времени и крупная сдача</span></li>
-          <li><span><b>Возврат и обмен</b> с обязательной причиной, товар возвращается на склад</span></li>
-          <li><span>Горячие клавиши: <b>F2</b> — оплата, <b>Esc</b> — закрыть</span></li>
+          <li><b>Сканер штрихкодов</b>Мгновенное добавление товара в чек</li>
+          <li><b>Весовой товар</b>Цена за килограмм, вес вводится при продаже</li>
+          <li><b>Товар без штрихкода</b>Выбор по названию: выпечка, развес</li>
+          <li><b>Смешанная оплата</b>Наличные и карта в одном чеке</li>
+          <li><b>Экран покупателя</b>Чек и сдача на втором мониторе</li>
+          <li><b>Возврат и обмен</b>С обязательным указанием причины</li>
         </ul>
-      </article>
-      <article class="fcard">
-        <header><h3>Склад</h3><span>товары</span></header>
+      </div>
+      <div class="col">
+        <h3>Склад</h3>
         <ul>
-          <li><span><b>Быстрый завод товаров</b> одним потоком: сохранил и сразу вводишь следующий</span></li>
-          <li><span><b>Приём по скану</b>: остаток растёт, себестоимость пересчитывается сама</span></li>
-          <li><span><b>«Пора закупить»</b>: расход за 30 дней и на сколько хватит остатка</span></li>
-          <li><span><b>«Залежалый товар»</b> и сумма замороженных в нём денег</span></li>
-          <li><span><b>Инвентаризация</b> сканером, недостача в штуках и в деньгах</span></li>
-          <li><span><b>Массовая смена цен</b> по категории, процентом или новым значением</span></li>
-          <li><span><b>Акции</b>: цена со скидкой на товар, можно с лимитом, например «20 шт по акции»</span></li>
+          <li><b>Быстрое заведение каталога</b>Ввод товаров потоком с клавиатуры</li>
+          <li><b>Средняя себестоимость</b>Пересчёт при каждом приёме</li>
+          <li><b>Пора закупить</b>Расход за 30 дней и запас в днях</li>
+          <li><b>Залежалый товар</b>Без продаж 14, 30, 60 или 90 дней</li>
+          <li><b>Инвентаризация</b>Недостача в штуках и в деньгах</li>
+          <li><b>Групповая переоценка</b>По категории, в процентах или суммой</li>
         </ul>
-      </article>
-      <article class="fcard">
-        <header><h3>Контроль</h3><span>владелец</span></header>
+      </div>
+      <div class="col">
+        <h3>Контроль</h3>
         <ul>
-          <li><span><b>Вход по PIN</b> для каждого сотрудника, блокировка одним нажатием</span></li>
-          <li><span><b>Права кассира</b>: без закупочных цен, выручки и чужих смен</span></li>
-          <li><span><b>Смены со сверкой</b>: сколько должно быть и сколько сдано</span></li>
-          <li><span><b>Журнал всех действий</b>: кто, что и когда сделал</span></li>
-          <li><span><b>Скидку ставит только владелец</b>, у кассира нет «свободной» скидки</span></li>
-          <li><span><b>Цена фиксируется сервером</b>, подменить её в чеке нельзя</span></li>
+          <li><b>Вход по PIN-коду</b>Отдельный доступ каждому сотруднику</li>
+          <li><b>Роли владельца и кассира</b>Разные права и разные экраны</li>
+          <li><b>Сверка смен</b>Недостача и излишек фиксируются автоматически</li>
+          <li><b>Акции с лимитом</b>Назначает только владелец, например 20 шт</li>
+          <li><b>Защита цены</b>Сервер сверяет цену в каждом чеке</li>
+          <li><b>Журнал действий</b>Кто, что и когда сделал</li>
         </ul>
-      </article>
-      <article class="fcard">
-        <header><h3>Надёжность</h3><span>данные</span></header>
+      </div>
+      <div class="col">
+        <h3>Надёжность</h3>
         <ul>
-          <li><span><b>Открытый чек хранится на кассе</b> и не пропадает при перезагрузке</span></li>
-          <li><span><b>Касса работает при обрыве сети</b>, операции догоняют сервер позже</span></li>
-          <li><span><b>«Проблемные операции»</b>: не отправленное не удаляется, а ждёт разбора</span></li>
-          <li><span><b>Ежедневная резервная копия</b> базы с проверкой, что её можно восстановить</span></li>
-          <li><span>Проверено на <b>2000 товаров</b>: каталог открывается мгновенно</span></li>
-          <li><span>Дневная и ночная тема экрана по времени суток</span></li>
+          <li><b>Локальное хранение чека</b>Не теряется при перезагрузке</li>
+          <li><b>Работа при обрыве сети</b>Синхронизация после восстановления</li>
+          <li><b>Контроль очереди</b>Неотправленные операции ждут разбора</li>
+          <li><b>Резервные копии</b>Ежедневно, с проверкой восстановления</li>
+          <li><b>Большой каталог</b>Проверено на 2 000 позиций</li>
+          <li><b>Дневная и ночная тема</b>Переключение по времени суток</li>
         </ul>
-      </article>
+      </div>
     </div>
   </div>
 </section>
 
-<!-- JOURNAL -->
-<section class="journal">
+<section class="block alt" id="control">
   <div class="wrap">
-    <div class="text">
-      <p class="eyebrow">Прозрачность</p>
-      <h2>Журнал, который нельзя «подчистить»</h2>
-      <p class="lead">Отмена позиции, возврат, изменение цены, закрытие смены. Всё пишется с именем сотрудника и временем. Расхождения по кассе подсвечены, чтобы вы заметили их первым.</p>
-      <p class="note">Пример записей. Имена и суммы условные.</p>
+    <div class="split-head">
+      <p class="label">Контроль</p>
+      <h2>Прозрачность каждой операции</h2>
+      <p class="sub">Журнал нельзя отредактировать задним числом. Кассир работает только в пределах своих прав.</p>
     </div>
-    <div class="log" role="region" aria-label="Пример журнала действий">
-      <div class="cap"><span>Журнал · сегодня</span><span>Asia/Dushanbe</span></div>
-      <ol>
-        <li><time>21:04</time><span class="who">Алишер</span><span class="what">Закрыл смену №41: ожидалось 2 340.00, сдано 2 328.00, <b>недостача 12.00</b></span></li>
-        <li><time>19:12</time><span class="who">Владелец</span><span class="what">Цена «Молоко 1 л»: 13.00 → 14.00</span></li>
-        <li><time>17:40</time><span class="who">Алишер</span><span class="what">Возврат «Сок яблочный 1 л», причина: брак упаковки</span></li>
-        <li><time>16:03</time><span class="who">Алишер</span><span class="what">Отменил позицию «Шоколад 90 г» в чеке</span></li>
-        <li><time>12:30</time><span class="who">Владелец</span><span class="what">Акция на «Йогурт 250 г»: 9.00 → 7.00, лимит 20 шт</span></li>
-        <li><time>09:01</time><span class="who">Алишер</span><span class="what">Открыл смену №41, размен 300.00</span></li>
-      </ol>
+    <div class="control">
+      <div>
+        <div class="card">
+          <div class="card-head"><b>Журнал действий</b><span>сегодня · Душанбе</span></div>
+          <div class="scroll">
+            <table class="t log">
+              <thead><tr><th>Время</th><th>Сотрудник</th><th>Событие</th></tr></thead>
+              <tbody>
+                <tr class="flag"><td class="m">21:04</td><td class="who">Кассир 1</td><td>Смена №41 закрыта: ожидалось 2 340.00, сдано 2 328.00, <b>недостача 12.00</b></td></tr>
+                <tr><td class="m">19:12</td><td class="who">Владелец</td><td>Цена «Молоко 1 л»: 13.00 → 14.00</td></tr>
+                <tr><td class="m">17:40</td><td class="who">Кассир 1</td><td>Возврат «Сок яблочный 1 л», причина: повреждена упаковка</td></tr>
+                <tr><td class="m">16:03</td><td class="who">Кассир 1</td><td>Отмена позиции «Шоколад 90 г»</td></tr>
+                <tr><td class="m">12:30</td><td class="who">Владелец</td><td>Акция «Йогурт 250 г»: 9.00 → 7.00, лимит 20 шт</td></tr>
+                <tr><td class="m">09:01</td><td class="who">Кассир 1</td><td>Смена №41 открыта, размен 300.00</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <p class="fine">Пример. Данные условные.</p>
+      </div>
+      <div class="card">
+        <div class="card-head"><b>Права доступа</b><span>2 роли</span></div>
+        <div class="scroll">
+          <table class="t roles">
+            <thead><tr><th>Действие</th><th class="c">Владелец</th><th class="c">Кассир</th></tr></thead>
+            <tbody>
+              <tr><td>Продажа и приём товара</td><td class="c yes">да</td><td class="c yes">да</td></tr>
+              <tr><td>Открытие и закрытие смены</td><td class="c yes">да</td><td class="c yes">да</td></tr>
+              <tr><td>Закупочные цены и маржа</td><td class="c yes">да</td><td class="c no">нет</td></tr>
+              <tr><td>Выручка и журнал</td><td class="c yes">да</td><td class="c no">нет</td></tr>
+              <tr><td>Изменение цен и скидки</td><td class="c yes">да</td><td class="c no">нет</td></tr>
+              <tr><td>Управление сотрудниками</td><td class="c yes">да</td><td class="c no">нет</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   </div>
 </section>
 
-<!-- ROLES -->
-<section>
+<section class="block">
   <div class="wrap">
-    <div class="head">
-      <p class="eyebrow">Роли</p>
-      <h2>Кассир видит только то, что нужно для работы</h2>
+    <div class="split-head">
+      <p class="label">Оборудование</p>
+      <h2>Специальная техника не нужна</h2>
+      <p class="sub">Система работает в браузере. Установка приложений на телефон не требуется.</p>
     </div>
-    <div class="tablebox">
-      <table>
-        <thead><tr><th>Что можно</th><th class="c">Владелец</th><th class="c">Кассир</th></tr></thead>
-        <tbody>
-          <tr><td>Продавать, принимать товар</td><td class="y">да</td><td class="y">да</td></tr>
-          <tr><td>Открывать и закрывать свою смену</td><td class="y">да</td><td class="y">да</td></tr>
-          <tr><td>Видеть закупочные цены и маржу</td><td class="y">да</td><td class="n">нет</td></tr>
-          <tr><td>Видеть выручку, журнал, чужие смены</td><td class="y">да</td><td class="n">нет</td></tr>
-          <tr><td>Менять цены, ставить скидки</td><td class="y">да</td><td class="n">нет</td></tr>
-          <tr><td>Заводить и блокировать сотрудников</td><td class="y">да</td><td class="n">нет</td></tr>
-        </tbody>
-      </table>
+    <div class="req">
+      <div><b>Ноутбук или ПК</b><span>Рабочее место кассира</span></div>
+      <div><b>Сканер штрихкодов</b><span>Любой USB-сканер</span></div>
+      <div><b>Смартфон владельца</b><span>Доступ к кабинету через браузер</span></div>
+      <div class="opt"><b>Второй монитор</b><span>Экран для покупателя</span></div>
     </div>
   </div>
 </section>
 
-<!-- SETUP -->
-<section>
-  <div class="wrap">
-    <div class="head">
-      <p class="eyebrow">Что понадобится</p>
-      <h2>Обычно всё уже есть в магазине</h2>
-      <p class="lead">Покупать специальное оборудование и ставить приложения не нужно. Касса открывается в браузере.</p>
+<section class="block" id="faq">
+  <div class="wrap split">
+    <div class="split-head">
+      <p class="label">Вопросы</p>
+      <h2>Частые вопросы</h2>
     </div>
-    <div class="need">
-      <div><b>Ноутбук или ПК</b><span>на нём работает касса</span></div>
-      <div><b>Сканер штрихкодов</b><span>любой USB-сканер</span></div>
-      <div><b>Ваш телефон</b><span>кабинет владельца в браузере</span></div>
-      <div class="opt"><b>Второй экран</b><span>по желанию, для покупателя</span></div>
-    </div>
-  </div>
-</section>
-
-<!-- FAQ -->
-<section class="faq" id="faq">
-  <div class="wrap">
-    <div class="head">
-      <p class="eyebrow">Вопросы</p>
-      <h2>Что обычно спрашивают</h2>
-    </div>
-    <div class="list">
+    <div class="faq">
       <details>
-        <summary>Касса пробивает фискальные чеки?</summary>
-        <p>Нет. Это внутренний учёт для владельца: продажи, склад, деньги и контроль сотрудников. Если в магазине нужен фискальный аппарат, он работает рядом, как и раньше.</p>
+        <summary>Система печатает фискальные чеки?</summary>
+        <p>Нет. Это система внутреннего учёта и контроля. Если магазину нужен фискальный аппарат, он продолжает работать параллельно.</p>
       </details>
       <details>
-        <summary>Что будет, если пропадёт интернет?</summary>
-        <p>Касса продолжит работать. Открытый чек хранится на самом компьютере, а операции уйдут на сервер, когда связь вернётся. В кабинете владельца данные обновятся после восстановления связи.</p>
+        <summary>Что происходит при отключении интернета?</summary>
+        <p>Касса продолжает работать. Открытый чек хранится на компьютере, операции отправляются на сервер после восстановления связи. Кабинет владельца обновится в тот же момент.</p>
       </details>
       <details>
-        <summary>У меня 2000 товаров. Долго их заводить?</summary>
-        <p>Для этого есть экран быстрого завода: скан, закупочная цена, Enter, и сразу следующий товар. Категория и наценка запоминаются, потому что товар обычно приходит партиями. На старте поможем и подскажем, с чего начать.</p>
+        <summary>Сколько времени занимает запуск?</summary>
+        <p>Основное время уходит на заведение каталога. Для этого есть отдельный экран потокового ввода: категория и наценка запоминаются между позициями, товар вводится с клавиатуры без переходов между экранами. При запуске мы помогаем владельцу и обучаем кассира.</p>
       </details>
       <details>
-        <summary>Как быть с курутом, развесом и лепёшками без штрихкода?</summary>
-        <p>Такой товар заводится без штрихкода и выбирается на кассе по названию. Для весового указывается цена за килограмм, а кассир вводит вес, и сумма считается сама.</p>
+        <summary>Как учитывается весовой товар?</summary>
+        <p>Для весового товара задаётся цена за килограмм, остаток хранится в килограммах. Кассир выбирает товар по названию и вводит вес, сумма рассчитывается автоматически.</p>
       </details>
       <details>
-        <summary>Кассир сможет сделать скидку «своим»?</summary>
-        <p>Нет. Скидку назначает только владелец, на конкретный товар и при желании с лимитом количества. Кассир просто продаёт, а акционная цена применяется сама.</p>
+        <summary>Может ли кассир сделать скидку?</summary>
+        <p>Нет. Скидки назначает только владелец на конкретный товар, при необходимости с ограничением по количеству. На кассе акционная цена применяется автоматически.</p>
       </details>
       <details>
-        <summary>Если у меня несколько магазинов?</summary>
-        <p>Сейчас один магазин — одна касса и один кабинет. Для каждой точки подключается отдельная касса.</p>
+        <summary>Подходит ли система для сети магазинов?</summary>
+        <p>Сейчас одна установка обслуживает один магазин. Для каждой точки подключается отдельная касса со своим кабинетом.</p>
       </details>
       <details>
-        <summary>Где хранятся мои данные?</summary>
-        <p>На кассе и на сервере. Каждый день автоматически делается резервная копия базы, и мы проверяем, что её можно восстановить.</p>
+        <summary>Где хранятся данные?</summary>
+        <p>На компьютере кассы и на сервере. Резервная копия базы создаётся ежедневно, её восстановление проверяется.</p>
       </details>
     </div>
   </div>
 </section>
 
-<!-- CTA -->
 <section class="cta" id="contact">
   <div class="wrap">
-    <div class="box">
-      <div>
-        <h2>Мы сделали эту кассу для своего магазина и работаем на ней каждый день</h2>
-        <p>Поэтому знаем, что нужно владельцу маленького магазина. Напишите или позвоните: покажем кассу вживую, поможем завести товары и обучим кассира.</p>
+    <div>
+      <p class="label">Подключение</p>
+      <h2>Система работает в нашем собственном магазине каждый день</h2>
+      <p>Мы разрабатывали её под реальные задачи владельца небольшого магазина. Свяжитесь с нами, чтобы увидеть систему в работе и обсудить подключение.</p>
+      <div class="steps-cta">
+        <div><i>01</i><span>Демонстрация системы в работающем магазине</span></div>
+        <div><i>02</i><span>Установка и заведение каталога вместе с вами</span></div>
+        <div><i>03</i><span>Обучение кассиров и сопровождение на старте</span></div>
       </div>
-      <div class="contacts">
-        <div class="contact"><small>Телефон</small><span>+992 00 000 00 00</span></div>
-        <div class="contact"><small>Telegram / WhatsApp</small><span>@kassa_shop</span></div>
-      </div>
+    </div>
+    <div class="contacts">
+      <div class="contact"><small>Телефон</small><span>+992 00 000 00 00</span></div>
+      <div class="contact"><small>Telegram</small><span>@kassa_shop</span></div>
+      <div class="contact"><small>WhatsApp</small><span>+992 00 000 00 00</span></div>
     </div>
   </div>
 </section>
@@ -638,43 +644,10 @@ footer .wrap { display: flex; flex-wrap: wrap; justify-content: space-between; g
 
 <footer>
   <div class="wrap">
-    <span>Касса — учёт для магазина у дома</span>
-    <span>Душанбе · 2026</span>
+    <span>Касса — учёт и контроль для небольших магазинов</span>
+    <span>Душанбе, 2026</span>
   </div>
 </footer>
 
-<script>
-(function () {
-  // Живая лента в макете телефона: иллюстрирует, что кабинет обновляется сам.
-  var feed = document.getElementById('feed');
-  if (!feed) return;
-  if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-  var rev = document.getElementById('rev'), mar = document.getElementById('mar'), chk = document.getElementById('chk');
-  var r = 4812, m = 1127, c = 96, h = 14, min = 32;
-  var items = [
-    ['Чек на 12.50 · Алишер', 12.5, 3],
-    ['Чек на 38.00 · Алишер', 38, 9],
-    ['Чек на 6.00 · Алишер', 6, 1.5],
-    ['Чек на 21.40 · Алишер', 21.4, 5]
-  ];
-  var i = 0;
-  function fmt(n) { return Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' '); }
-  setInterval(function () {
-    var it = items[i++ % items.length];
-    min += 3 + (i % 4); if (min >= 60) { min -= 60; h++; }
-    r += it[1]; m += it[2]; c += 1;
-    rev.textContent = fmt(r); mar.textContent = fmt(m); chk.textContent = c;
-    var li = document.createElement('li');
-    li.className = 'new';
-    var t = document.createElement('time');
-    t.textContent = h + ':' + (min < 10 ? '0' : '') + min;
-    var s = document.createElement('span');
-    s.textContent = it[0];
-    li.appendChild(t); li.appendChild(s);
-    feed.insertBefore(li, feed.firstChild);
-    while (feed.children.length > 4) feed.removeChild(feed.lastChild);
-  }, 3500);
-})();
-</script>
 </body>
 </html>
