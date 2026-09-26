@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import NumberInput from '../components/NumberInput';
 import { useNavigate } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, type CartLine } from '../db';
@@ -421,28 +422,30 @@ export default function SalePage() {
 // Размен нужен для сверки кассы в конце дня (п.4 ТЗ) — без него непонятно,
 // сколько денег должно остаться.
 function StartShift({ onDone }: { onDone: (msg: string) => void }) {
-  const [amount, setAmount] = useState('');
-  const [expected, setExpected] = useState<number | null>(null);
+  const [cash, setCash] = useState('');
+  const [wallet, setWallet] = useState('');
+  const [expected, setExpected] = useState<{ cash: number; wallet: number } | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  // Приём кассы: сколько должно остаться от прошлой смены. Предзаполняем —
-  // кассир пересчитывает и подтверждает; расхождение запишется на него.
+  // Приём кассы: сколько должно остаться от прошлой смены — и наличными,
+  // и на кошельках (безнал). Кассир пересчитывает, расхождение запишется на него.
   useEffect(() => {
     api
       .expectedOpening()
       .then((r) => {
-        setExpected(r.expected);
-        setAmount(r.expected > 0 ? String(r.expected) : '');
+        setExpected(r);
+        setCash(r.cash > 0 ? String(r.cash) : '');
+        setWallet(r.wallet > 0 ? String(r.wallet) : '');
       })
-      .catch(() => setExpected(0));
+      .catch(() => setExpected({ cash: 0, wallet: 0 }));
   }, []);
 
-  async function start(opening: number) {
+  async function start() {
     setBusy(true);
     setErr(null);
     try {
-      await openShift(opening);
+      await openShift(Number(cash) || 0, Number(wallet) || 0);
       onDone('Касса принята — можно продавать');
     } catch (e: any) {
       setErr(e.body?.message || e.message || 'Не удалось открыть смену');
@@ -451,38 +454,45 @@ function StartShift({ onDone }: { onDone: (msg: string) => void }) {
     }
   }
 
-  const entered = Number(amount) || 0;
-  const mismatch = expected !== null && expected > 0 && entered !== expected;
+  const cashMis = !!expected && expected.cash > 0 && (Number(cash) || 0) !== expected.cash;
+  const walMis = !!expected && expected.wallet > 0 && (Number(wallet) || 0) !== expected.wallet;
 
   return (
     <div className="page">
       <h1>Приём кассы</h1>
       <div className="card start-shift">
-        {expected !== null && expected > 0 ? (
+        {expected && (expected.cash > 0 || expected.wallet > 0) ? (
           <div className="warn">
-            От прошлой смены в кассе должно быть <b>{expected.toFixed(2)}</b>.
-            Пересчитайте деньги и подтвердите сумму.
+            От прошлой смены должно остаться: наличными <b>{expected.cash.toFixed(2)}</b>,
+            на кошельках <b>{expected.wallet.toFixed(2)}</b>. Пересчитайте и подтвердите.
           </div>
         ) : (
-          <p className="hint">Пересчитайте деньги в кассе (размен) и введите сумму.</p>
+          <p className="hint">Введите, сколько сейчас в кассе: наличными и на кошельках (безнал).</p>
         )}
 
         <label className="field">
-          <span>Сейчас в кассе (пересчитано)</span>
-          <div className="keypad-value">{amount || '0'}</div>
+          <span>Наличные в кассе</span>
+          <NumberInput value={cash} onValue={setCash} autoFocus />
         </label>
-
-        <Keypad value={amount} onChange={setAmount} allowDecimal />
-
-        {mismatch && (
+        {cashMis && (
           <div className="change change--neg" style={{ textAlign: 'left' }}>
-            Не сходится с остатком прошлой смены ({expected!.toFixed(2)}). Расхождение{' '}
-            {(entered - expected!).toFixed(2)} запишется на вас.
+            Наличные не сходятся с прошлой сменой ({expected!.cash.toFixed(2)}) — расхождение запишется на вас.
           </div>
         )}
+
+        <label className="field">
+          <span>Безнал — на кошельках</span>
+          <NumberInput value={wallet} onValue={setWallet} />
+        </label>
+        {walMis && (
+          <div className="change change--neg" style={{ textAlign: 'left' }}>
+            Безнал не сходится с прошлой сменой ({expected!.wallet.toFixed(2)}) — расхождение запишется на вас.
+          </div>
+        )}
+
         {err && <div className="change change--neg">{err}</div>}
 
-        <button className="btn btn--primary btn--big" disabled={busy} onClick={() => start(entered)}>
+        <button className="btn btn--primary btn--big" disabled={busy} onClick={start}>
           Принять кассу и начать
         </button>
       </div>

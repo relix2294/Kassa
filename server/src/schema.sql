@@ -166,6 +166,14 @@ CREATE TABLE IF NOT EXISTS shifts (
 -- Если размен на открытии не совпал — расхождение при приёме, видно владельцу.
 ALTER TABLE shifts ADD COLUMN IF NOT EXISTS opening_expected numeric(12,2);
 
+-- Безнал/кошельки — вторая подотчётная касса (баланс кошельков), тоже идёт по
+-- цепочке приёма-сдачи, как наличные.
+ALTER TABLE shifts ADD COLUMN IF NOT EXISTS opening_wallet numeric(12,2) NOT NULL DEFAULT 0;
+ALTER TABLE shifts ADD COLUMN IF NOT EXISTS opening_wallet_expected numeric(12,2);
+ALTER TABLE shifts ADD COLUMN IF NOT EXISTS expected_wallet numeric(12,2);
+ALTER TABLE shifts ADD COLUMN IF NOT EXISTS counted_wallet numeric(12,2);
+ALTER TABLE shifts ADD COLUMN IF NOT EXISTS wallet_difference numeric(12,2);
+
 -- Изъятие наличных из кассы (инкассация владельцем). Уменьшает ожидаемое.
 CREATE TABLE IF NOT EXISTS cash_withdrawals (
   id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -176,6 +184,8 @@ CREATE TABLE IF NOT EXISTS cash_withdrawals (
   created_at  timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_cash_wd_shift ON cash_withdrawals(shift_id);
+-- Изъять можно и наличные, и безнал (перевод с кошелька).
+ALTER TABLE cash_withdrawals ADD COLUMN IF NOT EXISTS kind text NOT NULL DEFAULT 'cash';
 
 CREATE INDEX IF NOT EXISTS idx_shifts_user ON shifts(user_id);
 CREATE INDEX IF NOT EXISTS idx_shifts_opened ON shifts(opened_at);

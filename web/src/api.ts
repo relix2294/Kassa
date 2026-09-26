@@ -77,17 +77,18 @@ export const api = {
       username: string | null; full_name: string | null;
       items: { name: string; qty: number; line_total: number }[];
     }[]>(`/returns?limit=${limit}`),
-  currentShift: () => req<{ shift: any | null; expected?: number; stats?: any }>('/shifts/current'),
-  expectedOpening: () => req<{ expected: number }>('/shifts/expected-opening'),
-  openShift: (opening_cash: number) =>
-    req<{ shift: any; expected_opening?: number; handover_diff?: number }>('/shifts/open', {
-      method: 'POST',
-      body: JSON.stringify({ opening_cash }),
-    }),
-  withdrawCash: (amount: number, note?: string) =>
-    req<{ ok: boolean; expected: number }>('/shifts/withdraw', { method: 'POST', body: JSON.stringify({ amount, note }) }),
-  closeShift: (counted_cash: number, user_id?: string) =>
-    req<{ shift: any }>('/shifts/close', { method: 'POST', body: JSON.stringify({ counted_cash, user_id }) }),
+  currentShift: () =>
+    req<{ shift: any | null; expected_cash?: number; expected_wallet?: number; stats?: any }>('/shifts/current'),
+  expectedOpening: () => req<{ cash: number; wallet: number }>('/shifts/expected-opening'),
+  openShift: (opening_cash: number, opening_wallet: number) =>
+    req<{ shift: any; expected?: { cash: number; wallet: number }; handover?: { cash: number; wallet: number } }>(
+      '/shifts/open',
+      { method: 'POST', body: JSON.stringify({ opening_cash, opening_wallet }) },
+    ),
+  withdrawCash: (amount: number, kind: 'cash' | 'wallet', note?: string) =>
+    req<{ ok: boolean }>('/shifts/withdraw', { method: 'POST', body: JSON.stringify({ amount, kind, note }) }),
+  closeShift: (counted_cash: number, counted_wallet: number, user_id?: string) =>
+    req<{ shift: any }>('/shifts/close', { method: 'POST', body: JSON.stringify({ counted_cash, counted_wallet, user_id }) }),
   openShifts: () => req<any[]>('/shifts/open'),
   listShifts: (limit = 100) => req<any[]>(`/shifts?limit=${limit}`),
   summary: (period: string) =>

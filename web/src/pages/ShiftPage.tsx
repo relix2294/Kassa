@@ -1,69 +1,62 @@
 import { useEffect, useState } from 'react';
+import NumberInput from '../components/NumberInput';
 import { api } from '../api';
 import { useShift, openShift, closeShift, refreshShift } from '../shift';
 import { useCurrentUser } from '../session';
-import Keypad from '../components/Keypad';
+
+type Stats = { expectedCash: number; expectedWallet: number; stats: any } | null;
 
 export default function ShiftPage() {
   const user = useCurrentUser();
   const { shift } = useShift();
-  const [stats, setStats] = useState<{ expected: number; stats: any } | null>(null);
+  const [stats, setStats] = useState<Stats>(null);
   const [mode, setMode] = useState<'view' | 'open' | 'close'>('view');
-  const [amount, setAmount] = useState('');
+  const [cashIn, setCashIn] = useState('');
+  const [walletIn, setWalletIn] = useState('');
   const [closed, setClosed] = useState<any | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [withdrawOpen, setWithdrawOpen] = useState(false);
 
-  // Промежуточный расчёт по открытой смене.
   async function loadStats() {
     try {
       const r = await api.currentShift();
-      if (r.shift) setStats({ expected: r.expected!, stats: r.stats });
+      if (r.shift) setStats({ expectedCash: r.expected_cash ?? 0, expectedWallet: r.expected_wallet ?? 0, stats: r.stats });
       else setStats(null);
     } catch {
       /* ignore */
     }
   }
+  useEffect(() => { refreshShift(); }, []);
+  useEffect(() => { if (shift) loadStats(); }, [shift]);
+  // При открытии подставляем остаток от прошлой смены (обе кассы).
   useEffect(() => {
-    refreshShift();
-  }, []);
-  useEffect(() => {
-    if (shift) loadStats();
-  }, [shift]);
-  // При открытии смены подставляем остаток от прошлой (деньги в кассе не менялись).
-  useEffect(() => {
-    if (mode === 'open') api.expectedOpening().then((r) => setAmount(r.expected > 0 ? String(r.expected) : '')).catch(() => {});
+    if (mode === 'open') {
+      api.expectedOpening().then((r) => {
+        setCashIn(r.cash > 0 ? String(r.cash) : '');
+        setWalletIn(r.wallet > 0 ? String(r.wallet) : '');
+      }).catch(() => {});
+    }
   }, [mode]);
 
   async function doOpen() {
-    setBusy(true);
-    setErr(null);
+    setBusy(true); setErr(null);
     try {
-      await openShift(Number(amount) || 0);
-      setMode('view');
-      setAmount('');
+      await openShift(Number(cashIn) || 0, Number(walletIn) || 0);
+      setMode('view'); setCashIn(''); setWalletIn('');
     } catch (e: any) {
-      // Раньше ошибка гасилась молча: кассир жал кнопку, и ничего не происходило.
       setErr(e?.body?.message || e?.message || 'Не удалось открыть смену');
-    } finally {
-      setBusy(false);
-    }
+    } finally { setBusy(false); }
   }
 
   async function doClose() {
-    setBusy(true);
-    setErr(null);
+    setBusy(true); setErr(null);
     try {
-      const c = await closeShift(Number(amount) || 0);
-      setClosed(c);
-      setMode('view');
-      setAmount('');
+      const c = await closeShift(Number(cashIn) || 0, Number(walletIn) || 0);
+      setClosed(c); setMode('view'); setCashIn(''); setWalletIn('');
     } catch (e: any) {
-      setErr(e?.message || 'Не удалось закрыть смену');
-    } finally {
-      setBusy(false);
-    }
+      setErr(e?.body?.message || e?.message || 'Не удалось закрыть смену');
+    } finally { setBusy(false); }
   }
 
   return (
@@ -76,18 +69,10 @@ export default function ShiftPage() {
       {closed && (
         <div className="card">
           <div className="product-name">Смена закрыта</div>
-          <Row label="Ожидалось в кассе" value={closed.expected_cash} />
-          <Row label="Посчитано" value={closed.counted_cash} />
-          <div className={`shift-diff ${closed.difference < 0 ? 'shift-diff--neg' : closed.difference > 0 ? 'shift-diff--pos' : ''}`}>
-            Расхождение: <b>{closed.difference > 0 ? '+' : ''}{closed.difference}</b>
-            {closed.difference < 0 && ' (недостача)'}
-            {closed.difference > 0 && ' (излишек)'}
-            {closed.difference === 0 && ' — сходится ✓'}
-          </div>
-          {closed.difference !== 0 && (
-            <p className="hint">
-              Расхождение записано в журнал — владелец увидит его в кабинете и в списке смен.
-            </p>
+          <DiffBlock label="Наличные" expected={closed.expected_cash} counted={closed.counted_cash} diff={closed.difference} />
+          <DiffBlock label="Безнал (кошельки)" expected={closed.expected_wallet} counted={closed.counted_wallet} diff={closed.wallet_difference} />
+          {(Number(closed.difference) !== 0 || Number(closed.wallet_difference) !== 0) && (
+            <p className="hint">Расхождение записано в журнал — владелец увидит его в кабинете и в списке смен.</p>
           )}
           <button className="btn" onClick={() => setClosed(null)}>ОК</button>
         </div>
@@ -96,25 +81,20 @@ export default function ShiftPage() {
       {/* Нет открытой смены */}
       {!shift && mode === 'view' && !closed && (
         <div className="card">
-          <p className="hint">Смена закрыта. Откройте смену, чтобы начать продавать.</p>
-          <button className="btn btn--primary btn--big" onClick={() => setMode('open')}>
-            Открыть смену
-          </button>
+          <p className="hint">Смена закрыта. Примите кассу, чтобы начать продавать.</p>
+          <button className="btn btn--primary btn--big" onClick={() => setMode('open')}>Принять кассу</button>
         </div>
       )}
 
-      {/* Открытие смены (приём кассы) */}
+      {/* Приём кассы */}
       {mode === 'open' && (
         <div className="card">
-          <p className="hint">Пересчитайте деньги в кассе и подтвердите. Должно совпасть с остатком прошлой смены.</p>
-          <label className="field">
-            <span>Сейчас в кассе (пересчитано)</span>
-            <div className="keypad-value">{amount || '0'}</div>
-          </label>
-          <Keypad value={amount} onChange={setAmount} allowDecimal />
+          <p className="hint">Пересчитайте деньги — наличные и на кошельках. Должно совпасть с остатком прошлой смены.</p>
+          <label className="field"><span>Наличные в кассе</span><NumberInput value={cashIn} onValue={setCashIn} autoFocus /></label>
+          <label className="field"><span>Безнал — на кошельках</span><NumberInput value={walletIn} onValue={setWalletIn} /></label>
           <div className="row">
-            <button className="btn" onClick={() => { setMode('view'); setAmount(''); }} disabled={busy}>Отмена</button>
-            <button className="btn btn--primary" onClick={doOpen} disabled={busy}>Открыть</button>
+            <button className="btn" onClick={() => { setMode('view'); setCashIn(''); setWalletIn(''); }} disabled={busy}>Отмена</button>
+            <button className="btn btn--primary" onClick={doOpen} disabled={busy}>Принять</button>
           </div>
         </div>
       )}
@@ -124,47 +104,43 @@ export default function ShiftPage() {
         <div className="card">
           <div className="product-name">Смена открыта</div>
           <div className="muted">с {new Date(shift.opened_at).toLocaleString('ru-RU')}</div>
-          <Row label="Размен" value={shift.opening_cash} />
+          <Row label="Размен наличными" value={shift.opening_cash} />
+          <Row label="Размен безнал" value={shift.opening_wallet} />
           {stats && (
             <>
               <Row label="Продажи наличными" value={stats.stats.cash_sales} />
-              <Row label="Продажи картой" value={stats.stats.card_sales} />
+              <Row label="Продажи безналом" value={stats.stats.card_sales} />
               <Row label="Возвраты" value={stats.stats.refunds} />
-              {Number(stats.stats.withdrawn) > 0 && <Row label="Изъято из кассы" value={stats.stats.withdrawn} />}
-              <div className="shift-expected">
-                Ожидается в кассе: <b>{stats.expected}</b>
-              </div>
+              {Number(stats.stats.withdrawn) > 0 && <Row label="Изъято наличных" value={stats.stats.withdrawn} />}
+              {Number(stats.stats.wallet_withdrawn) > 0 && <Row label="Изъято безнал" value={stats.stats.wallet_withdrawn} />}
+              <div className="shift-expected">Ожидается наличными: <b>{stats.expectedCash}</b></div>
+              <div className="shift-expected">Ожидается на кошельках: <b>{stats.expectedWallet}</b></div>
             </>
           )}
           {user?.role === 'owner' && (
-            <button className="btn btn--ghost" onClick={() => setWithdrawOpen(true)}>
-              Изъять наличные
-            </button>
+            <button className="btn btn--ghost" onClick={() => setWithdrawOpen(true)}>Изъять из кассы</button>
           )}
-          <button className="btn btn--primary btn--big" onClick={() => setMode('close')}>
-            Закрыть смену
-          </button>
+          <button className="btn btn--primary btn--big" onClick={() => setMode('close')}>Закрыть смену</button>
         </div>
       )}
 
-      {withdrawOpen && (
+      {withdrawOpen && stats && (
         <WithdrawModal
-          max={stats?.expected ?? 0}
+          maxCash={stats.expectedCash}
+          maxWallet={stats.expectedWallet}
           onClose={() => setWithdrawOpen(false)}
           onDone={() => { setWithdrawOpen(false); loadStats(); }}
         />
       )}
 
-      {/* Закрытие смены */}
+      {/* Сдача кассы */}
       {mode === 'close' && (
         <div className="card">
-          <label className="field">
-            <span>Сколько денег в кассе фактически</span>
-            <div className="keypad-value">{amount || '0'}</div>
-          </label>
-          <Keypad value={amount} onChange={setAmount} allowDecimal />
+          <p className="hint">Пересчитайте и введите, сколько сейчас фактически: наличными и на кошельках.</p>
+          <label className="field"><span>Наличные в кассе</span><NumberInput value={cashIn} onValue={setCashIn} autoFocus /></label>
+          <label className="field"><span>Безнал — на кошельках</span><NumberInput value={walletIn} onValue={setWalletIn} /></label>
           <div className="row">
-            <button className="btn" onClick={() => { setMode('view'); setAmount(''); }} disabled={busy}>Отмена</button>
+            <button className="btn" onClick={() => { setMode('view'); setCashIn(''); setWalletIn(''); }} disabled={busy}>Отмена</button>
             <button className="btn btn--primary" onClick={doClose} disabled={busy}>Закрыть смену</button>
           </div>
         </div>
@@ -177,19 +153,37 @@ export default function ShiftPage() {
   );
 }
 
-function WithdrawModal({ max, onClose, onDone }: { max: number; onClose: () => void; onDone: () => void }) {
+function DiffBlock({ label, expected, counted, diff }: { label: string; expected: number; counted: number; diff: number }) {
+  const d = Number(diff);
+  return (
+    <div className="mb">
+      <Row label={`${label}: ожидалось`} value={expected} />
+      <Row label={`${label}: посчитано`} value={counted} />
+      <div className={`shift-diff ${d < 0 ? 'shift-diff--neg' : d > 0 ? 'shift-diff--pos' : ''}`}>
+        Расхождение: <b>{d > 0 ? '+' : ''}{d}</b>
+        {d < 0 && ' (недостача)'}{d > 0 && ' (излишек)'}{d === 0 && ' ✓'}
+      </div>
+    </div>
+  );
+}
+
+function WithdrawModal({ maxCash, maxWallet, onClose, onDone }: {
+  maxCash: number; maxWallet: number; onClose: () => void; onDone: () => void;
+}) {
+  const [kind, setKind] = useState<'cash' | 'wallet'>('cash');
   const [amount, setAmount] = useState('');
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const max = kind === 'wallet' ? maxWallet : maxCash;
 
   async function save() {
     const a = Number(amount) || 0;
     if (!(a > 0)) { setErr('Укажите сумму'); return; }
-    if (a > max) { setErr(`В кассе только ${max.toFixed(2)}`); return; }
+    if (a > max) { setErr(`Доступно только ${max.toFixed(2)}`); return; }
     setBusy(true); setErr(null);
     try {
-      await api.withdrawCash(a, note.trim() || undefined);
+      await api.withdrawCash(a, kind, note.trim() || undefined);
       onDone();
     } catch (e: any) {
       setErr(e?.body?.message || e?.message || 'Не удалось изъять');
@@ -199,10 +193,13 @@ function WithdrawModal({ max, onClose, onDone }: { max: number; onClose: () => v
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
-        <h2>Изъятие наличных</h2>
-        <p className="muted">В кассе сейчас: <b>{max.toFixed(2)}</b>. Изъятое уменьшит ожидаемую сумму.</p>
-        <label className="field"><span>Сколько изъять</span><div className="keypad-value">{amount || '0'}</div></label>
-        <Keypad value={amount} onChange={setAmount} allowDecimal />
+        <h2>Изъятие из кассы</h2>
+        <div className="seg">
+          <button className={`seg__btn ${kind === 'cash' ? 'seg__btn--on' : ''}`} onClick={() => setKind('cash')}>Наличные</button>
+          <button className={`seg__btn ${kind === 'wallet' ? 'seg__btn--on' : ''}`} onClick={() => setKind('wallet')}>Безнал</button>
+        </div>
+        <p className="muted">Доступно {kind === 'wallet' ? 'на кошельках' : 'наличными'}: <b>{max.toFixed(2)}</b>.</p>
+        <label className="field"><span>Сколько изъять</span><NumberInput value={amount} onValue={setAmount} autoFocus /></label>
         <label className="field"><span>Причина</span>
           <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="напр. инкассация" />
         </label>
@@ -225,12 +222,12 @@ function Row({ label, value }: { label: string; value: number }) {
   );
 }
 
-// Кассир мог уйти домой, не закрыв смену. Владелец закрывает за него,
-// и в журнале видно, что закрыл именно владелец (п.26 аудита).
+// Владелец закрывает смену за ушедшего кассира (п.26 аудита).
 function OpenShifts({ meId, onDone }: { meId: string; onDone: () => void }) {
   const [rows, setRows] = useState<any[]>([]);
   const [closing, setClosing] = useState<any | null>(null);
-  const [amount, setAmount] = useState('');
+  const [cash, setCash] = useState('');
+  const [wallet, setWallet] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -249,7 +246,7 @@ function OpenShifts({ meId, onDone }: { meId: string; onDone: () => void }) {
               <div className="list-item__name">{s.full_name || s.username}</div>
               <div className="muted">открыта {new Date(s.opened_at).toLocaleString('ru-RU')}</div>
             </div>
-            <button className="btn btn--ghost" onClick={() => { setClosing(s); setAmount(''); setErr(null); }}>
+            <button className="btn btn--ghost" onClick={() => { setClosing(s); setCash(''); setWallet(''); setErr(null); }}>
               Закрыть
             </button>
           </div>
@@ -260,11 +257,8 @@ function OpenShifts({ meId, onDone }: { meId: string; onDone: () => void }) {
         <div className="modal-backdrop" onClick={() => setClosing(null)}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
             <h2>Закрыть смену: {closing.full_name || closing.username}</h2>
-            <label className="field">
-              <span>Сколько денег в кассе фактически</span>
-              <div className="keypad-value">{amount || '0'}</div>
-            </label>
-            <Keypad value={amount} onChange={setAmount} allowDecimal />
+            <label className="field"><span>Наличные в кассе</span><NumberInput value={cash} onValue={setCash} autoFocus /></label>
+            <label className="field"><span>Безнал — на кошельках</span><NumberInput value={wallet} onValue={setWallet} /></label>
             {err && <div className="change change--neg">{err}</div>}
             <div className="row">
               <button className="btn" onClick={() => setClosing(null)} disabled={busy}>Отмена</button>
@@ -272,18 +266,13 @@ function OpenShifts({ meId, onDone }: { meId: string; onDone: () => void }) {
                 className="btn btn--primary"
                 disabled={busy}
                 onClick={async () => {
-                  setBusy(true);
-                  setErr(null);
+                  setBusy(true); setErr(null);
                   try {
-                    await closeShift(Number(amount) || 0, closing.user_id);
-                    setClosing(null);
-                    load();
-                    onDone();
+                    await closeShift(Number(cash) || 0, Number(wallet) || 0, closing.user_id);
+                    setClosing(null); load(); onDone();
                   } catch (e: any) {
-                    setErr(e.message || 'Не удалось закрыть смену');
-                  } finally {
-                    setBusy(false);
-                  }
+                    setErr(e?.body?.message || e?.message || 'Не удалось закрыть смену');
+                  } finally { setBusy(false); }
                 }}
               >
                 Закрыть смену
@@ -307,17 +296,24 @@ function OwnerShifts() {
     <div className="shift-history">
       <h2>Закрытые смены</h2>
       <div className="list">
-        {closed.map((s) => (
-          <div key={s.id} className="list-item list-item--static">
-            <div className="list-item__main">
-              <div className="list-item__name">{s.full_name || s.username}</div>
-              <div className="muted">{new Date(s.opened_at).toLocaleDateString('ru-RU')} · ожид. {s.expected_cash} / посч. {s.counted_cash}</div>
+        {closed.map((s) => {
+          const wd = Number(s.wallet_difference ?? 0);
+          const cd = Number(s.difference ?? 0);
+          return (
+            <div key={s.id} className="list-item list-item--static">
+              <div className="list-item__main">
+                <div className="list-item__name">{s.full_name || s.username}</div>
+                <div className="muted">
+                  {new Date(s.opened_at).toLocaleDateString('ru-RU')} · нал {s.counted_cash}/{s.expected_cash} · безнал {s.counted_wallet ?? 0}/{s.expected_wallet ?? 0}
+                </div>
+              </div>
+              <div className={`stock ${cd < 0 || wd < 0 ? 'stock--low' : ''}`}>
+                {cd !== 0 ? `нал ${cd > 0 ? '+' : ''}${cd}` : ''}{cd !== 0 && wd !== 0 ? ' · ' : ''}{wd !== 0 ? `безнал ${wd > 0 ? '+' : ''}${wd}` : ''}
+                {cd === 0 && wd === 0 ? '✓' : ''}
+              </div>
             </div>
-            <div className={`stock ${s.difference < 0 ? 'stock--low' : ''}`}>
-              {s.difference > 0 ? '+' : ''}{s.difference}
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
