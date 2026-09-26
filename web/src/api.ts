@@ -154,6 +154,24 @@ export const api = {
       body: JSON.stringify(payload),
     }),
   listInventories: (limit = 50) => req<any[]>(`/analytics/inventory?limit=${limit}`),
+  // Поставщики и долги.
+  listSuppliers: () =>
+    req<{ suppliers: { id: string; name: string; phone: string | null; debt: number; invoices: string }[]; total_debt: number }>(
+      '/suppliers',
+    ),
+  createSupplier: (payload: { name: string; phone?: string }) =>
+    req<any>('/suppliers', { method: 'POST', body: JSON.stringify(payload) }),
+  getSupplier: (id: string) =>
+    req<{
+      supplier: { id: string; name: string; phone: string | null };
+      invoices: { id: string; total: number; paid: number; remaining: number; note: string | null; created_at: string;
+        payments: { id: string; amount: number; note: string | null; created_at: string }[] }[];
+      debt: number;
+    }>(`/suppliers/${id}`),
+  addInvoice: (id: string, payload: { total: number; paid?: number; note?: string }) =>
+    req<any>(`/suppliers/${id}/invoices`, { method: 'POST', body: JSON.stringify(payload) }),
+  payInvoice: (invoiceId: string, payload: { amount: number; note?: string }) =>
+    req<any>(`/suppliers/invoices/${invoiceId}/payments`, { method: 'POST', body: JSON.stringify(payload) }),
   writeOff: (payload: { product_id?: string; barcode?: string; qty: number; reason: string }) =>
     req<{ write_off: any; product: Product }>('/analytics/write-off', {
       method: 'POST',

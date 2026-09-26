@@ -3,6 +3,7 @@ import NumberInput from '../components/NumberInput';
 import { db } from '../db';
 import { api } from '../api';
 import { createProduct, receiveGoods } from '../sync';
+import { CostNote } from './ReceivingPage';
 import type { Product } from '../types';
 
 // Конвейерный завод товаров.
@@ -262,6 +263,7 @@ export default function BulkEntryPage() {
             Остаток сейчас: {existing.stock} {existing.unit === 'kg' ? 'кг' : 'шт'}
           </div>
         )}
+        {existing && <CostNote product={existing} qty={Number(qty) || 0} batchCost={Number(cost) || 0} />}
 
         <label className="field">
           <span>Штрихкод — можно пропустить</span>

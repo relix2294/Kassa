@@ -20,6 +20,7 @@ import { dashboardRouter } from './routes/dashboard.js';
 import { analyticsRouter } from './routes/analytics.js';
 import { logsRouter } from './routes/logs.js';
 import { usersRouter } from './routes/users.js';
+import { suppliersRouter } from './routes/suppliers.js';
 
 // Роль процесса:
 //  'store'  — полноценная касса магазина (пишет данные, работает офлайн);
@@ -55,6 +56,7 @@ app.use('/api/returns', requireAuth, returnsRouter);
 app.use('/api/shifts', requireAuth, shiftsRouter);
 app.use('/api/dashboard', requireAuth, dashboardRouter);
 app.use('/api/analytics', requireAuth, analyticsRouter);
+app.use('/api/suppliers', requireAuth, suppliersRouter);
 app.use('/api/logs', requireAuth, logsRouter);
 app.use('/api/users', usersRouter);
 

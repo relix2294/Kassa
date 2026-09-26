@@ -188,6 +188,8 @@ function ReceiveExisting({
         <p className="hint">Закупочную цену задаёт владелец.</p>
       )}
 
+      {isOwner && <CostNote product={product} qty={Number(qty) || 0} batchCost={Number(cost) || 0} />}
+
       <div className="row">
         <button type="button" className="btn" onClick={onCancel} disabled={busy}>
           Отмена
@@ -327,5 +329,31 @@ function CreateProduct({
         </button>
       </div>
     </form>
+  );
+}
+
+// Подсказка о себестоимости и марже на приёме: показывает, как поменяется
+// средняя себестоимость с этой партией, и предупреждает, если уходим в минус.
+export function CostNote({ product, qty, batchCost }: { product: Product; qty: number; batchCost: number }) {
+  if (!(batchCost > 0)) return null;
+  const curCost = Number(product.cost_price);
+  const stockNum = Number(product.stock);
+  const denom = stockNum + qty;
+  const newAvg = denom > 0 ? (stockNum * curCost + qty * batchCost) / denom : batchCost;
+  const sale = Number(product.sale_price);
+  const marginNow = sale > 0 ? ((sale - curCost) / sale) * 100 : 0;
+  const marginAfter = sale > 0 ? ((sale - newAvg) / sale) * 100 : 0;
+  const loss = sale > 0 && newAvg >= sale;
+  const jump = batchCost > curCost + 1e-9;
+  return loss ? (
+    <div className="change change--neg" style={{ textAlign: 'left' }}>
+      ⚠️ Себестоимость станет ~{newAvg.toFixed(2)}, а продаёте за {sale} — это убыток.
+      Поднимите цену продажи в разделе «Товары».
+    </div>
+  ) : (
+    <p className="hint">
+      Себестоимость: было {curCost} → станет ~{newAvg.toFixed(2)}
+      {jump ? ' — партия дороже прежней!' : ''}. Маржа {marginNow.toFixed(0)}% → {marginAfter.toFixed(0)}%.
+    </p>
   );
 }

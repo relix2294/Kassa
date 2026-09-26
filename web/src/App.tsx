@@ -14,6 +14,7 @@ import ShiftPage from './pages/ShiftPage';
 import DashboardPage from './pages/DashboardPage';
 import AnalyticsPage from './pages/AnalyticsPage';
 import HistoryPage from './pages/HistoryPage';
+import SuppliersPage from './pages/SuppliersPage';
 import QueuePage, { QueueBadge } from './pages/QueuePage';
 import BulkEntryPage from './pages/BulkEntryPage';
 import CustomerDisplay from './pages/CustomerDisplay';
@@ -101,6 +102,7 @@ export default function App() {
             <Route path="/dashboard" element={owner ? <DashboardPage /> : <Navigate to="/dashboard" replace />} />
             <Route path="/analytics" element={owner ? <AnalyticsPage /> : <Navigate to="/dashboard" replace />} />
             <Route path="/history" element={owner ? <HistoryPage /> : <Navigate to="/dashboard" replace />} />
+            <Route path="/debts" element={owner ? <SuppliersPage /> : <Navigate to="/dashboard" replace />} />
             <Route path="*" element={<Navigate to="/dashboard" replace />} />
           </Routes>
         ) : (
@@ -115,6 +117,7 @@ export default function App() {
             <Route path="/bulk" element={owner ? <BulkEntryPage /> : <Navigate to="/sale" replace />} />
             <Route path="/analytics" element={owner ? <AnalyticsPage /> : <Navigate to="/sale" replace />} />
             <Route path="/history" element={owner ? <HistoryPage /> : <Navigate to="/sale" replace />} />
+            <Route path="/debts" element={owner ? <SuppliersPage /> : <Navigate to="/sale" replace />} />
             <Route path="/staff" element={owner ? <StaffPage /> : <Navigate to="/sale" replace />} />
             <Route path="*" element={<Navigate to="/sale" replace />} />
           </Routes>
@@ -168,6 +171,12 @@ export default function App() {
           <NavLink to="/history" className="tab">
             <span className="tab__icon">📜</span>
             <span>Чеки</span>
+          </NavLink>
+        )}
+        {owner && (
+          <NavLink to="/debts" className="tab">
+            <span className="tab__icon">💰</span>
+            <span>Долги</span>
           </NavLink>
         )}
         {owner && !mirror && (

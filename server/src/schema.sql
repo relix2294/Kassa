@@ -211,3 +211,35 @@ CREATE TABLE IF NOT EXISTS write_offs (
 );
 CREATE INDEX IF NOT EXISTS idx_write_offs_created ON write_offs(created_at);
 CREATE INDEX IF NOT EXISTS idx_write_offs_product ON write_offs(product_id);
+
+-- Поставщики и долги (постоплата). Не бухгалтерия — учёт «кому и сколько должны».
+CREATE TABLE IF NOT EXISTS suppliers (
+  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  name        text NOT NULL,
+  phone       text,
+  created_at  timestamptz NOT NULL DEFAULT now()
+);
+
+-- Накладная/поставка: сумма и сколько уже оплачено. Долг = total - paid.
+CREATE TABLE IF NOT EXISTS supplier_invoices (
+  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  supplier_id uuid NOT NULL REFERENCES suppliers(id) ON DELETE CASCADE,
+  total       numeric(12,2) NOT NULL,       -- сумма накладной
+  paid        numeric(12,2) NOT NULL DEFAULT 0,  -- сколько оплачено (растёт платежами)
+  note        text,
+  user_id     uuid REFERENCES users(id),
+  created_at  timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_sup_inv_supplier ON supplier_invoices(supplier_id);
+CREATE INDEX IF NOT EXISTS idx_sup_inv_created ON supplier_invoices(created_at);
+
+-- Платежи по накладной (история погашения долга).
+CREATE TABLE IF NOT EXISTS supplier_payments (
+  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  invoice_id  uuid NOT NULL REFERENCES supplier_invoices(id) ON DELETE CASCADE,
+  amount      numeric(12,2) NOT NULL,
+  note        text,
+  user_id     uuid REFERENCES users(id),
+  created_at  timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_sup_pay_invoice ON supplier_payments(invoice_id);
