@@ -4,6 +4,7 @@ import { onRealtimeEvent } from '../sync';
 import InventoryPanel from './InventoryPanel';
 import WriteOffPanel from './WriteOffPanel';
 import BulkPricePanel from './BulkPricePanel';
+import CatalogPanel from './CatalogPanel';
 
 type Tab = 'restock' | 'stale' | 'tools';
 
@@ -129,7 +130,7 @@ function StaleTab() {
 }
 
 function ToolsTab({ onDone }: { onDone: (m: string) => void }) {
-  const [panel, setPanel] = useState<'none' | 'inventory' | 'price' | 'writeoff'>('none');
+  const [panel, setPanel] = useState<'none' | 'inventory' | 'price' | 'writeoff' | 'catalog'>('none');
   const [history, setHistory] = useState<any[]>([]);
   const [writeOffs, setWriteOffs] = useState<any[]>([]);
 
@@ -164,6 +165,14 @@ function ToolsTab({ onDone }: { onDone: (m: string) => void }) {
         <p className="hint">Поднять или опустить цены по всей категории сразу.</p>
         <button className="btn btn--primary" onClick={() => setPanel('price')}>
           Изменить цены
+        </button>
+      </div>
+
+      <div className="card" style={{ marginTop: 12 }}>
+        <div className="product-name">Каталог товаров</div>
+        <p className="hint">Сохранить всю базу товаров файлом или перенести в другой магазин.</p>
+        <button className="btn btn--primary" onClick={() => setPanel('catalog')}>
+          Сохранить / перенести
         </button>
       </div>
 
@@ -232,6 +241,9 @@ function ToolsTab({ onDone }: { onDone: (m: string) => void }) {
             loadHistory();
           }}
         />
+      )}
+      {panel === 'catalog' && (
+        <CatalogPanel onClose={() => setPanel('none')} onDone={(msg) => onDone(msg)} />
       )}
       {panel === 'price' && (
         <BulkPricePanel

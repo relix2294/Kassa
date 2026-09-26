@@ -55,6 +55,20 @@ export const api = {
   archiveProduct: (id: string, archive = true) =>
     req<Product>(`/products/${id}/archive`, { method: 'POST', body: JSON.stringify({ archive }) }),
   listArchived: () => req<Product[]>('/products/archived'),
+  // Выгрузка каталога — сырой CSV (не JSON), поэтому отдельный fetch.
+  exportCatalog: async (): Promise<string> => {
+    const token = getToken();
+    const res = await fetch('/api/products/export', {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) throw new Error('Не удалось выгрузить каталог');
+    return res.text();
+  },
+  importCatalog: (products: any[]) =>
+    req<{ added: number; skipped: number }>('/products/import', {
+      method: 'POST',
+      body: JSON.stringify({ products }),
+    }),
   listSales: (limit = 100) => req<any[]>(`/sales?limit=${limit}`),
   listReturns: (limit = 100) =>
     req<{

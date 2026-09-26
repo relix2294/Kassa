@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { query } from '../db.js';
+import { query, withTx } from '../db.js';
 import { writeLog } from '../lib/log.js';
 import { broadcast } from '../lib/realtime.js';
 import { lookupBarcode } from '../lib/barcode.js';
@@ -7,6 +7,73 @@ import { requireOwner } from '../lib/auth.js';
 import { productFor, productsFor } from '../lib/sanitize.js';
 
 export const productsRouter = Router();
+
+// Экранирование значения для CSV.
+function csvCell(v: unknown): string {
+  const s = v == null ? '' : String(v);
+  return /[",\n;]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+
+// Выгрузка каталога в CSV — только владелец. Это ваша ручная база местных
+// товаров (штрихкод + название + цены). Остаток НЕ выгружаем: каталог
+// переносимый, в новом магазине у товара свой остаток.
+productsRouter.get('/export', requireOwner, async (_req, res) => {
+  const rows = await query(
+    `SELECT barcode, name, category, unit, sale_price, cost_price, min_stock
+       FROM products WHERE is_archived = false ORDER BY name`,
+  );
+  const header = ['barcode', 'name', 'category', 'unit', 'sale_price', 'cost_price', 'min_stock'];
+  const lines = [header.join(',')];
+  for (const r of rows as any[]) {
+    lines.push([r.barcode, r.name, r.category, r.unit, r.sale_price, r.cost_price, r.min_stock].map(csvCell).join(','));
+  }
+  // BOM — чтобы Excel открыл кириллицу правильно.
+  const csv = '﻿' + lines.join('\r\n');
+  const date = new Date().toISOString().slice(0, 10);
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename="kassa-catalog-${date}.csv"`);
+  res.send(csv);
+});
+
+// Загрузка каталога — только владелец. Тело: { products: [{barcode,name,...}] }.
+// Существующие товары НЕ трогаем (защита от перезаписи цен): только добавляем
+// новые. Остаток у добавленных = 0 (примут отдельно). Идеально для второго
+// магазина: развернул систему → загрузил каталог → та же продукция.
+productsRouter.post('/import', requireOwner, async (req, res) => {
+  const items = req.body?.products;
+  if (!Array.isArray(items) || items.length === 0) {
+    return res.status(400).json({ error: 'Пустой каталог' });
+  }
+  const result = await withTx(async (client) => {
+    let added = 0;
+    let skipped = 0;
+    for (const it of items) {
+      const name = String(it?.name ?? '').trim();
+      if (!name) { skipped++; continue; }
+      const barcode = it?.barcode != null && String(it.barcode).trim() ? String(it.barcode).trim() : null;
+
+      const exists = barcode
+        ? (await client.query(`SELECT id FROM products WHERE barcode = $1`, [barcode])).rows[0]
+        : (await client.query(`SELECT id FROM products WHERE barcode IS NULL AND lower(name) = lower($1)`, [name])).rows[0];
+      if (exists) { skipped++; continue; }
+
+      const unit = it?.unit === 'kg' ? 'kg' : 'pcs';
+      await client.query(
+        `INSERT INTO products (barcode, name, category, sale_price, cost_price, min_stock, unit)
+         VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+        [barcode, name, (it?.category ?? '') || null,
+         Number(it?.sale_price) || 0, Number(it?.cost_price) || 0, Number(it?.min_stock) || 0, unit],
+      );
+      added++;
+    }
+    await writeLog(
+      { type: 'catalog_import', entity: 'product', entityId: null, userId: req.user!.id, details: { added, skipped } },
+      client,
+    );
+    return { added, skipped };
+  });
+  res.json(result);
+});
 
 // Список всех товаров. Кассиру отдаём без закупочных цен.
 productsRouter.get('/', async (req, res) => {
