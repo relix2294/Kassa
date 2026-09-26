@@ -15,6 +15,7 @@ import DashboardPage from './pages/DashboardPage';
 import AnalyticsPage from './pages/AnalyticsPage';
 import HistoryPage from './pages/HistoryPage';
 import SuppliersPage from './pages/SuppliersPage';
+import PriceTags from './pages/PriceTags';
 import QueuePage, { QueueBadge } from './pages/QueuePage';
 import BulkEntryPage from './pages/BulkEntryPage';
 import CustomerDisplay from './pages/CustomerDisplay';
@@ -118,6 +119,7 @@ export default function App() {
             <Route path="/analytics" element={owner ? <AnalyticsPage /> : <Navigate to="/sale" replace />} />
             <Route path="/history" element={owner ? <HistoryPage /> : <Navigate to="/sale" replace />} />
             <Route path="/debts" element={owner ? <SuppliersPage /> : <Navigate to="/sale" replace />} />
+            <Route path="/tags" element={owner ? <PriceTags /> : <Navigate to="/sale" replace />} />
             <Route path="/staff" element={owner ? <StaffPage /> : <Navigate to="/sale" replace />} />
             <Route path="*" element={<Navigate to="/sale" replace />} />
           </Routes>

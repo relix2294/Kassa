@@ -54,6 +54,7 @@ export const api = {
     req<Product>(`/products/${id}/discount`, { method: 'POST', body: JSON.stringify(payload) }),
   archiveProduct: (id: string, archive = true) =>
     req<Product>(`/products/${id}/archive`, { method: 'POST', body: JSON.stringify({ archive }) }),
+  assignBarcode: (id: string) => req<Product>(`/products/${id}/assign-barcode`, { method: 'POST' }),
   listArchived: () => req<Product[]>('/products/archived'),
   // Выгрузка каталога — сырой CSV (не JSON), поэтому отдельный fetch.
   exportCatalog: async (): Promise<string> => {

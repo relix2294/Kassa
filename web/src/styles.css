@@ -1013,3 +1013,25 @@ kbd {
 .calc__btn--fn { background: var(--surface); color: var(--muted); }
 .calc__btn--op { background: var(--surface); color: var(--primary); font-weight: 800; }
 .calc__btn--eq { background: var(--primary); color: var(--primary-ink); font-weight: 800; }
+
+/* Ценники (печать со штрих-кодом) */
+.tags-print {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px; margin-top: 12px;
+}
+.tag {
+  border: 1px dashed var(--border); border-radius: 8px; padding: 8px; text-align: center;
+  break-inside: avoid; background: #fff; color: #000;
+}
+.tag__name { font-size: 13px; font-weight: 600; min-height: 32px; line-height: 1.2; }
+.tag__price { font-size: 26px; font-weight: 800; }
+.tag__unit { font-size: 12px; font-weight: 500; }
+.tag__barcode { width: 100%; height: auto; }
+
+@media print {
+  .no-print, .topbar, .tabbar { display: none !important; }
+  .app { display: block !important; height: auto !important; max-width: none !important; }
+  .content { padding: 0 !important; overflow: visible !important; }
+  .page { max-width: none !important; }
+  .tags-print { grid-template-columns: repeat(3, 1fr); gap: 4mm; }
+  .tag { border: 1px solid #999; }
+}

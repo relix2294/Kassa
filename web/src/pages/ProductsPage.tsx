@@ -53,6 +53,7 @@ export default function ProductsPage() {
         <h1>Товары</h1>
         <div className="staff-actions">
           <Link className="btn btn--ghost" to="/bulk">Быстрый завод</Link>
+          <Link className="btn btn--ghost" to="/tags">🏷️ Ценники</Link>
           <button className="btn btn--ghost" onClick={() => setAdding(true)}>
             + Товар
           </button>

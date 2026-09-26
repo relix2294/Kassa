@@ -269,3 +269,35 @@ productsRouter.get('/archived', requireOwner, async (req, res) => {
   const rows = await query(`SELECT * FROM products WHERE is_archived = true ORDER BY name`);
   res.json(productsFor(req, rows));
 });
+
+// Присвоить товару без штрих-кода внутренний код — чтобы напечатать ценник
+// со сканируемым штрих-кодом (местные/весовые/фасованные товары). Только владелец.
+// Префикс «2» — общепринятый диапазон внутримагазинных кодов.
+function genInternalBarcode(): string {
+  let s = '2';
+  for (let i = 0; i < 11; i++) s += Math.floor(Math.random() * 10);
+  return s;
+}
+
+productsRouter.post('/:id/assign-barcode', requireOwner, async (req, res) => {
+  const p = (await query(`SELECT * FROM products WHERE id = $1`, [req.params.id]))[0];
+  if (!p) return res.status(404).json({ error: 'not_found' });
+  if (p.barcode) return res.json(p); // уже есть — не трогаем
+
+  let code = '';
+  for (let tries = 0; tries < 25; tries++) {
+    code = genInternalBarcode();
+    const dup = await query(`SELECT 1 FROM products WHERE barcode = $1`, [code]);
+    if (dup.length === 0) break;
+    code = '';
+  }
+  if (!code) return res.status(500).json({ error: 'Не удалось сгенерировать код, попробуйте ещё раз' });
+
+  const upd = (await query(`UPDATE products SET barcode = $2, updated_at = now() WHERE id = $1 RETURNING *`, [req.params.id, code]))[0];
+  await writeLog({
+    type: 'barcode_assign', entity: 'product', entityId: p.id, userId: req.user!.id,
+    details: { name: p.name, barcode: code },
+  });
+  broadcast('product_upsert', upd, 'all');
+  res.json(upd);
+});
