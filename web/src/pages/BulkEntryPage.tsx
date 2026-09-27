@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import NumberInput from '../components/NumberInput';
 import { db } from '../db';
 import { api } from '../api';
@@ -18,6 +19,7 @@ import type { Product } from '../types';
 //   - уже знакомый штрихкод не заводится заново, а сразу принимается на склад.
 
 interface Added {
+  id?: string; // id нового товара — чтобы можно было сразу напечатать ценник
   name: string;
   qty: number;
   isReceipt: boolean;
@@ -162,7 +164,7 @@ export default function BulkEntryPage() {
         if (res.product) {
           await receiveGoods({ product_id: res.product.id, qty: qtyNum, cost_price: Number(cost) || undefined });
         }
-        setAdded((a) => [{ name: name.trim(), qty: qtyNum, isReceipt: false }, ...a].slice(0, 8));
+        setAdded((a) => [{ id: res.product?.id, name: name.trim(), qty: qtyNum, isReceipt: false }, ...a].slice(0, 8));
       }
       resetLine();
     } catch (e: any) {
@@ -336,7 +338,14 @@ export default function BulkEntryPage() {
 
       {added.length > 0 && (
         <>
-          <h2 className="sect">Последние</h2>
+          <div className="sale-head" style={{ marginTop: 20 }}>
+            <h2 className="sect" style={{ margin: 0 }}>Последние</h2>
+            {added.some((a) => a.id) && (
+              <Link className="btn btn--ghost" to={`/tags?ids=${added.filter((a) => a.id).map((a) => a.id).join(',')}`}>
+                🏷️ Ценники заведённых
+              </Link>
+            )}
+          </div>
           <div className="list">
             {added.map((a, i) => (
               <div key={i} className="list-item list-item--static">
@@ -345,6 +354,11 @@ export default function BulkEntryPage() {
                   <div className="muted">{a.isReceipt ? 'принято на склад' : 'заведён новый товар'}</div>
                 </div>
                 {a.qty > 0 && <div className="stock">+{a.qty}</div>}
+                {a.id && (
+                  <Link className="btn btn--ghost" to={`/tags?ids=${a.id}`} title="Напечатать ценник">
+                    🏷️ Ценник
+                  </Link>
+                )}
               </div>
             ))}
           </div>

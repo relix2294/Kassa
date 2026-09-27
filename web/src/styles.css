@@ -169,7 +169,11 @@ input:focus, .search:focus { outline: none; border-color: var(--primary); }
   cursor: pointer;
   width: 100%;
 }
-.list-item__name { font-weight: 600; font-size: 16px; }
+/* Основной блок строки занимает всё свободное место — иначе при space-between
+   контент уезжает к правому краю, а середина пустует. min-width:0 позволяет
+   длинному названию переноситься, а не растягивать строку по горизонтали. */
+.list-item__main { flex: 1 1 auto; min-width: 0; }
+.list-item__name { font-weight: 600; font-size: 16px; overflow-wrap: anywhere; }
 .list-item__side { text-align: right; }
 .stock { font-weight: 700; font-size: 16px; }
 .stock--low { color: var(--off); }
@@ -520,6 +524,8 @@ select:focus { outline: none; border-color: var(--primary); }
 
   /* Экраны-списки не растягиваем на всю ширину — читать неудобно. */
   .page { max-width: 900px; }
+  /* Ценники — работаем со всем каталогом сразу, нужен весь экран. */
+  .page--wide { max-width: none; }
 
   .cart-line { padding: 14px 16px; }
   .cart-line__name { font-size: 17px; }

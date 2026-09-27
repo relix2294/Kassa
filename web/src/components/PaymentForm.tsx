@@ -134,7 +134,7 @@ export default function PaymentForm({
           <button className="btn btn--primary btn--big" disabled={disabled} onClick={() => setMethod('cash')}>
             💵 Наличные
           </button>
-          <button className="btn btn--primary btn--big" disabled={disabled} onClick={() => onPay('card')}>
+          <button className="btn btn--primary btn--big" disabled={disabled} onClick={() => setMethod('card')}>
             💳 Карта
           </button>
           <button className="btn btn--big" disabled={disabled} onClick={() => setMethod('mixed')}>
@@ -149,6 +149,27 @@ export default function PaymentForm({
       )}
 
       {method === 'cash' && <CashStep onBack={reset} />}
+
+      {/* Карта: подтверждение, чтобы не закрыть чек одним случайным касанием. */}
+      {method === 'card' && (
+        <>
+          <div className="change-box change-box--ok">
+            <div className="change-box__label">Оплата картой</div>
+            <div className="change-box__sum">{total.toFixed(2)}</div>
+          </div>
+          <p className="hint" style={{ textAlign: 'center' }}>
+            Проверьте, что оплата на терминале прошла. Провести и закрыть чек?
+          </p>
+          <div className="row">
+            <button className="btn" onClick={reset} disabled={disabled}>
+              Назад
+            </button>
+            <button className="btn btn--primary" disabled={disabled} onClick={() => onPay('card')}>
+              ✅ Провести
+            </button>
+          </div>
+        </>
+      )}
 
       {/* Смешанная, шаг 1: сколько по карте. Остальное добьётся наличными. */}
       {method === 'mixed' && mixedStep === 'card' && (

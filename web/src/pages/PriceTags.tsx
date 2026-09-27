@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import JsBarcode from 'jsbarcode';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { db } from '../db';
 import { api } from '../api';
 import { pullProducts } from '../sync';
@@ -10,21 +10,35 @@ import type { Product } from '../types';
 // Печать ценников со штрих-кодом. Штучному печатаем его штрих-код; товару без
 // штрих-кода можно присвоить внутренний код — и он станет сканируемым.
 export default function PriceTags() {
+  const [params] = useSearchParams();
   const [q, setQ] = useState('');
   const [sel, setSel] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  const [onlySel, setOnlySel] = useState(false);
 
   const products = useLiveQuery(() => db.products.orderBy('name').toArray(), [], [] as Product[]);
 
+  // Пришли из «Завода» со списком только что заведённых товаров (?ids=a,b,c) —
+  // сразу их отмечаем и показываем только их, чтобы можно было тут же печатать.
+  useEffect(() => {
+    const ids = (params.get('ids') || '').split(',').map((s) => s.trim()).filter(Boolean);
+    if (ids.length) {
+      setSel(new Set(ids));
+      setOnlySel(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase();
-    const list = products.filter((p) => !p.is_archived);
+    let list = products.filter((p) => !p.is_archived);
+    if (onlySel) list = list.filter((p) => sel.has(p.id));
     if (!s) return list;
     return list.filter(
       (p) => p.name.toLowerCase().includes(s) || (p.category ?? '').toLowerCase().includes(s) || (p.barcode ?? '').includes(s),
     );
-  }, [products, q]);
+  }, [products, q, onlySel, sel]);
 
   const chosen = filtered.filter((p) => sel.has(p.id));
   const chosenNoBarcode = chosen.filter((p) => !p.barcode);
@@ -57,7 +71,7 @@ export default function PriceTags() {
   const readyToPrint = chosen.filter((p) => !!p.barcode);
 
   return (
-    <div className="page">
+    <div className="page page--wide">
       <div className="sale-head no-print">
         <h1>Ценники</h1>
         <Link className="btn btn--ghost" to="/products">← к товарам</Link>
@@ -66,9 +80,14 @@ export default function PriceTags() {
       <div className="no-print">
         <input className="search" placeholder="Поиск по названию, категории, штрихкоду" value={q} onChange={(e) => setQ(e.target.value)} />
 
-        <div className="row" style={{ margin: '8px 0' }}>
+        <div className="row" style={{ margin: '8px 0', flexWrap: 'wrap' }}>
           <button className="btn btn--ghost" onClick={selectAllShown}>Выбрать всё ({filtered.length})</button>
           <button className="btn btn--ghost" onClick={clearSel}>Снять выбор</button>
+          {sel.size > 0 && (
+            <button className="btn btn--ghost" onClick={() => setOnlySel((v) => !v)}>
+              {onlySel ? 'Показать все товары' : `Только выбранные (${sel.size})`}
+            </button>
+          )}
         </div>
 
         <p className="hint">Выбрано: {chosen.length}. Без штрих-кода среди выбранных: {chosenNoBarcode.length}.</p>
@@ -81,10 +100,10 @@ export default function PriceTags() {
 
         {msg && <div style={{ margin: '8px 0', color: '#16a34a', fontWeight: 600 }}>{msg}</div>}
 
-        <div className="list" style={{ marginTop: 8, maxHeight: 320, overflowY: 'auto' }}>
-          {filtered.slice(0, 200).map((p) => (
+        <div className="list" style={{ marginTop: 8, maxHeight: '62vh', overflowY: 'auto' }}>
+          {filtered.slice(0, 400).map((p) => (
             <label key={p.id} className="list-item" style={{ cursor: 'pointer' }}>
-              <input type="checkbox" checked={sel.has(p.id)} onChange={() => toggle(p.id)} style={{ marginRight: 10 }} />
+              <input type="checkbox" checked={sel.has(p.id)} onChange={() => toggle(p.id)} style={{ marginRight: 10, width: 20, height: 20, flex: '0 0 auto' }} />
               <div className="list-item__main">
                 <div className="list-item__name">{p.name}</div>
                 <div className="muted">{p.barcode || 'без штрих-кода'}{p.category ? ` · ${p.category}` : ''}</div>
@@ -92,6 +111,7 @@ export default function PriceTags() {
               <div className="stock">{p.sale_price}{p.unit === 'kg' ? ' /кг' : ''}</div>
             </label>
           ))}
+          {filtered.length > 400 && <p className="hint">Показаны первые 400 — уточните поиск.</p>}
         </div>
 
         <div className="row" style={{ marginTop: 12 }}>
