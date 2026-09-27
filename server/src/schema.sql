@@ -268,3 +268,25 @@ CREATE TABLE IF NOT EXISTS supplier_payments (
   created_at  timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_sup_pay_invoice ON supplier_payments(invoice_id);
+
+-- Запросы кассира на действие со сменой при расхождении.
+-- Кассир сам открыть/закрыть смену с расхождением не может — создаётся запрос,
+-- а владелец подтверждает его из своего кабинета (может быть не в магазине).
+CREATE TABLE IF NOT EXISTS shift_requests (
+  id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  kind            text NOT NULL,                 -- 'open' | 'close'
+  user_id         uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE, -- кассир
+  shift_id        uuid REFERENCES shifts(id) ON DELETE CASCADE,         -- для закрытия
+  counted_cash    numeric(12,2) NOT NULL DEFAULT 0,
+  counted_wallet  numeric(12,2) NOT NULL DEFAULT 0,
+  expected_cash   numeric(12,2) NOT NULL DEFAULT 0,
+  expected_wallet numeric(12,2) NOT NULL DEFAULT 0,
+  cash_diff       numeric(12,2) NOT NULL DEFAULT 0,
+  wallet_diff     numeric(12,2) NOT NULL DEFAULT 0,
+  status          text NOT NULL DEFAULT 'pending', -- pending|approved|rejected|cancelled
+  resolved_by     uuid REFERENCES users(id),       -- кто дал добро / отклонил
+  resolved_at     timestamptz,
+  created_at      timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_shift_req_status ON shift_requests(status);
+CREATE INDEX IF NOT EXISTS idx_shift_req_user ON shift_requests(user_id);

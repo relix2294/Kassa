@@ -16,7 +16,7 @@ import ReturnPanel from './ReturnPanel';
 import ProductPicker from '../components/ProductPicker';
 import Confirm from '../components/Confirm';
 import Calculator from '../components/Calculator';
-import { OwnerOverrideModal } from '../components/OwnerOverrideModal';
+import ShiftWaiting from '../components/ShiftWaiting';
 import { postCustomer } from '../customer';
 
 export default function SalePage() {
@@ -428,8 +428,8 @@ function StartShift({ onDone }: { onDone: (msg: string) => void }) {
   const [expected, setExpected] = useState<{ cash: number; wallet: number } | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  // Экран разрешения владельца при расхождении на приёме кассы.
-  const [override, setOverride] = useState<string | null>(null);
+  // Запрос владельцу при расхождении на приёме кассы (ждём подтверждения).
+  const [pending, setPending] = useState<{ request: any; message?: string | null } | null>(null);
 
   // Приём кассы: сколько должно остаться от прошлой смены — и наличными,
   // и на кошельках (безнал). Кассир пересчитывает, расхождение запишется на него.
@@ -444,22 +444,16 @@ function StartShift({ onDone }: { onDone: (msg: string) => void }) {
       .catch(() => setExpected({ cash: 0, wallet: 0 }));
   }, []);
 
-  async function start(creds?: { username: string; pin: string }) {
+  async function start() {
     setBusy(true);
     setErr(null);
     try {
-      await openShift(Number(cash) || 0, Number(wallet) || 0, creds);
-      setOverride(null);
-      onDone('Касса принята — можно продавать');
+      const res = await openShift(Number(cash) || 0, Number(wallet) || 0);
+      // Расхождение: кассир сам открыть не может — запрос ушёл владельцу.
+      if (res.pending) setPending({ request: res.request, message: res.message });
+      else onDone('Касса принята — можно продавать');
     } catch (e: any) {
-      // Расхождение: кассир сам открыть не может — просим добро владельца.
-      if (e.status === 403 && e.body?.needs_override) {
-        setErr(null);
-        setOverride(e.body?.message || 'Не сходится с остатком прошлой смены.');
-      } else {
-        setOverride(null);
-        setErr(e.body?.message || e.message || 'Не удалось открыть смену');
-      }
+      setErr(e.body?.message || e.message || 'Не удалось открыть смену');
     } finally {
       setBusy(false);
     }
@@ -467,6 +461,22 @@ function StartShift({ onDone }: { onDone: (msg: string) => void }) {
 
   const cashMis = !!expected && expected.cash > 0 && (Number(cash) || 0) !== expected.cash;
   const walMis = !!expected && expected.wallet > 0 && (Number(wallet) || 0) !== expected.wallet;
+
+  // Ждём подтверждения владельца — форму не показываем.
+  if (pending) {
+    return (
+      <div className="page">
+        <h1>Приём кассы</h1>
+        <ShiftWaiting
+          request={pending.request}
+          message={pending.message}
+          onApproved={() => { setPending(null); onDone('Владелец подтвердил — касса принята'); }}
+          onRejected={() => { setPending(null); setErr('Владелец отклонил запрос. Пересчитайте кассу и попробуйте снова.'); }}
+          onCancelled={() => setPending(null)}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="page">
@@ -507,16 +517,6 @@ function StartShift({ onDone }: { onDone: (msg: string) => void }) {
           Принять кассу и начать
         </button>
       </div>
-
-      {override !== null && (
-        <OwnerOverrideModal
-          title="Наличные или безнал не сходятся с остатком прошлой смены."
-          message={override}
-          busy={busy}
-          onConfirm={(creds) => start(creds)}
-          onCancel={() => { setOverride(null); setBusy(false); }}
-        />
-      )}
     </div>
   );
 }

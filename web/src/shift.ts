@@ -45,29 +45,24 @@ export async function refreshShift() {
   notify();
 }
 
-export async function openShift(
-  openingCash: number,
-  openingWallet: number,
-  override?: { username: string; pin: string },
-) {
-  const { shift } = await api.openShift(openingCash, openingWallet, override);
-  current = shift;
-  localStorage.setItem(CACHE_KEY, JSON.stringify(shift));
+// Возвращает { shift } при успехе или { pending, request } если нужно
+// подтверждение владельца (расхождение). Смену в стор кладём только реально
+// открытую.
+export async function openShift(openingCash: number, openingWallet: number) {
+  const res = await api.openShift(openingCash, openingWallet);
+  if (res.pending) return { pending: true, request: res.request, message: res.message };
+  current = res.shift;
+  localStorage.setItem(CACHE_KEY, JSON.stringify(res.shift));
   notify();
-  return shift;
+  return { shift: res.shift };
 }
 
-export async function closeShift(
-  countedCash: number,
-  countedWallet: number,
-  userId?: string,
-  override?: { username: string; pin: string },
-) {
-  const { shift } = await api.closeShift(countedCash, countedWallet, userId, override);
-  if (!userId) current = null; // закрыли свою смену
-  if (!userId) localStorage.removeItem(CACHE_KEY);
+export async function closeShift(countedCash: number, countedWallet: number, userId?: string) {
+  const res = await api.closeShift(countedCash, countedWallet, userId);
+  if (res.pending) return { pending: true, request: res.request, message: res.message };
+  if (!userId) { current = null; localStorage.removeItem(CACHE_KEY); } // закрыли свою смену
   notify();
-  return shift; // закрытая смена с расчётом расхождения
+  return { shift: res.shift }; // закрытая смена с расчётом расхождения
 }
 
 // Выход пользователя: смена и её кэш не должны достаться следующему.

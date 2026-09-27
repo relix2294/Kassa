@@ -3,7 +3,8 @@ import NumberInput from '../components/NumberInput';
 import { api } from '../api';
 import { useShift, openShift, closeShift, refreshShift } from '../shift';
 import { useCurrentUser } from '../session';
-import { OwnerOverrideModal } from '../components/OwnerOverrideModal';
+import ShiftWaiting from '../components/ShiftWaiting';
+import ShiftRequests from '../components/ShiftRequests';
 
 type Stats = { expectedCash: number; expectedWallet: number; stats: any } | null;
 
@@ -18,8 +19,8 @@ export default function ShiftPage() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [withdrawOpen, setWithdrawOpen] = useState(false);
-  // Экран разрешения владельца при расхождении (кассир сам не проходит).
-  const [override, setOverride] = useState<{ action: 'open' | 'close'; message: string } | null>(null);
+  // Ожидание подтверждения владельца при расхождении (кассир сам не проходит).
+  const [pending, setPending] = useState<{ action: 'open' | 'close'; request: any; message?: string | null } | null>(null);
 
   async function loadStats() {
     try {
@@ -42,36 +43,47 @@ export default function ShiftPage() {
     }
   }, [mode]);
 
-  async function doOpen(creds?: { username: string; pin: string }) {
+  async function doOpen() {
     setBusy(true); setErr(null);
     try {
-      await openShift(Number(cashIn) || 0, Number(walletIn) || 0, creds);
-      setOverride(null); setMode('view'); setCashIn(''); setWalletIn('');
+      const res = await openShift(Number(cashIn) || 0, Number(walletIn) || 0);
+      if (res.pending) { setPending({ action: 'open', request: res.request, message: res.message }); }
+      else { setMode('view'); setCashIn(''); setWalletIn(''); }
     } catch (e: any) {
-      if (e?.status === 403 && e?.body?.needs_override) {
-        setErr(null);
-        setOverride({ action: 'open', message: e.body?.message || 'Не сходится с остатком прошлой смены.' });
-      } else {
-        setOverride(null);
-        setErr(e?.body?.message || e?.message || 'Не удалось открыть смену');
-      }
+      setErr(e?.body?.message || e?.message || 'Не удалось открыть смену');
     } finally { setBusy(false); }
   }
 
-  async function doClose(creds?: { username: string; pin: string }) {
+  async function doClose() {
     setBusy(true); setErr(null);
     try {
-      const c = await closeShift(Number(cashIn) || 0, Number(walletIn) || 0, undefined, creds);
-      setClosed(c); setOverride(null); setMode('view'); setCashIn(''); setWalletIn('');
+      const res = await closeShift(Number(cashIn) || 0, Number(walletIn) || 0);
+      if (res.pending) { setPending({ action: 'close', request: res.request, message: res.message }); }
+      else { setClosed(res.shift); setMode('view'); setCashIn(''); setWalletIn(''); }
     } catch (e: any) {
-      if (e?.status === 403 && e?.body?.needs_override) {
-        setErr(null);
-        setOverride({ action: 'close', message: e.body?.message || 'Расхождение при закрытии.' });
-      } else {
-        setOverride(null);
-        setErr(e?.body?.message || e?.message || 'Не удалось закрыть смену');
-      }
+      setErr(e?.body?.message || e?.message || 'Не удалось закрыть смену');
     } finally { setBusy(false); }
+  }
+
+  // Ждём подтверждения владельца — остальное не показываем.
+  if (pending) {
+    return (
+      <div className="page">
+        <h1>Смена</h1>
+        <ShiftWaiting
+          request={pending.request}
+          message={pending.message}
+          onApproved={async () => {
+            setPending(null); setCashIn(''); setWalletIn('');
+            await refreshShift();
+            if (pending.action === 'close') { await loadStats(); setMode('view'); }
+            else setMode('view');
+          }}
+          onRejected={() => { setPending(null); setErr('Владелец отклонил запрос. Пересчитайте и попробуйте снова.'); }}
+          onCancelled={() => setPending(null)}
+        />
+      </div>
+    );
   }
 
   return (
@@ -79,6 +91,9 @@ export default function ShiftPage() {
       <h1>Смена</h1>
 
       {err && <div className="change change--neg">{err}</div>}
+
+      {/* Владельцу: запросы кассиров на кассу с расхождением */}
+      {user?.role === 'owner' && <ShiftRequests />}
 
       {/* Итог только что закрытой смены */}
       {closed && (
@@ -159,18 +174,6 @@ export default function ShiftPage() {
             <button className="btn btn--primary" onClick={() => doClose()} disabled={busy}>Закрыть смену</button>
           </div>
         </div>
-      )}
-
-      {override && (
-        <OwnerOverrideModal
-          title={override.action === 'open'
-            ? 'Наличные или безнал не сходятся с остатком прошлой смены.'
-            : 'Расхождение при закрытии смены.'}
-          message={override.message}
-          busy={busy}
-          onConfirm={(creds) => (override.action === 'open' ? doOpen(creds) : doClose(creds))}
-          onCancel={() => { setOverride(null); setBusy(false); }}
-        />
       )}
 
       {/* Владелец: чужие незакрытые смены и история */}

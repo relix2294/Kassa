@@ -2,29 +2,20 @@ import { Router } from 'express';
 import { query } from '../db.js';
 import { writeLog } from '../lib/log.js';
 import { broadcast } from '../lib/realtime.js';
-import { requireOwner, verifyPin } from '../lib/auth.js';
+import { requireOwner } from '../lib/auth.js';
 
 export const shiftsRouter = Router();
 
-// Разрешение владельца прямо на экране кассира: владелец вводит свой логин и
-// PIN, чтобы дать «добро» на действие с расхождением. Смена при этом остаётся
-// за кассиром — мы лишь фиксируем, кто санкционировал. Возвращает запись
-// владельца или null (не владелец / неверный PIN / заблокирован).
-async function ownerOverride(
-  username: unknown,
-  pin: unknown,
-): Promise<{ id: string; username: string } | null> {
-  const uname = String(username ?? '').trim();
-  const code = String(pin ?? '');
-  if (!uname || !code) return null;
-  const rows = await query<{ id: string; username: string; role: string; pin_hash: string | null; is_blocked: boolean }>(
-    `SELECT id, username, role, pin_hash, is_blocked FROM users WHERE lower(username) = lower($1)`,
-    [uname],
+// Незакрытый запрос кассира на действие со сменой (открытие/закрытие с
+// расхождением). Ждёт «добро» владельца из его кабинета.
+async function getPendingRequest(userId: string, kind?: 'open' | 'close') {
+  const rows = await query(
+    `SELECT * FROM shift_requests
+      WHERE user_id = $1 AND status = 'pending' ${kind ? 'AND kind = $2' : ''}
+      ORDER BY created_at DESC LIMIT 1`,
+    kind ? [userId, kind] : [userId],
   );
-  const u = rows[0];
-  if (!u || u.is_blocked || u.role !== 'owner' || !u.pin_hash) return null;
-  const ok = await verifyPin(code, u.pin_hash);
-  return ok ? { id: u.id, username: u.username } : null;
+  return rows[0] ?? null;
 }
 
 // Открытая смена пользователя (или null).
@@ -142,60 +133,84 @@ shiftsRouter.post('/open', async (req, res) => {
   const mismatch = cashDiff0 !== 0 || walletDiff0 !== 0;
 
   // Железобетонное правило: принять кассу с расхождением может только владелец.
-  // Кассир при несовпадении открыть не может — но владелец может дать «добро»
-  // прямо тут, введя свой логин и PIN (смена всё равно останется за кассиром).
-  let approvedBy: { id: string; username: string } | null = null;
+  // Кассир сам открыть не может — создаётся запрос, а владелец даёт «добро» из
+  // своего кабинета (он может быть не в магазине). Смена откроется на кассира.
   if (mismatch && req.user!.role !== 'owner') {
-    approvedBy = await ownerOverride(req.body?.override_username, req.body?.override_pin);
-    if (!approvedBy) {
-      return res.status(403).json({
-        error: 'handover_mismatch',
-        needs_override: true,
-        message:
-          `Не сходится с остатком прошлой смены. Наличные: ожидалось ${prev.cash}, ввели ${openingCash}. ` +
-          `Безнал: ожидалось ${prev.wallet}, ввели ${openingWallet}. ` +
-          `Открыть кассу с расхождением может только владелец — позовите администратора, чтобы он дал добро.`,
-        expected: prev,
+    const existing = await getPendingRequest(req.user!.id, 'open');
+    const request = existing ?? (
+      await query(
+        `INSERT INTO shift_requests
+           (kind, user_id, counted_cash, counted_wallet, expected_cash, expected_wallet, cash_diff, wallet_diff)
+         VALUES ('open',$1,$2,$3,$4,$5,$6,$7) RETURNING *`,
+        [req.user!.id, openingCash, openingWallet, prev.cash, prev.wallet, cashDiff0, walletDiff0],
+      )
+    )[0];
+    if (!existing) {
+      await writeLog({
+        type: 'shift_request', entity: 'shift_request', entityId: request.id, userId: req.user!.id,
+        details: { kind: 'open', counted_cash: openingCash, counted_wallet: openingWallet, expected_cash: prev.cash, expected_wallet: prev.wallet, cash_diff: cashDiff0, wallet_diff: walletDiff0 },
       });
+      broadcast('shift_request', { id: request.id });
     }
+    return res.status(202).json({
+      pending: true,
+      request,
+      message:
+        `Не сходится с остатком прошлой смены. Наличные: ожидалось ${prev.cash}, ввели ${openingCash}. ` +
+        `Безнал: ожидалось ${prev.wallet}, ввели ${openingWallet}. ` +
+        `Открыть кассу может только владелец. Запрос отправлен — позвоните владельцу, он подтвердит из своего кабинета.`,
+      expected: prev,
+    });
   }
 
   try {
-    const shift = (
-      await query(
-        `INSERT INTO shifts (user_id, opening_cash, opening_expected, opening_wallet, opening_wallet_expected)
-         VALUES ($1,$2,$3,$4,$5) RETURNING *`,
-        [req.user!.id, openingCash, prev.cash, openingWallet, prev.wallet],
-      )
-    )[0];
-    await writeLog({
-      type: 'shift_open', entity: 'shift', entityId: shift.id, userId: req.user!.id,
-      details: {
-        opening_cash: openingCash, opening_wallet: openingWallet,
-        expected_cash: prev.cash, expected_wallet: prev.wallet,
-        approved_by: approvedBy ?? undefined,
-      },
-    });
-    // Расхождение при приёме — по каждой кассе отдельно.
-    const cashDiff = Number((openingCash - prev.cash).toFixed(2));
-    const walletDiff = Number((openingWallet - prev.wallet).toFixed(2));
-    if (cashDiff !== 0 || walletDiff !== 0) {
-      await writeLog({
-        type: 'handover_discrepancy', entity: 'shift', entityId: shift.id, userId: req.user!.id,
-        details: {
-          cash: { expected: prev.cash, counted: openingCash, difference: cashDiff },
-          wallet: { expected: prev.wallet, counted: openingWallet, difference: walletDiff },
-          approved_by: approvedBy ?? undefined,
-        },
-      });
-    }
-    broadcast('shift', shift);
-    res.status(201).json({ shift, expected: prev, handover: { cash: cashDiff, wallet: walletDiff } });
+    const shift = await createOpenShift(req.user!.id, openingCash, openingWallet, prev, null);
+    res.status(201).json({ shift, expected: prev, handover: { cash: cashDiff0, wallet: walletDiff0 } });
   } catch (err: any) {
     if (err.code === '23505') return res.status(409).json({ error: 'already_open' });
     throw err;
   }
 });
+
+// Собственно создание открытой смены + журнал. approvedBy — владелец, если
+// открытие было с расхождением и он его подтвердил.
+async function createOpenShift(
+  userId: string,
+  openingCash: number,
+  openingWallet: number,
+  prev: { cash: number; wallet: number },
+  approvedBy: { id: string; username: string } | null,
+) {
+  const shift = (
+    await query(
+      `INSERT INTO shifts (user_id, opening_cash, opening_expected, opening_wallet, opening_wallet_expected)
+       VALUES ($1,$2,$3,$4,$5) RETURNING *`,
+      [userId, openingCash, prev.cash, openingWallet, prev.wallet],
+    )
+  )[0];
+  await writeLog({
+    type: 'shift_open', entity: 'shift', entityId: shift.id, userId,
+    details: {
+      opening_cash: openingCash, opening_wallet: openingWallet,
+      expected_cash: prev.cash, expected_wallet: prev.wallet,
+      approved_by: approvedBy ?? undefined,
+    },
+  });
+  const cashDiff = Number((openingCash - prev.cash).toFixed(2));
+  const walletDiff = Number((openingWallet - prev.wallet).toFixed(2));
+  if (cashDiff !== 0 || walletDiff !== 0) {
+    await writeLog({
+      type: 'handover_discrepancy', entity: 'shift', entityId: shift.id, userId,
+      details: {
+        cash: { expected: prev.cash, counted: openingCash, difference: cashDiff },
+        wallet: { expected: prev.wallet, counted: openingWallet, difference: walletDiff },
+        approved_by: approvedBy ?? undefined,
+      },
+    });
+  }
+  broadcast('shift', shift);
+  return shift;
+}
 
 // Изъятие из кассы (инкассация) — владелец. kind: 'cash' (наличные) | 'wallet' (безнал).
 shiftsRouter.post('/withdraw', requireOwner, async (req, res) => {
@@ -241,25 +256,53 @@ shiftsRouter.post('/close', async (req, res) => {
   const walletDiff = Number((countedWallet - exp.wallet).toFixed(2));
 
   // Железобетонное правило: закрыть смену с расхождением может только владелец.
-  // Кассир при недостаче/излишке сам закрыть не может — но владелец может дать
-  // «добро» прямо тут, введя свой логин и PIN (смена остаётся за кассиром).
-  let approvedBy: { id: string; username: string } | null = null;
+  // Кассир сам закрыть не может — создаётся запрос, владелец даёт «добро» из
+  // кабинета (может быть не в магазине). Смена закроется под тем же кассиром.
   if ((cashDiff !== 0 || walletDiff !== 0) && req.user!.role !== 'owner') {
-    approvedBy = await ownerOverride(req.body?.override_username, req.body?.override_pin);
-    if (!approvedBy) {
-      return res.status(403).json({
-        error: 'close_mismatch',
-        needs_override: true,
-        message:
-          `Расхождение при закрытии. Наличные: ожидалось ${exp.cash}, посчитали ${countedCash} (${cashDiff > 0 ? '+' : ''}${cashDiff}). ` +
-          `Безнал: ожидалось ${exp.wallet}, посчитали ${countedWallet} (${walletDiff > 0 ? '+' : ''}${walletDiff}). ` +
-          `Закрыть смену с расхождением может только владелец — позовите администратора, чтобы он дал добро.`,
-        expected_cash: exp.cash,
-        expected_wallet: exp.wallet,
+    const existing = await getPendingRequest(req.user!.id, 'close');
+    const request = existing ?? (
+      await query(
+        `INSERT INTO shift_requests
+           (kind, user_id, shift_id, counted_cash, counted_wallet, expected_cash, expected_wallet, cash_diff, wallet_diff)
+         VALUES ('close',$1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
+        [req.user!.id, shift.id, countedCash, countedWallet, exp.cash, exp.wallet, cashDiff, walletDiff],
+      )
+    )[0];
+    if (!existing) {
+      await writeLog({
+        type: 'shift_request', entity: 'shift_request', entityId: request.id, userId: req.user!.id,
+        details: { kind: 'close', shift_id: shift.id, counted_cash: countedCash, counted_wallet: countedWallet, expected_cash: exp.cash, expected_wallet: exp.wallet, cash_diff: cashDiff, wallet_diff: walletDiff },
       });
+      broadcast('shift_request', { id: request.id });
     }
+    return res.status(202).json({
+      pending: true,
+      request,
+      message:
+        `Расхождение при закрытии. Наличные: ожидалось ${exp.cash}, посчитали ${countedCash} (${cashDiff > 0 ? '+' : ''}${cashDiff}). ` +
+        `Безнал: ожидалось ${exp.wallet}, посчитали ${countedWallet} (${walletDiff > 0 ? '+' : ''}${walletDiff}). ` +
+        `Закрыть смену может только владелец. Запрос отправлен — позвоните владельцу, он подтвердит из своего кабинета.`,
+      expected_cash: exp.cash,
+      expected_wallet: exp.wallet,
+    });
   }
 
+  const closed = await closeShiftRow(shift, req.user!.id, countedCash, countedWallet, null);
+  res.json({ shift: closed });
+});
+
+// Собственно закрытие смены + журнал. approvedBy — владелец, если закрытие было
+// с расхождением и он его подтвердил.
+async function closeShiftRow(
+  shift: any,
+  actorId: string,
+  countedCash: number,
+  countedWallet: number,
+  approvedBy: { id: string; username: string } | null,
+) {
+  const exp = await computeExpected(shift);
+  const cashDiff = Number((countedCash - exp.cash).toFixed(2));
+  const walletDiff = Number((countedWallet - exp.wallet).toFixed(2));
   const closed = (
     await query(
       `UPDATE shifts
@@ -270,24 +313,120 @@ shiftsRouter.post('/close', async (req, res) => {
       [shift.id, exp.cash, countedCash, cashDiff, exp.wallet, countedWallet, walletDiff],
     )
   )[0];
-
   await writeLog({
-    type: 'shift_close', entity: 'shift', entityId: shift.id, userId: req.user!.id,
+    type: 'shift_close', entity: 'shift', entityId: shift.id, userId: actorId,
     details: {
       cash: { expected: exp.cash, counted: countedCash, difference: cashDiff },
       wallet: { expected: exp.wallet, counted: countedWallet, difference: walletDiff },
-      closed_by_owner: shift.user_id !== req.user!.id || undefined,
+      closed_by_owner: shift.user_id !== actorId || undefined,
       approved_by: approvedBy ?? undefined,
     },
   });
   if (cashDiff !== 0 || walletDiff !== 0) {
     await writeLog({
-      type: 'cash_discrepancy', entity: 'shift', entityId: shift.id, userId: req.user!.id,
+      type: 'cash_discrepancy', entity: 'shift', entityId: shift.id, userId: actorId,
       details: { cash_difference: cashDiff, wallet_difference: walletDiff, approved_by: approvedBy ?? undefined },
     });
   }
   broadcast('shift', closed);
-  res.json({ shift: closed });
+  return closed;
+}
+
+// --- Запросы кассира на кассу с расхождением (подтверждает владелец) ---
+
+// Кассир: статус своего последнего запроса (для экрана ожидания).
+// Отдаём pending, а также недавно решённые (approved/rejected) — чтобы касса
+// среагировала. Старые (>10 мин) не тянем, чтобы не всплывали заново.
+shiftsRouter.get('/my-request', async (req, res) => {
+  const rows = await query(
+    `SELECT * FROM shift_requests
+      WHERE user_id = $1
+        AND (status = 'pending' OR resolved_at > now() - interval '10 minutes')
+      ORDER BY created_at DESC LIMIT 1`,
+    [req.user!.id],
+  );
+  res.json({ request: rows[0] ?? null });
+});
+
+// Кассир: отменить свой запрос (передумал / пересчитает).
+shiftsRouter.post('/requests/:id/cancel', async (req, res) => {
+  const rows = await query(
+    `UPDATE shift_requests SET status='cancelled', resolved_at=now()
+      WHERE id=$1 AND user_id=$2 AND status='pending' RETURNING *`,
+    [req.params.id, req.user!.id],
+  );
+  if (!rows[0]) return res.status(404).json({ error: 'not_found' });
+  broadcast('shift_request', { id: rows[0].id });
+  res.json({ ok: true });
+});
+
+// Владелец: список запросов, ожидающих подтверждения (с именем кассира).
+shiftsRouter.get('/requests', requireOwner, async (_req, res) => {
+  const rows = await query(
+    `SELECT r.*, u.username, u.full_name
+       FROM shift_requests r JOIN users u ON u.id = r.user_id
+      WHERE r.status = 'pending' ORDER BY r.created_at`,
+  );
+  res.json(rows);
+});
+
+// Владелец: дать «добро» — выполнить действие кассира (открыть/закрыть смену).
+shiftsRouter.post('/requests/:id/approve', requireOwner, async (req, res) => {
+  const reqRows = await query(`SELECT * FROM shift_requests WHERE id=$1`, [req.params.id]);
+  const r = reqRows[0];
+  if (!r) return res.status(404).json({ error: 'not_found' });
+  if (r.status !== 'pending') return res.status(409).json({ error: 'already_resolved', status: r.status });
+
+  const approver = { id: req.user!.id, username: req.user!.username };
+
+  if (r.kind === 'open') {
+    // Касса одна — если уже открыта смена, открыть нельзя.
+    const anyOpen = await getAnyOpenShift();
+    if (anyOpen) {
+      return res.status(409).json({
+        error: 'shift_already_open',
+        message: `Смена уже открыта (${anyOpen.full_name || anyOpen.username}).`,
+      });
+    }
+    const prev = await getLastClosing();
+    const shift = await createOpenShift(
+      r.user_id, Number(r.counted_cash), Number(r.counted_wallet), prev, approver,
+    );
+    await query(`UPDATE shift_requests SET status='approved', resolved_by=$2, resolved_at=now() WHERE id=$1`,
+      [r.id, req.user!.id]);
+    broadcast('shift_request', { id: r.id });
+    return res.json({ ok: true, kind: 'open', shift });
+  }
+
+  // kind === 'close'
+  const shift = await query(`SELECT * FROM shifts WHERE id=$1`, [r.shift_id]);
+  const s = shift[0];
+  if (!s || s.status !== 'open') {
+    await query(`UPDATE shift_requests SET status='cancelled', resolved_by=$2, resolved_at=now() WHERE id=$1`,
+      [r.id, req.user!.id]);
+    return res.status(409).json({ error: 'shift_not_open', message: 'Смена уже закрыта или не найдена.' });
+  }
+  const closed = await closeShiftRow(s, r.user_id, Number(r.counted_cash), Number(r.counted_wallet), approver);
+  await query(`UPDATE shift_requests SET status='approved', resolved_by=$2, resolved_at=now() WHERE id=$1`,
+    [r.id, req.user!.id]);
+  broadcast('shift_request', { id: r.id });
+  res.json({ ok: true, kind: 'close', shift: closed });
+});
+
+// Владелец: отклонить запрос — действие не выполняется.
+shiftsRouter.post('/requests/:id/reject', requireOwner, async (req, res) => {
+  const rows = await query(
+    `UPDATE shift_requests SET status='rejected', resolved_by=$2, resolved_at=now()
+      WHERE id=$1 AND status='pending' RETURNING *`,
+    [req.params.id, req.user!.id],
+  );
+  if (!rows[0]) return res.status(404).json({ error: 'not_found_or_resolved' });
+  await writeLog({
+    type: 'shift_request_rejected', entity: 'shift_request', entityId: rows[0].id, userId: req.user!.id,
+    details: { kind: rows[0].kind, cashier_id: rows[0].user_id },
+  });
+  broadcast('shift_request', { id: rows[0].id });
+  res.json({ ok: true });
 });
 
 // Открытые смены (владельцу) — чтобы закрыть за ушедшего кассира.

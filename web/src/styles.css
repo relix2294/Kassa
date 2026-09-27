@@ -419,6 +419,14 @@ input:focus, .search:focus { outline: none; border-color: var(--primary); }
 .list-item--alert { border-left: 3px solid var(--danger); }
 .log-details { color: var(--muted); font-size: 13px; margin-top: 4px; }
 
+/* Карточка, требующая внимания (запросы кассира, ожидание владельца) */
+.card--alert { border: 2px solid var(--danger); }
+.spinner-dots {
+  font-size: 22px; letter-spacing: 4px; color: var(--danger);
+  text-align: center; margin: 12px 0; animation: pulse 1.2s ease-in-out infinite;
+}
+@keyframes pulse { 0%,100% { opacity: .35; } 50% { opacity: 1; } }
+
 /* --- Аналитика / инвентаризация --- */
 .count-input {
   width: 80px;

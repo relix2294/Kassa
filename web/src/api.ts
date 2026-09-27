@@ -80,36 +80,25 @@ export const api = {
   currentShift: () =>
     req<{ shift: any | null; expected_cash?: number; expected_wallet?: number; stats?: any }>('/shifts/current'),
   expectedOpening: () => req<{ cash: number; wallet: number }>('/shifts/expected-opening'),
-  openShift: (
-    opening_cash: number,
-    opening_wallet: number,
-    override?: { username: string; pin: string },
-  ) =>
-    req<{ shift: any; expected?: { cash: number; wallet: number }; handover?: { cash: number; wallet: number } }>(
+  openShift: (opening_cash: number, opening_wallet: number) =>
+    req<{ shift?: any; pending?: boolean; request?: any; expected?: { cash: number; wallet: number }; handover?: { cash: number; wallet: number }; message?: string }>(
       '/shifts/open',
-      {
-        method: 'POST',
-        body: JSON.stringify({
-          opening_cash, opening_wallet,
-          override_username: override?.username, override_pin: override?.pin,
-        }),
-      },
+      { method: 'POST', body: JSON.stringify({ opening_cash, opening_wallet }) },
     ),
   withdrawCash: (amount: number, kind: 'cash' | 'wallet', note?: string) =>
     req<{ ok: boolean }>('/shifts/withdraw', { method: 'POST', body: JSON.stringify({ amount, kind, note }) }),
-  closeShift: (
-    counted_cash: number,
-    counted_wallet: number,
-    user_id?: string,
-    override?: { username: string; pin: string },
-  ) =>
-    req<{ shift: any }>('/shifts/close', {
+  closeShift: (counted_cash: number, counted_wallet: number, user_id?: string) =>
+    req<{ shift?: any; pending?: boolean; request?: any; message?: string }>('/shifts/close', {
       method: 'POST',
-      body: JSON.stringify({
-        counted_cash, counted_wallet, user_id,
-        override_username: override?.username, override_pin: override?.pin,
-      }),
+      body: JSON.stringify({ counted_cash, counted_wallet, user_id }),
     }),
+  // Запросы кассира на кассу с расхождением (подтверждает владелец).
+  myShiftRequest: () => req<{ request: any | null }>('/shifts/my-request'),
+  cancelShiftRequest: (id: string) => req<{ ok: boolean }>(`/shifts/requests/${id}/cancel`, { method: 'POST' }),
+  shiftRequests: () => req<any[]>('/shifts/requests'),
+  approveShiftRequest: (id: string) =>
+    req<{ ok: boolean; kind: 'open' | 'close'; shift: any }>(`/shifts/requests/${id}/approve`, { method: 'POST' }),
+  rejectShiftRequest: (id: string) => req<{ ok: boolean }>(`/shifts/requests/${id}/reject`, { method: 'POST' }),
   openShifts: () => req<any[]>('/shifts/open'),
   listShifts: (limit = 100) => req<any[]>(`/shifts?limit=${limit}`),
   summary: (period: string) =>

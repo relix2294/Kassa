@@ -3,6 +3,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db';
 import { api } from '../api';
 import { onRealtimeEvent } from '../sync';
+import ShiftRequests from '../components/ShiftRequests';
 import type { LogRow, Product } from '../types';
 
 type Period = 'today' | 'week' | 'month' | 'all';
@@ -54,6 +55,9 @@ export default function DashboardPage() {
   return (
     <div className="page">
       <h1>Кабинет</h1>
+
+      {/* Запросы кассиров на кассу с расхождением — требуют решения владельца */}
+      <ShiftRequests />
 
       <div className="seg">
         {(Object.keys(PERIOD_LABEL) as Period[]).map((p) => (
