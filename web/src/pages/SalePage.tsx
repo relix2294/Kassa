@@ -17,6 +17,7 @@ import ProductPicker from '../components/ProductPicker';
 import Confirm from '../components/Confirm';
 import Calculator from '../components/Calculator';
 import ShiftWaiting from '../components/ShiftWaiting';
+import RecentReceipts from '../components/RecentReceipts';
 import { postCustomer } from '../customer';
 
 export default function SalePage() {
@@ -30,6 +31,8 @@ export default function SalePage() {
   const [qtyEdit, setQtyEdit] = useState<CartLine | null>(null);
   const [returnOpen, setReturnOpen] = useState(false);
   const [changeDue, setChangeDue] = useState<number | null>(null);
+  // Счётчик обновления списка последних чеков — растёт после каждой продажи.
+  const [saleTick, setSaleTick] = useState(0);
   const [askClear, setAskClear] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [weighing, setWeighing] = useState<Product | null>(null);
@@ -165,6 +168,7 @@ export default function SalePage() {
       const r = await completeSale(items, method, received, shift?.id, cardAmount);
       await clearCart();
       setPayOpen(false);
+      setSaleTick((n) => n + 1); // обновить список последних чеков
       // Показываем покупателю на втором экране «спасибо» и сдачу.
       postCustomer({ type: 'paid', change: due > 0 ? due : 0 });
       // Сдачу показываем крупно и держим на экране, пока кассир её отсчитывает.
@@ -299,6 +303,7 @@ export default function SalePage() {
                 Очистить чек
               </button>
             )}
+            <RecentReceipts reloadKey={saleTick} />
           </div>
 
           <aside className="sale-side">
@@ -339,6 +344,7 @@ export default function SalePage() {
               </button>
             </div>
           )}
+          <RecentReceipts reloadKey={saleTick} />
         </>
       )}
 

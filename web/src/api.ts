@@ -71,6 +71,14 @@ export const api = {
       body: JSON.stringify({ products }),
     }),
   listSales: (limit = 100) => req<any[]>(`/sales?limit=${limit}`),
+  // Последние чеки текущей смены — для экрана кассы (доступно кассиру).
+  recentReceipts: (limit = 4) =>
+    req<{
+      id: string; created_at: string; total: number;
+      payment_method: 'cash' | 'card' | 'mixed';
+      cash_amount: number; card_amount: number; cash_received: number | null; change_given: number | null;
+      items: { name: string; qty: number; unit_price: number; line_total: number }[];
+    }[]>(`/sales/recent?limit=${limit}`),
   listReturns: (limit = 100) =>
     req<{
       id: string; total: number; reason: string | null; created_at: string;

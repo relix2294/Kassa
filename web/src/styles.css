@@ -423,6 +423,17 @@ input:focus, .search:focus { outline: none; border-color: var(--primary); }
 .list-item--alert { border-left: 3px solid var(--danger); }
 .log-details { color: var(--muted); font-size: 13px; margin-top: 4px; }
 
+/* Последние чеки на экране кассы */
+.recent-receipts { margin-top: 16px; }
+.recent-receipts__title { font-size: 15px; font-weight: 700; color: var(--muted); margin-bottom: 8px; }
+.recent-receipts__row {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  width: 100%; background: none; border: none; color: inherit; cursor: pointer;
+  padding: 0; text-align: left;
+}
+.recent-receipts__items { margin-top: 10px; border-top: 1px solid var(--border); padding-top: 8px; }
+.recent-receipts__item { display: flex; justify-content: space-between; gap: 12px; padding: 3px 0; font-size: 14px; }
+
 /* Карточка, требующая внимания (запросы кассира, ожидание владельца) */
 .card--alert { border: 2px solid var(--danger); }
 .spinner-dots {

@@ -73,6 +73,34 @@ salesRouter.get('/history', requireOwner, async (req, res) => {
   res.json(rows);
 });
 
+// Последние чеки текущей смены — для экрана кассы. Доступно кассиру: видит
+// только чеки своей открытой смены (без себестоимости/маржи). Закрылась смена —
+// список пуст (новый отсчёт). Нужен, чтобы кассир мог глянуть/сверить последнее.
+salesRouter.get('/recent', async (req, res) => {
+  const limit = Math.min(Number(req.query.limit) || 4, 20);
+  const shift = await getOpenShift(req.user!.id);
+  if (!shift) return res.json([]);
+  const rows = await query(
+    `SELECT s.id, s.created_at, s.total, s.payment_method,
+            s.cash_amount, s.card_amount, s.cash_received, s.change_given,
+            COALESCE(
+              json_agg(
+                json_build_object('name', si.name, 'qty', si.qty,
+                  'unit_price', si.unit_price, 'line_total', si.line_total)
+                ORDER BY si.id
+              ) FILTER (WHERE si.id IS NOT NULL), '[]'
+            ) AS items
+       FROM sales s
+       LEFT JOIN sale_items si ON si.sale_id = s.id
+      WHERE s.shift_id = $1
+      GROUP BY s.id
+      ORDER BY s.created_at DESC
+      LIMIT $2`,
+    [shift.id, limit],
+  );
+  res.json(rows);
+});
+
 // Провести продажу (чек).
 // Тело: { client_id, items:[{barcode, qty}], payment_method, cash_received?, user_id }
 salesRouter.post('/', async (req, res) => {
