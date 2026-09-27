@@ -32,45 +32,35 @@ returnsRouter.get('/', requireOwner, async (req, res) => {
   res.json(rows);
 });
 
-// Возврат/обмен: товар возвращается на склад, деньги выходят из кассы.
-// Тело: { client_id, items:[{barcode, qty}], reason?, sale_id?, user_id }
-returnsRouter.post('/', async (req, res) => {
-  const { client_id, items, reason, sale_id } = req.body ?? {};
-  const user_id = req.user!.id;
+// Выполнить возврат: товар на склад, деньги из кассы. Вынесено отдельно, чтобы
+// вызывать и напрямую (владелец), и после одобрения запроса кассира.
+// Бросает { status, message } при ошибке валидации/нехватке кассы.
+async function executeReturn(body: any, userId: string) {
+  const { client_id, items, reason, sale_id, shift_id } = body ?? {};
 
-  if (!Array.isArray(items) || items.length === 0) {
-    return res.status(400).json({ error: 'Пустой возврат' });
-  }
-
-  // Возврат идёт без чека, поэтому причина обязательна: это единственный
-  // след, по которому владелец потом разберёт, что произошло.
-  if (!reason || String(reason).trim().length < 3) {
-    return res.status(400).json({ error: 'Укажите причину возврата' });
-  }
+  if (!Array.isArray(items) || items.length === 0) throw { status: 400, message: 'Пустой возврат' };
+  if (!reason || String(reason).trim().length < 3) throw { status: 400, message: 'Укажите причину возврата' };
 
   if (client_id) {
     const existing = await query(`SELECT * FROM returns WHERE client_id = $1`, [client_id]);
-    if (existing.length > 0) return res.status(200).json({ ret: existing[0], duplicate: true });
+    if (existing.length > 0) return { ret: existing[0], duplicate: true, changedProducts: [] as any[] };
   }
 
-  // Возврат — тоже движение денег: привязываем к своей смене, даже если она
-  // уже закрыта (возврат мог быть отложен обрывом сети).
-  const { shift_id } = req.body ?? {};
+  // Возврат — движение денег: привязываем к своей смене, даже если она уже
+  // закрыта (возврат мог быть отложен обрывом сети).
   let shift: any = null;
   let lateToClosedShift = false;
-
   if (shift_id) {
-    const rows = await query(`SELECT * FROM shifts WHERE id = $1 AND user_id = $2`, [shift_id, user_id]);
+    const rows = await query(`SELECT * FROM shifts WHERE id = $1 AND user_id = $2`, [shift_id, userId]);
     shift = rows[0] ?? null;
-    if (!shift) return res.status(400).json({ error: 'Смена не найдена или чужая' });
+    if (!shift) throw { status: 400, message: 'Смена не найдена или чужая' };
     lateToClosedShift = shift.status === 'closed';
   } else {
-    shift = await getOpenShift(user_id);
-    if (!shift) return res.status(409).json({ error: 'no_shift' });
+    shift = await getOpenShift(userId);
+    if (!shift) throw { status: 409, message: 'Нет открытой смены' };
   }
 
-  try {
-    const result = await withTx(async (client) => {
+  const result = await withTx(async (client) => {
       let total = 0;
       const changedProducts: any[] = [];
       const lineRows: any[] = [];
@@ -125,7 +115,7 @@ returnsRouter.post('/', async (req, res) => {
         await client.query(
           `INSERT INTO returns (client_id, sale_id, total, reason, user_id, shift_id)
            VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
-          [client_id ?? null, sale_id ?? null, total, reason ?? null, user_id ?? null, shift.id],
+          [client_id ?? null, sale_id ?? null, total, reason ?? null, userId ?? null, shift.id],
         )
       ).rows[0];
 
@@ -142,30 +132,152 @@ returnsRouter.post('/', async (req, res) => {
           type: 'return',
           entity: 'return',
           entityId: retRow.id,
-          userId: user_id ?? null,
-          details: { total, items: lineRows.length, reason: reason ?? null },
+          userId: userId ?? null,
+          details: { total, items: lineRows.length, reason: reason ?? null, approved_by: body.__approved_by ?? undefined },
         },
         client,
       );
 
-      return { ret: retRow, changedProducts };
+      return { ret: retRow, changedProducts, duplicate: false };
     });
 
-    if (lateToClosedShift) {
+    if (lateToClosedShift && !result.duplicate) {
       const updated = await recomputeClosedShift(shift.id);
       await writeLog({
-        type: 'late_return', entity: 'shift', entityId: shift.id, userId: user_id,
+        type: 'late_return', entity: 'shift', entityId: shift.id, userId,
         details: { return_id: result.ret.id, total: result.ret.total, new_difference: updated?.difference },
       });
       if (updated) broadcast('shift', updated);
     }
 
-    result.changedProducts.forEach((p) => broadcast('product_upsert', p, 'all'));
+    result.changedProducts.forEach((p: any) => broadcast('product_upsert', p, 'all'));
     broadcast('return', result.ret);
-    res.status(201).json({ ret: result.ret });
+    return result;
+}
+
+// Возврат/обмен. Владелец — сразу. Кассир — только через одобрение владельца:
+// возврат это выдача денег из кассы, главный канал краж (пробил → взял нал →
+// «вернул»). Поэтому кассир создаёт запрос, а выполняется он после «добро».
+returnsRouter.post('/', async (req, res) => {
+  const body = req.body ?? {};
+  const { client_id, items, reason } = body;
+  const user_id = req.user!.id;
+
+  if (!Array.isArray(items) || items.length === 0) return res.status(400).json({ error: 'Пустой возврат' });
+  if (!reason || String(reason).trim().length < 3) return res.status(400).json({ error: 'Укажите причину возврата' });
+
+  // Владелец возвращает сам.
+  if (req.user!.role === 'owner') {
+    try {
+      const result = await executeReturn(body, user_id);
+      return res.status(result.duplicate ? 200 : 201).json({ ret: result.ret, duplicate: result.duplicate });
+    } catch (err: any) {
+      if (err?.status) return res.status(err.status).json({ error: err.message });
+      console.error('Ошибка возврата:', err);
+      return res.status(500).json({ error: 'internal' });
+    }
+  }
+
+  // Кассир: не выполняем, а создаём запрос владельцу (идемпотентно по client_id).
+  if (client_id) {
+    const doneRet = await query(`SELECT * FROM returns WHERE client_id = $1`, [client_id]);
+    if (doneRet.length > 0) return res.status(200).json({ ret: doneRet[0], duplicate: true });
+    const existingReq = await query(`SELECT * FROM return_requests WHERE client_id = $1`, [client_id]);
+    if (existingReq.length > 0) return res.status(202).json({ pending: true, request: existingReq[0] });
+  }
+
+  const total = Number(
+    items.reduce((s: number, it: any) => s + (Number(it.unit_price) || 0) * (Number(it.qty) || 0), 0).toFixed(2),
+  );
+  const request = (
+    await query(
+      `INSERT INTO return_requests (user_id, client_id, payload, total, items_count, reason)
+       VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
+      [user_id, client_id ?? null, JSON.stringify(body), total, items.length, String(reason).trim()],
+    )
+  )[0];
+  await writeLog({
+    type: 'return_request', entity: 'return_request', entityId: request.id, userId: user_id,
+    details: { total, items: items.length, reason: String(reason).trim() },
+  });
+  broadcast('return_request', { id: request.id });
+  return res.status(202).json({
+    pending: true,
+    request,
+    message: `Возврат на ${total} отправлен владельцу на подтверждение. Позвоните владельцу — он подтвердит из кабинета.`,
+  });
+});
+
+// Кассир: статус своего последнего запроса на возврат (экран ожидания).
+returnsRouter.get('/my-request', async (req, res) => {
+  const rows = await query(
+    `SELECT * FROM return_requests
+      WHERE user_id = $1 AND (status = 'pending' OR resolved_at > now() - interval '10 minutes')
+      ORDER BY created_at DESC LIMIT 1`,
+    [req.user!.id],
+  );
+  res.json({ request: rows[0] ?? null });
+});
+
+// Кассир: отменить свой запрос на возврат.
+returnsRouter.post('/requests/:id/cancel', async (req, res) => {
+  const rows = await query(
+    `UPDATE return_requests SET status='cancelled', resolved_at=now()
+      WHERE id=$1 AND user_id=$2 AND status='pending' RETURNING *`,
+    [req.params.id, req.user!.id],
+  );
+  if (!rows[0]) return res.status(404).json({ error: 'not_found' });
+  broadcast('return_request', { id: rows[0].id });
+  res.json({ ok: true });
+});
+
+// Владелец: запросы на возврат, ожидающие подтверждения (с составом).
+returnsRouter.get('/requests', requireOwner, async (_req, res) => {
+  const rows = await query(
+    `SELECT r.*, u.username, u.full_name
+       FROM return_requests r JOIN users u ON u.id = r.user_id
+      WHERE r.status = 'pending' ORDER BY r.created_at`,
+  );
+  res.json(rows);
+});
+
+// Владелец: дать «добро» — выполнить возврат от имени кассира.
+returnsRouter.post('/requests/:id/approve', requireOwner, async (req, res) => {
+  const reqRows = await query(`SELECT * FROM return_requests WHERE id=$1`, [req.params.id]);
+  const r = reqRows[0];
+  if (!r) return res.status(404).json({ error: 'not_found' });
+  if (r.status !== 'pending') return res.status(409).json({ error: 'already_resolved', status: r.status });
+
+  try {
+    const payload = { ...r.payload, __approved_by: { id: req.user!.id, username: req.user!.username } };
+    const result = await executeReturn(payload, r.user_id);
+    await query(
+      `UPDATE return_requests SET status='approved', resolved_by=$2, resolved_at=now(), result_return_id=$3 WHERE id=$1`,
+      [r.id, req.user!.id, result.ret.id],
+    );
+    broadcast('return_request', { id: r.id });
+    res.json({ ok: true, ret: result.ret });
   } catch (err: any) {
-    if (err?.status === 400) return res.status(400).json({ error: err.message });
-    console.error('Ошибка возврата:', err);
+    // Возврат не прошёл (напр. в кассе не хватает наличных) — запрос оставляем
+    // в ожидании, чтобы владелец мог разобраться и повторить или отклонить.
+    if (err?.status) return res.status(err.status).json({ error: err.message });
+    console.error('Ошибка возврата (approve):', err);
     res.status(500).json({ error: 'internal' });
   }
+});
+
+// Владелец: отклонить запрос на возврат.
+returnsRouter.post('/requests/:id/reject', requireOwner, async (req, res) => {
+  const rows = await query(
+    `UPDATE return_requests SET status='rejected', resolved_by=$2, resolved_at=now()
+      WHERE id=$1 AND status='pending' RETURNING *`,
+    [req.params.id, req.user!.id],
+  );
+  if (!rows[0]) return res.status(404).json({ error: 'not_found_or_resolved' });
+  await writeLog({
+    type: 'return_request_rejected', entity: 'return_request', entityId: rows[0].id, userId: req.user!.id,
+    details: { total: rows[0].total, cashier_id: rows[0].user_id },
+  });
+  broadcast('return_request', { id: rows[0].id });
+  res.json({ ok: true });
 });

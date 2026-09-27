@@ -290,3 +290,24 @@ CREATE TABLE IF NOT EXISTS shift_requests (
 );
 CREATE INDEX IF NOT EXISTS idx_shift_req_status ON shift_requests(status);
 CREATE INDEX IF NOT EXISTS idx_shift_req_user ON shift_requests(user_id);
+
+-- Запросы кассира на возврат оплаченного чека. Возврат — движение денег из
+-- кассы, поэтому кассир сам его сделать не может: создаётся запрос, а владелец
+-- подтверждает из кабинета. Сам возврат выполняется только после одобрения.
+CREATE TABLE IF NOT EXISTS return_requests (
+  id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id       uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE, -- кассир
+  client_id     text,                         -- идемпотентность (повтор из очереди)
+  payload       jsonb NOT NULL,               -- тело возврата (items, reason, shift_id)
+  total         numeric(12,2) NOT NULL DEFAULT 0,   -- предпросмотр суммы
+  items_count   int NOT NULL DEFAULT 0,
+  reason        text,
+  status        text NOT NULL DEFAULT 'pending',    -- pending|approved|rejected|cancelled
+  result_return_id uuid REFERENCES returns(id),     -- созданный возврат после одобрения
+  resolved_by   uuid REFERENCES users(id),
+  resolved_at   timestamptz,
+  created_at    timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_ret_req_status ON return_requests(status);
+CREATE INDEX IF NOT EXISTS idx_ret_req_user ON return_requests(user_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_ret_req_client ON return_requests(client_id) WHERE client_id IS NOT NULL;

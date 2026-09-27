@@ -5,6 +5,7 @@ import { useShift, openShift, closeShift, refreshShift } from '../shift';
 import { useCurrentUser } from '../session';
 import ShiftWaiting from '../components/ShiftWaiting';
 import ShiftRequests from '../components/ShiftRequests';
+import ReturnRequests from '../components/ReturnRequests';
 
 type Stats = { expectedCash: number; expectedWallet: number; stats: any } | null;
 
@@ -92,8 +93,9 @@ export default function ShiftPage() {
 
       {err && <div className="change change--neg">{err}</div>}
 
-      {/* Владельцу: запросы кассиров на кассу с расхождением */}
+      {/* Владельцу: запросы кассиров на кассу с расхождением и на возврат */}
       {user?.role === 'owner' && <ShiftRequests />}
+      {user?.role === 'owner' && <ReturnRequests />}
 
       {/* Итог только что закрытой смены */}
       {closed && (

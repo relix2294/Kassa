@@ -299,12 +299,18 @@ export async function completeReturn(
   items: { barcode?: string; product_id?: string; qty: number; unit_price?: number }[],
   reason: string | undefined,
   shiftId?: string,
-): Promise<{ queued: boolean }> {
+): Promise<{ queued: boolean; pending?: boolean; request?: any }> {
   const client_id = genId();
   const payload = { client_id, items, reason, shift_id: shiftId };
   for (const it of items) await adjustLocalStock(it, Number(it.qty));
   try {
-    await api.createReturn(payload);
+    const res = await api.createReturn(payload);
+    // Возврат кассира ждёт одобрения владельца — по факту он ещё не сделан,
+    // поэтому откатываем оптимистичное изменение остатка (вернём при одобрении).
+    if (res.pending) {
+      for (const it of items) await adjustLocalStock(it, -Number(it.qty));
+      return { queued: false, pending: true, request: res.request };
+    }
     return { queued: false };
   } catch (err: any) {
     if (err.status !== undefined) {

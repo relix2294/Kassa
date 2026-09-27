@@ -4,6 +4,7 @@ import { db } from '../db';
 import { api } from '../api';
 import { onRealtimeEvent } from '../sync';
 import ShiftRequests from '../components/ShiftRequests';
+import ReturnRequests from '../components/ReturnRequests';
 import type { LogRow, Product } from '../types';
 
 type Period = 'today' | 'week' | 'month' | 'all';
@@ -56,8 +57,9 @@ export default function DashboardPage() {
     <div className="page">
       <h1>Кабинет</h1>
 
-      {/* Запросы кассиров на кассу с расхождением — требуют решения владельца */}
+      {/* Запросы кассиров — требуют решения владельца */}
       <ShiftRequests />
+      <ReturnRequests />
 
       <div className="seg">
         {(Object.keys(PERIOD_LABEL) as Period[]).map((p) => (

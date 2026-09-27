@@ -6,6 +6,8 @@ import { useCurrentUser } from '../session';
 import { useShift } from '../shift';
 import { useGuardedClose } from '../components/Confirm';
 import ProductPicker from '../components/ProductPicker';
+import ShiftWaiting from '../components/ShiftWaiting';
+import { api } from '../api';
 import type { Product } from '../types';
 
 // Частые причины — чтобы кассир не писал руками и владельцу было что группировать.
@@ -30,6 +32,8 @@ export default function ReturnPanel({ onClose, onDone }: { onClose: () => void; 
   const [err, setErr] = useState<string | null>(null);
   const scanRef = useRef<HTMLInputElement>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
+  // Возврат кассира ждёт одобрения владельца.
+  const [pending, setPending] = useState<{ request: any; message?: string | null } | null>(null);
   const { requestClose, guard } = useGuardedClose(lines.length > 0 || reason.trim() !== '', onClose);
 
   useEffect(() => {
@@ -81,11 +85,36 @@ export default function ReturnPanel({ onClose, onDone }: { onClose: () => void; 
     try {
       const items = lines.map((l) => ({ product_id: l.product_id, qty: l.qty, unit_price: l.unit_price }));
       const r = await completeReturn(items, reason.trim(), shift?.id);
+      if (r.pending) {
+        // Кассир: возврат не выполнен — ждём «добро» владельца.
+        setPending({ request: r.request, message: `Возврат на ${total} отправлен владельцу на подтверждение.` });
+        return;
+      }
       onDone(r.queued ? 'Нет сети — возврат в очереди' : `Возврат оформлен: −${total}`);
       onClose();
     } catch (e: any) {
       setErr(`Ошибка: ${e.message}`);
     }
+  }
+
+  // Кассир ждёт подтверждения владельца — показываем экран ожидания.
+  if (pending) {
+    return (
+      <div className="modal-backdrop" onClick={(e) => e.stopPropagation()}>
+        <div className="modal" onClick={(e) => e.stopPropagation()}>
+          <ShiftWaiting
+            request={pending.request}
+            message={pending.message}
+            poll={api.myReturnRequest}
+            cancel={api.cancelReturnRequest}
+            whatHappens="возврат оформится"
+            onApproved={() => { onDone('Владелец подтвердил — возврат оформлен'); onClose(); }}
+            onRejected={() => { setPending(null); setErr('Владелец отклонил возврат.'); }}
+            onCancelled={() => { setPending(null); }}
+          />
+        </div>
+      </div>
+    );
   }
 
   return (

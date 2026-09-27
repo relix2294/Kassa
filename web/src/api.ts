@@ -49,7 +49,13 @@ export const api = {
     items: { barcode?: string; product_id?: string; qty: number; unit_price?: number }[];
     reason?: string;
     shift_id?: string;
-  }) => req<{ ret: any; duplicate?: boolean }>('/returns', { method: 'POST', body: JSON.stringify(payload) }),
+  }) => req<{ ret?: any; duplicate?: boolean; pending?: boolean; request?: any; message?: string }>('/returns', { method: 'POST', body: JSON.stringify(payload) }),
+  // Возвраты требуют одобрения владельца (движение денег из кассы).
+  myReturnRequest: () => req<{ request: any | null }>('/returns/my-request'),
+  cancelReturnRequest: (id: string) => req<{ ok: boolean }>(`/returns/requests/${id}/cancel`, { method: 'POST' }),
+  returnRequests: () => req<any[]>('/returns/requests'),
+  approveReturnRequest: (id: string) => req<{ ok: boolean; ret: any }>(`/returns/requests/${id}/approve`, { method: 'POST' }),
+  rejectReturnRequest: (id: string) => req<{ ok: boolean }>(`/returns/requests/${id}/reject`, { method: 'POST' }),
   setDiscount: (id: string, payload: { discount_price?: number; discount_limit?: number | null; clear?: boolean }) =>
     req<Product>(`/products/${id}/discount`, { method: 'POST', body: JSON.stringify(payload) }),
   archiveProduct: (id: string, archive = true) =>
