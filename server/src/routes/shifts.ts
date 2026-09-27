@@ -2,9 +2,30 @@ import { Router } from 'express';
 import { query } from '../db.js';
 import { writeLog } from '../lib/log.js';
 import { broadcast } from '../lib/realtime.js';
-import { requireOwner } from '../lib/auth.js';
+import { requireOwner, verifyPin } from '../lib/auth.js';
 
 export const shiftsRouter = Router();
+
+// Разрешение владельца прямо на экране кассира: владелец вводит свой логин и
+// PIN, чтобы дать «добро» на действие с расхождением. Смена при этом остаётся
+// за кассиром — мы лишь фиксируем, кто санкционировал. Возвращает запись
+// владельца или null (не владелец / неверный PIN / заблокирован).
+async function ownerOverride(
+  username: unknown,
+  pin: unknown,
+): Promise<{ id: string; username: string } | null> {
+  const uname = String(username ?? '').trim();
+  const code = String(pin ?? '');
+  if (!uname || !code) return null;
+  const rows = await query<{ id: string; username: string; role: string; pin_hash: string | null; is_blocked: boolean }>(
+    `SELECT id, username, role, pin_hash, is_blocked FROM users WHERE lower(username) = lower($1)`,
+    [uname],
+  );
+  const u = rows[0];
+  if (!u || u.is_blocked || u.role !== 'owner' || !u.pin_hash) return null;
+  const ok = await verifyPin(code, u.pin_hash);
+  return ok ? { id: u.id, username: u.username } : null;
+}
 
 // Открытая смена пользователя (или null).
 export async function getOpenShift(userId: string) {
@@ -116,6 +137,28 @@ shiftsRouter.post('/open', async (req, res) => {
   }
 
   const prev = await getLastClosing();
+  const cashDiff0 = Number((openingCash - prev.cash).toFixed(2));
+  const walletDiff0 = Number((openingWallet - prev.wallet).toFixed(2));
+  const mismatch = cashDiff0 !== 0 || walletDiff0 !== 0;
+
+  // Железобетонное правило: принять кассу с расхождением может только владелец.
+  // Кассир при несовпадении открыть не может — но владелец может дать «добро»
+  // прямо тут, введя свой логин и PIN (смена всё равно останется за кассиром).
+  let approvedBy: { id: string; username: string } | null = null;
+  if (mismatch && req.user!.role !== 'owner') {
+    approvedBy = await ownerOverride(req.body?.override_username, req.body?.override_pin);
+    if (!approvedBy) {
+      return res.status(403).json({
+        error: 'handover_mismatch',
+        needs_override: true,
+        message:
+          `Не сходится с остатком прошлой смены. Наличные: ожидалось ${prev.cash}, ввели ${openingCash}. ` +
+          `Безнал: ожидалось ${prev.wallet}, ввели ${openingWallet}. ` +
+          `Открыть кассу с расхождением может только владелец — позовите администратора, чтобы он дал добро.`,
+        expected: prev,
+      });
+    }
+  }
 
   try {
     const shift = (
@@ -127,7 +170,11 @@ shiftsRouter.post('/open', async (req, res) => {
     )[0];
     await writeLog({
       type: 'shift_open', entity: 'shift', entityId: shift.id, userId: req.user!.id,
-      details: { opening_cash: openingCash, opening_wallet: openingWallet, expected_cash: prev.cash, expected_wallet: prev.wallet },
+      details: {
+        opening_cash: openingCash, opening_wallet: openingWallet,
+        expected_cash: prev.cash, expected_wallet: prev.wallet,
+        approved_by: approvedBy ?? undefined,
+      },
     });
     // Расхождение при приёме — по каждой кассе отдельно.
     const cashDiff = Number((openingCash - prev.cash).toFixed(2));
@@ -138,6 +185,7 @@ shiftsRouter.post('/open', async (req, res) => {
         details: {
           cash: { expected: prev.cash, counted: openingCash, difference: cashDiff },
           wallet: { expected: prev.wallet, counted: openingWallet, difference: walletDiff },
+          approved_by: approvedBy ?? undefined,
         },
       });
     }
@@ -192,6 +240,26 @@ shiftsRouter.post('/close', async (req, res) => {
   const cashDiff = Number((countedCash - exp.cash).toFixed(2));
   const walletDiff = Number((countedWallet - exp.wallet).toFixed(2));
 
+  // Железобетонное правило: закрыть смену с расхождением может только владелец.
+  // Кассир при недостаче/излишке сам закрыть не может — но владелец может дать
+  // «добро» прямо тут, введя свой логин и PIN (смена остаётся за кассиром).
+  let approvedBy: { id: string; username: string } | null = null;
+  if ((cashDiff !== 0 || walletDiff !== 0) && req.user!.role !== 'owner') {
+    approvedBy = await ownerOverride(req.body?.override_username, req.body?.override_pin);
+    if (!approvedBy) {
+      return res.status(403).json({
+        error: 'close_mismatch',
+        needs_override: true,
+        message:
+          `Расхождение при закрытии. Наличные: ожидалось ${exp.cash}, посчитали ${countedCash} (${cashDiff > 0 ? '+' : ''}${cashDiff}). ` +
+          `Безнал: ожидалось ${exp.wallet}, посчитали ${countedWallet} (${walletDiff > 0 ? '+' : ''}${walletDiff}). ` +
+          `Закрыть смену с расхождением может только владелец — позовите администратора, чтобы он дал добро.`,
+        expected_cash: exp.cash,
+        expected_wallet: exp.wallet,
+      });
+    }
+  }
+
   const closed = (
     await query(
       `UPDATE shifts
@@ -209,12 +277,13 @@ shiftsRouter.post('/close', async (req, res) => {
       cash: { expected: exp.cash, counted: countedCash, difference: cashDiff },
       wallet: { expected: exp.wallet, counted: countedWallet, difference: walletDiff },
       closed_by_owner: shift.user_id !== req.user!.id || undefined,
+      approved_by: approvedBy ?? undefined,
     },
   });
   if (cashDiff !== 0 || walletDiff !== 0) {
     await writeLog({
       type: 'cash_discrepancy', entity: 'shift', entityId: shift.id, userId: req.user!.id,
-      details: { cash_difference: cashDiff, wallet_difference: walletDiff },
+      details: { cash_difference: cashDiff, wallet_difference: walletDiff, approved_by: approvedBy ?? undefined },
     });
   }
   broadcast('shift', closed);

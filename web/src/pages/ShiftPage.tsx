@@ -3,6 +3,7 @@ import NumberInput from '../components/NumberInput';
 import { api } from '../api';
 import { useShift, openShift, closeShift, refreshShift } from '../shift';
 import { useCurrentUser } from '../session';
+import { OwnerOverrideModal } from '../components/OwnerOverrideModal';
 
 type Stats = { expectedCash: number; expectedWallet: number; stats: any } | null;
 
@@ -17,6 +18,8 @@ export default function ShiftPage() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [withdrawOpen, setWithdrawOpen] = useState(false);
+  // Экран разрешения владельца при расхождении (кассир сам не проходит).
+  const [override, setOverride] = useState<{ action: 'open' | 'close'; message: string } | null>(null);
 
   async function loadStats() {
     try {
@@ -39,23 +42,35 @@ export default function ShiftPage() {
     }
   }, [mode]);
 
-  async function doOpen() {
+  async function doOpen(creds?: { username: string; pin: string }) {
     setBusy(true); setErr(null);
     try {
-      await openShift(Number(cashIn) || 0, Number(walletIn) || 0);
-      setMode('view'); setCashIn(''); setWalletIn('');
+      await openShift(Number(cashIn) || 0, Number(walletIn) || 0, creds);
+      setOverride(null); setMode('view'); setCashIn(''); setWalletIn('');
     } catch (e: any) {
-      setErr(e?.body?.message || e?.message || 'Не удалось открыть смену');
+      if (e?.status === 403 && e?.body?.needs_override) {
+        setErr(null);
+        setOverride({ action: 'open', message: e.body?.message || 'Не сходится с остатком прошлой смены.' });
+      } else {
+        setOverride(null);
+        setErr(e?.body?.message || e?.message || 'Не удалось открыть смену');
+      }
     } finally { setBusy(false); }
   }
 
-  async function doClose() {
+  async function doClose(creds?: { username: string; pin: string }) {
     setBusy(true); setErr(null);
     try {
-      const c = await closeShift(Number(cashIn) || 0, Number(walletIn) || 0);
-      setClosed(c); setMode('view'); setCashIn(''); setWalletIn('');
+      const c = await closeShift(Number(cashIn) || 0, Number(walletIn) || 0, undefined, creds);
+      setClosed(c); setOverride(null); setMode('view'); setCashIn(''); setWalletIn('');
     } catch (e: any) {
-      setErr(e?.body?.message || e?.message || 'Не удалось закрыть смену');
+      if (e?.status === 403 && e?.body?.needs_override) {
+        setErr(null);
+        setOverride({ action: 'close', message: e.body?.message || 'Расхождение при закрытии.' });
+      } else {
+        setOverride(null);
+        setErr(e?.body?.message || e?.message || 'Не удалось закрыть смену');
+      }
     } finally { setBusy(false); }
   }
 
@@ -94,7 +109,7 @@ export default function ShiftPage() {
           <label className="field"><span>Безнал — на кошельках</span><NumberInput value={walletIn} onValue={setWalletIn} /></label>
           <div className="row">
             <button className="btn" onClick={() => { setMode('view'); setCashIn(''); setWalletIn(''); }} disabled={busy}>Отмена</button>
-            <button className="btn btn--primary" onClick={doOpen} disabled={busy}>Принять</button>
+            <button className="btn btn--primary" onClick={() => doOpen()} disabled={busy}>Принять</button>
           </div>
         </div>
       )}
@@ -141,9 +156,21 @@ export default function ShiftPage() {
           <label className="field"><span>Безнал — на кошельках</span><NumberInput value={walletIn} onValue={setWalletIn} /></label>
           <div className="row">
             <button className="btn" onClick={() => { setMode('view'); setCashIn(''); setWalletIn(''); }} disabled={busy}>Отмена</button>
-            <button className="btn btn--primary" onClick={doClose} disabled={busy}>Закрыть смену</button>
+            <button className="btn btn--primary" onClick={() => doClose()} disabled={busy}>Закрыть смену</button>
           </div>
         </div>
+      )}
+
+      {override && (
+        <OwnerOverrideModal
+          title={override.action === 'open'
+            ? 'Наличные или безнал не сходятся с остатком прошлой смены.'
+            : 'Расхождение при закрытии смены.'}
+          message={override.message}
+          busy={busy}
+          onConfirm={(creds) => (override.action === 'open' ? doOpen(creds) : doClose(creds))}
+          onCancel={() => { setOverride(null); setBusy(false); }}
+        />
       )}
 
       {/* Владелец: чужие незакрытые смены и история */}

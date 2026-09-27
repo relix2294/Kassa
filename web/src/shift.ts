@@ -45,16 +45,25 @@ export async function refreshShift() {
   notify();
 }
 
-export async function openShift(openingCash: number, openingWallet: number) {
-  const { shift } = await api.openShift(openingCash, openingWallet);
+export async function openShift(
+  openingCash: number,
+  openingWallet: number,
+  override?: { username: string; pin: string },
+) {
+  const { shift } = await api.openShift(openingCash, openingWallet, override);
   current = shift;
   localStorage.setItem(CACHE_KEY, JSON.stringify(shift));
   notify();
   return shift;
 }
 
-export async function closeShift(countedCash: number, countedWallet: number, userId?: string) {
-  const { shift } = await api.closeShift(countedCash, countedWallet, userId);
+export async function closeShift(
+  countedCash: number,
+  countedWallet: number,
+  userId?: string,
+  override?: { username: string; pin: string },
+) {
+  const { shift } = await api.closeShift(countedCash, countedWallet, userId, override);
   if (!userId) current = null; // закрыли свою смену
   if (!userId) localStorage.removeItem(CACHE_KEY);
   notify();

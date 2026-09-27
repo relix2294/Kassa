@@ -80,15 +80,36 @@ export const api = {
   currentShift: () =>
     req<{ shift: any | null; expected_cash?: number; expected_wallet?: number; stats?: any }>('/shifts/current'),
   expectedOpening: () => req<{ cash: number; wallet: number }>('/shifts/expected-opening'),
-  openShift: (opening_cash: number, opening_wallet: number) =>
+  openShift: (
+    opening_cash: number,
+    opening_wallet: number,
+    override?: { username: string; pin: string },
+  ) =>
     req<{ shift: any; expected?: { cash: number; wallet: number }; handover?: { cash: number; wallet: number } }>(
       '/shifts/open',
-      { method: 'POST', body: JSON.stringify({ opening_cash, opening_wallet }) },
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          opening_cash, opening_wallet,
+          override_username: override?.username, override_pin: override?.pin,
+        }),
+      },
     ),
   withdrawCash: (amount: number, kind: 'cash' | 'wallet', note?: string) =>
     req<{ ok: boolean }>('/shifts/withdraw', { method: 'POST', body: JSON.stringify({ amount, kind, note }) }),
-  closeShift: (counted_cash: number, counted_wallet: number, user_id?: string) =>
-    req<{ shift: any }>('/shifts/close', { method: 'POST', body: JSON.stringify({ counted_cash, counted_wallet, user_id }) }),
+  closeShift: (
+    counted_cash: number,
+    counted_wallet: number,
+    user_id?: string,
+    override?: { username: string; pin: string },
+  ) =>
+    req<{ shift: any }>('/shifts/close', {
+      method: 'POST',
+      body: JSON.stringify({
+        counted_cash, counted_wallet, user_id,
+        override_username: override?.username, override_pin: override?.pin,
+      }),
+    }),
   openShifts: () => req<any[]>('/shifts/open'),
   listShifts: (limit = 100) => req<any[]>(`/shifts?limit=${limit}`),
   summary: (period: string) =>
