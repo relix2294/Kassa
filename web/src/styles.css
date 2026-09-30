@@ -112,8 +112,8 @@ input, .search {
   border: 1px solid var(--border);
   color: var(--text);
   border-radius: 10px;
-  padding: 12px 14px;
-  font-size: 17px;
+  padding: 14px 16px;
+  font-size: 18px;
   width: 100%;
 }
 input:focus, .search:focus { outline: none; border-color: var(--primary); }
@@ -127,12 +127,15 @@ input:focus, .search:focus { outline: none; border-color: var(--primary); }
   color: var(--text);
   border: none;
   border-radius: 10px;
-  padding: 13px 16px;
-  font-size: 16px;
+  padding: 15px 18px;
+  font-size: 17px;
   font-weight: 600;
+  min-height: 52px;
   flex: 1;
   cursor: pointer;
 }
+/* Компактные вспомогательные кнопки (в шапке) — не растягиваем по высоте. */
+.btn--ghost { min-height: 0; }
 .btn:disabled { opacity: 0.5; }
 .btn--primary { background: var(--primary); color: var(--primary-ink); }
 
@@ -249,51 +252,53 @@ input:focus, .search:focus { outline: none; border-color: var(--primary); }
 .sale-head { display: flex; align-items: center; justify-content: space-between; }
 .btn--ghost { background: transparent; border: 1px solid var(--border); flex: 0 0 auto; padding: 8px 14px; }
 .btn--pay { flex: 2; }
-.btn--big { padding: 20px; font-size: 18px; }
+.btn--big { padding: 22px; font-size: 20px; min-height: 64px; }
 
 .scan-row { margin-bottom: 12px; }
-.scan-row input { font-size: 18px; }
+.scan-row input { font-size: 22px; padding: 16px; }
 
 .cart { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
 .cart-line {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   background: var(--surface);
   border-radius: 12px;
-  padding: 10px 12px;
+  padding: 14px 14px;
 }
 .cart-line__main { flex: 1; min-width: 0; }
-.cart-line__name { font-weight: 600; }
+.cart-line__name { font-weight: 700; font-size: 18px; }
+.cart-line__main .muted { font-size: 15px; }
+.cart-line__main .muted b { font-size: 17px; color: var(--text); }
 .cart-line__del {
   background: transparent;
   border: none;
   color: var(--danger);
-  font-size: 24px;
-  width: 34px;
-  height: 34px;
+  font-size: 30px;
+  width: 46px;
+  height: 46px;
   cursor: pointer;
   flex: 0 0 auto;
 }
 
-.qty-ctrl { display: flex; align-items: center; gap: 4px; }
+.qty-ctrl { display: flex; align-items: center; gap: 6px; }
 .qty-btn {
-  width: 36px;
-  height: 36px;
-  border-radius: 9px;
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
   border: none;
   background: var(--surface-2);
   color: var(--text);
-  font-size: 22px;
+  font-size: 28px;
   cursor: pointer;
 }
 .qty-num {
-  min-width: 40px;
-  height: 36px;
+  min-width: 58px;
+  height: 48px;
   border: none;
   background: transparent;
   color: var(--text);
-  font-size: 18px;
+  font-size: 24px;
   font-weight: 700;
   cursor: pointer;
 }
@@ -308,8 +313,8 @@ input:focus, .search:focus { outline: none; border-color: var(--primary); }
   gap: 10px;
 }
 .keypad__key {
-  padding: 18px;
-  font-size: 22px;
+  padding: 20px;
+  font-size: 26px;
   font-weight: 600;
   background: var(--surface-2);
   color: var(--text);
@@ -647,7 +652,7 @@ kbd {
 .change-box--idle { background: var(--surface); }
 .change-box--ok { background: rgba(34, 197, 94, 0.12); border-color: var(--ok); }
 .change-box--short { background: rgba(239, 68, 68, 0.12); border-color: var(--danger); }
-.change-box__label { font-size: 14px; color: var(--muted); }
+.change-box__label { font-size: 16px; color: var(--muted); }
 .change-box--ok .change-box__label { color: var(--ok); }
 .change-box--short .change-box__label { color: var(--danger); }
 .change-box__hint { font-size: 13px; color: var(--muted); margin-top: 4px; }
@@ -659,18 +664,18 @@ kbd {
 .quick-sums { display: flex; flex-wrap: wrap; gap: 8px; }
 .quick-sum {
   flex: 1 0 auto;
-  min-width: 64px;
+  min-width: 72px;
   background: var(--surface-2);
   color: var(--text);
   border: none;
   border-radius: 10px;
-  padding: 14px 10px;
-  font-size: 18px;
+  padding: 16px 12px;
+  font-size: 20px;
   font-weight: 700;
   cursor: pointer;
 }
 .quick-sum:active { background: var(--primary); color: var(--primary-ink); }
-.quick-sum--exact { font-size: 15px; background: var(--surface); border: 1px solid var(--border); }
+.quick-sum--exact { font-size: 17px; background: var(--surface); border: 1px solid var(--border); }
 
 /* Экран сдачи после оплаты. */
 .change-screen {
@@ -695,16 +700,21 @@ kbd {
 }
 .change-screen__btn { margin-top: 20px; max-width: 320px; width: 100%; flex: 0 0 auto; }
 
-/* На десктопе кассы панель оплаты должна умещаться целиком: клавиатура
-   компактнее, у кассира к тому же есть физическая клавиатура. */
+/* На десктопе кассы панель оплаты крупная и читаемая. Если не влезает по
+   высоте — панель прокручивается (overflow-y:auto выше), кнопки не режутся. */
 @media (min-width: 1000px) {
-  .sale-side .keypad__key { padding: 12px; font-size: 19px; }
+  .sale-side .keypad__key { padding: 13px; font-size: 22px; }
   .sale-side .keypad { gap: 8px; }
-  .sale-side .quick-sum { padding: 10px 8px; font-size: 16px; }
-  .sale-side .change-box { padding: 12px; }
-  .sale-side .change-box__sum { font-size: 34px; }
-  .sale-side .payform__sum { font-size: 34px; }
-  .sale-side .keypad-value { padding: 10px 14px; font-size: 22px; }
+  .sale-side .quick-sum { padding: 13px 10px; font-size: 19px; }
+  .sale-side .change-box__sum { font-size: 40px; }
+  .sale-side .payform__sum { font-size: 40px; }
+  .sale-side .keypad-value { padding: 12px 14px; font-size: 26px; }
+  /* «Провести/Назад» всегда на виду внизу панели, не надо прокручивать. */
+  .sale-side .payform > .row:last-child,
+  .sale-side .payform .row:last-of-type {
+    position: sticky; bottom: 0; background: var(--bg);
+    padding-top: 10px; margin-top: 2px;
+  }
 }
 
 /* Индикатор непрошедших операций. */
@@ -999,25 +1009,29 @@ kbd {
   z-index: 20; overflow: hidden auto; max-height: 340px;
   box-shadow: 0 10px 28px rgba(0, 0, 0, 0.18);
 }
-.scan-suggest--empty { padding: 12px 14px; color: var(--muted); }
+.scan-suggest--empty { padding: 16px; color: var(--muted); font-size: 16px; }
 .scan-suggest__item {
   display: flex; justify-content: space-between; align-items: center; gap: 12px;
-  width: 100%; padding: 12px 14px; background: transparent; border: 0;
+  width: 100%; padding: 16px; background: transparent; border: 0;
   border-bottom: 1px solid var(--border); text-align: left; cursor: pointer; color: var(--text);
+  min-height: 60px; font-size: 16px;
 }
 .scan-suggest__item:last-child { border-bottom: 0; }
 .scan-suggest__item:hover { background: var(--surface-2); }
-.scan-suggest__name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.scan-suggest__name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; font-size: 18px; }
 
-/* Плавающая кнопка калькулятора на экране продажи */
+/* Плавающая кнопка калькулятора на экране продажи. На телефоне поднимаем выше
+   нижней навигации и кнопки оплаты, чтобы она их не перекрывала. */
 .calc-fab {
-  position: fixed; right: 16px; bottom: 88px; z-index: 30;
+  position: fixed; right: 16px; bottom: 150px; z-index: 30;
   width: 56px; height: 56px; border-radius: 50%; border: none;
   background: var(--primary); color: var(--primary-ink);
   font-size: 26px; cursor: pointer; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.28);
 }
 .calc-fab:hover { filter: brightness(1.05); }
-@media (min-width: 1000px) { .calc-fab { bottom: 24px; } }
+/* На десктопе уводим кнопку в левый нижний угол, чтобы не перекрывать панель
+   оплаты справа и кнопку «Провести». */
+@media (min-width: 1000px) { .calc-fab { bottom: 20px; right: auto; left: 20px; } }
 
 /* Калькулятор */
 .modal.calc { max-width: 340px; }
