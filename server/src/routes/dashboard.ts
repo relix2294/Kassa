@@ -219,6 +219,22 @@ dashboardRouter.get('/by-hour', async (req, res) => {
   res.json(rows);
 });
 
+// Разрез по дням недели (Пн–Вс): выручка и маржа. Виден лучший/худший день.
+dashboardRouter.get('/by-weekday', async (req, res) => {
+  const { lo, hi } = await resolveBounds(req.query);
+  const rows = await query(
+    `SELECT EXTRACT(ISODOW FROM created_at AT TIME ZONE '${TZ}')::int AS dow,
+            COALESCE(SUM(total),0)              AS revenue,
+            COALESCE(SUM(total - cost_total),0) AS margin,
+            COUNT(*)                            AS receipts
+       FROM sales
+      WHERE created_at >= $1 AND created_at < $2
+      GROUP BY 1 ORDER BY 1`,
+    [lo, hi],
+  );
+  res.json(rows);
+});
+
 // Разбивка оплат: наличные / безнал (карта) / смешанная.
 dashboardRouter.get('/payment-split', async (req, res) => {
   const { lo, hi } = await resolveBounds(req.query);

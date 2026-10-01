@@ -145,6 +145,8 @@ export const api = {
     req<{ cashier: string; receipts: string; revenue: number; margin: number }[]>(`/dashboard/by-cashier?${rangeQS(range)}`),
   byHour: (range: Range) =>
     req<{ hour: number; revenue: number; receipts: string }[]>(`/dashboard/by-hour?${rangeQS(range)}`),
+  byWeekday: (range: Range) =>
+    req<{ dow: number; revenue: number; margin: number; receipts: string }[]>(`/dashboard/by-weekday?${rangeQS(range)}`),
   paymentSplit: (range: Range) =>
     req<{ method: string; receipts: string; total: number }[]>(`/dashboard/payment-split?${rangeQS(range)}`),
   recentSales: (limit = 20) =>

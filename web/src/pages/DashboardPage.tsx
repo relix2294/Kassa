@@ -34,18 +34,19 @@ export default function DashboardPage() {
   const [cats, setCats] = useState<any[]>([]);
   const [cashiers, setCashiers] = useState<any[]>([]);
   const [hours, setHours] = useState<any[]>([]);
+  const [weekday, setWeekday] = useState<any[]>([]);
   const [pay, setPay] = useState<any[]>([]);
   const [recent, setRecent] = useState<any[]>([]);
 
   const load = useCallback(async () => {
     try {
-      const [s, ts, t, c, ca, h, p, r] = await Promise.all([
+      const [s, ts, t, c, ca, h, wd, p, r] = await Promise.all([
         api.summary(range), api.timeseries(range), api.topProducts(range, topSort, 10),
         api.byCategory(range), api.byCashier(range), api.byHour(range),
-        api.paymentSplit(range), api.recentSales(15),
+        api.byWeekday(range), api.paymentSplit(range), api.recentSales(15),
       ]);
       setSummary(s); setSeries(ts); setTop(t); setCats(c); setCashiers(ca);
-      setHours(h); setPay(p); setRecent(r);
+      setHours(h); setWeekday(wd); setPay(p); setRecent(r);
     } catch { /* ignore */ }
   }, [range, topSort]);
 
@@ -56,6 +57,48 @@ export default function DashboardPage() {
     }),
     [load],
   );
+
+  const WEEKDAYS = ['', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
+
+  // Выгрузка отчёта в CSV (открывается в Excel). Собираем из уже загруженных
+  // данных — отдельного запроса не нужно.
+  function exportCsv() {
+    if (!summary) return;
+    const esc = (v: any) => {
+      const s = String(v ?? '');
+      return /[",;\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const rows: string[][] = [];
+    const period = `${new Date(summary.from).toLocaleDateString('ru-RU')} — ${new Date(summary.to).toLocaleDateString('ru-RU')}`;
+    rows.push(['Отчёт Kassa', period]);
+    rows.push([]);
+    rows.push(['Показатель', 'Значение']);
+    rows.push(['Выручка (за вычетом возвратов)', String(summary.net_revenue)]);
+    rows.push(['Маржа', String(summary.margin)], ['Маржа, %', String(summary.margin_pct)]);
+    rows.push(['Средний чек', String(summary.avg_check)], ['Чеков', String(summary.receipts)]);
+    rows.push(['Наличные', String(summary.cash)], ['Безнал', String(summary.card)]);
+    rows.push(['Товаров продано', String(summary.items)], ['Возвраты', String(summary.refunds_total)]);
+    rows.push([]);
+    rows.push(['Топ товаров', 'Кол-во', 'Выручка', 'Маржа']);
+    top.forEach((p: any) => rows.push([p.name, String(p.qty), String(p.revenue), String(p.margin)]));
+    rows.push([]);
+    rows.push(['Категория', 'Выручка', 'Маржа']);
+    cats.forEach((c: any) => rows.push([c.category, String(c.revenue), String(c.margin)]));
+    rows.push([]);
+    rows.push(['Кассир', 'Чеков', 'Выручка', 'Маржа']);
+    cashiers.forEach((c: any) => rows.push([c.cashier, String(c.receipts), String(c.revenue), String(c.margin)]));
+    rows.push([]);
+    rows.push(['День недели', 'Выручка', 'Маржа', 'Чеков']);
+    weekday.forEach((w: any) => rows.push([WEEKDAYS[w.dow] || String(w.dow), String(w.revenue), String(w.margin), String(w.receipts)]));
+
+    const csv = '﻿' + rows.map((r) => r.map(esc).join(';')).join('\r\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `kassa-otchet-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
 
   // Временной ряд → точки для графика (подпись = дата/час).
   const points = (series?.points ?? []).map((p: any) => ({
@@ -77,6 +120,10 @@ export default function DashboardPage() {
       <RangeControl range={range} onChange={setRange} />
 
       {summary && <KpiRow s={summary} />}
+
+      <div className="dash-actions">
+        <button className="btn btn--ghost" onClick={exportCsv} disabled={!summary}>⬇ Скачать отчёт (CSV)</button>
+      </div>
 
       <div className="seg seg--tabs">
         {([['overview', 'Обзор'], ['sales', 'Чеки'], ['returns', 'Возвраты'], ['stock', 'Остатки'], ['log', 'Журнал']] as [Tab, string][])
@@ -127,6 +174,14 @@ export default function DashboardPage() {
               <RankBars items={cashiers.map((c: any) => ({ label: c.cashier, value: Number(c.revenue), sub: `${c.receipts} чек. · маржа ${money(c.margin)}` }))} />
             </Card>
           </div>
+
+          <Card title="По дням недели">
+            <RankBars items={weekday.map((w: any) => ({
+              label: WEEKDAYS[w.dow] || String(w.dow),
+              value: Number(w.revenue),
+              sub: `маржа ${money(w.margin)} · ${w.receipts} чек.`,
+            }))} />
+          </Card>
         </>
       )}
 
