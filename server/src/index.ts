@@ -27,6 +27,21 @@ import { suppliersRouter } from './routes/suppliers.js';
 //  'mirror' — зеркало на VPS: только чтение (кабинет владельца) + приём снимка.
 const ROLE = process.env.ROLE || 'store';
 
+// Безопасность: в боевом режиме запрещаем старт со стандартным/пустым
+// JWT_SECRET — иначе токены входа можно подделать (кто угодно «станет»
+// владельцем). В разработке только предупреждаем.
+const jwtSecret = process.env.JWT_SECRET;
+if (!jwtSecret || jwtSecret === 'dev-secret-change-me') {
+  if (process.env.NODE_ENV === 'production') {
+    console.error(
+      'ОТКАЗ ЗАПУСКА: не задан надёжный JWT_SECRET. В бою это дыра в безопасности.\n' +
+        'Задайте случайный ключ, напр.: JWT_SECRET=$(openssl rand -hex 32)',
+    );
+    process.exit(1);
+  }
+  console.warn('⚠ JWT_SECRET не задан — использую небезопасный ключ по умолчанию (только для разработки).');
+}
+
 const app = express();
 app.use(cors());
 app.use(express.json());

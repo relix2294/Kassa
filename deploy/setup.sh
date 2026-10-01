@@ -67,12 +67,18 @@ if [ ! -f "$ENV_FILE" ]; then
   cat > "$ENV_FILE" <<EOF
 DB_PASS=$(openssl rand -hex 16)
 JWT_SECRET=$(openssl rand -hex 32)
+MIRROR_SECRET=$(openssl rand -hex 24)
 HOST_PORT=${HOST_PORT}
 EOF
   chmod 600 "$ENV_FILE"
-  echo "    Создан $ENV_FILE (пароль БД и JWT_SECRET сгенерированы)"
+  echo "    Создан $ENV_FILE (DB_PASS, JWT_SECRET, MIRROR_SECRET сгенерированы)"
 else
-  echo "    $ENV_FILE уже есть — оставляю (секреты и порт не меняю)"
+  # Дозаписываем MIRROR_SECRET в старый .env, если его там ещё нет.
+  if ! grep -q '^MIRROR_SECRET=' "$ENV_FILE"; then
+    echo "MIRROR_SECRET=$(openssl rand -hex 24)" >> "$ENV_FILE"
+    echo "    В $ENV_FILE добавлен MIRROR_SECRET"
+  fi
+  echo "    $ENV_FILE уже есть — секреты и порт сохранены"
 fi
 
 echo "==> 5/5 Сборка и запуск контейнеров"
@@ -90,4 +96,10 @@ echo
 echo "  Статус:  docker compose -f ${APP_DIR}/deploy/docker-compose.yml ps"
 echo "  Логи:    docker compose -f ${APP_DIR}/deploy/docker-compose.yml logs -f app"
 echo "  Стоп:    docker compose -f ${APP_DIR}/deploy/docker-compose.yml down"
+echo "  Бэкапы:  ${APP_DIR}/deploy/backups  (ежедневно, авто; восстановление — deploy/README.md)"
+echo
+echo "  Синхронизация магазин → VPS-зеркало работает по общему секрету."
+echo "  MIRROR_SECRET этой установки:"
+echo "     $(grep -E '^MIRROR_SECRET=' "$ENV_FILE" | cut -d= -f2)"
+echo "  На ВТОРОЙ машине (зеркале/кассе) впишите в deploy/.env ТОТ ЖЕ MIRROR_SECRET."
 echo "======================================================"

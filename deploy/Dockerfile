@@ -17,6 +17,10 @@ COPY . .
 RUN npm --prefix web run build && chmod +x deploy/entrypoint.sh
 
 ENV PORT=4000
+# Боевой режим: включает серверные проверки безопасности (напр. запрет запуска
+# со стандартным JWT_SECRET). Ставим ПОСЛЕ установки зависимостей и сборки,
+# чтобы npm install подтянул и dev-зависимости (vite, tsx) для сборки/запуска.
+ENV NODE_ENV=production
 EXPOSE 4000
 
 ENTRYPOINT ["/app/deploy/entrypoint.sh"]
