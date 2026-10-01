@@ -30,3 +30,6 @@ Thumbs.db
 .vscode/
 .idea/
 *.swp
+
+# Резервные копии БД (deploy/backups) — в репозиторий не кладём
+deploy/backups/
