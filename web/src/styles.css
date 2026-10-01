@@ -504,6 +504,17 @@ input:focus, .search:focus { outline: none; border-color: var(--primary); }
 .recent-receipts__items { margin-top: 10px; border-top: 1px solid var(--border); padding-top: 8px; }
 .recent-receipts__item { display: flex; justify-content: space-between; gap: 12px; padding: 3px 0; font-size: 14px; }
 
+/* Баннер «операции не отправлены» на экране кассы — крупный, во всю ширину. */
+.stuck-banner {
+  grid-column: 1 / -1;
+  display: block; width: 100%; text-align: left;
+  background: var(--danger); color: #fff; border: none; cursor: pointer;
+  border-radius: 12px; padding: 14px 16px; margin-bottom: 12px;
+  font-size: 16px; font-weight: 700; line-height: 1.3;
+  box-shadow: var(--shadow-sm);
+}
+.stuck-banner:active { filter: brightness(0.95); }
+
 /* Карточка, требующая внимания (запросы кассира, ожидание владельца) */
 .card--alert { border: 2px solid var(--danger); }
 .spinner-dots {

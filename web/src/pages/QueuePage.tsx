@@ -98,6 +98,28 @@ export default function QueuePage() {
   );
 }
 
+// Крупный баннер на экране продажи: кассир в запарке может не заметить значок
+// в шапке, а непринятый чек — это деньги в кассе без записи. Показываем, только
+// когда есть застрявшие операции.
+export function StuckBanner({ onOpen }: { onOpen: () => void }) {
+  const [failed, setFailed] = useState(0);
+  const load = useCallback(() => { queueStats().then((s) => setFailed(s.failed)).catch(() => {}); }, []);
+  useEffect(() => {
+    load();
+    const t = setInterval(load, 4000);
+    return () => clearInterval(t);
+  }, [load]);
+  useEffect(() => onQueueChange(load), [load]);
+
+  if (failed === 0) return null;
+  return (
+    <button className="stuck-banner" onClick={onOpen}>
+      ⚠ {failed} {failed === 1 ? 'операция не отправлена' : 'операций не отправлено'} на сервер —
+      деньги могут быть не учтены. Нажмите, чтобы разобраться.
+    </button>
+  );
+}
+
 // Индикатор в шапке: сколько ждёт отправки и сколько застряло.
 export function QueueBadge({ onOpen }: { onOpen: () => void }) {
   const [stats, setStats] = useState({ pending: 0, failed: 0 });

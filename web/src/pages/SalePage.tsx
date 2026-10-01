@@ -18,6 +18,7 @@ import Confirm from '../components/Confirm';
 import Calculator from '../components/Calculator';
 import ShiftWaiting from '../components/ShiftWaiting';
 import RecentReceipts from '../components/RecentReceipts';
+import { StuckBanner } from './QueuePage';
 import { postCustomer } from '../customer';
 
 export default function SalePage() {
@@ -281,6 +282,7 @@ export default function SalePage() {
 
   return (
     <div className={`page ${isDesktop ? 'page--sale-desk' : 'page--sale'}`}>
+      <StuckBanner onOpen={() => navigate('/queue')} />
       {isDesktop ? (
         // Десктоп кассы: слева чек, справа постоянная панель оплаты.
         <>
