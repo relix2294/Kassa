@@ -425,6 +425,71 @@ input:focus, .search:focus { outline: none; border-color: var(--primary); }
 
 .sect { font-size: 17px; margin: 20px 0 10px; }
 
+/* ====== Аналитика (Кабинет) ====== */
+.kpi__change { font-size: 12px; font-weight: 700; margin-top: 4px; }
+.kpi__change--up { color: var(--ok); }
+.kpi__change--down { color: var(--danger); }
+.kpi__change .muted { font-weight: 500; }
+
+/* Выбор периода */
+.range-control { margin-bottom: 16px; }
+.seg--wrap { flex-wrap: wrap; overflow: visible; }
+.range-custom { display: flex; gap: 10px; align-items: flex-end; margin-top: 10px; flex-wrap: wrap; }
+.range-custom .field { flex: 1 1 140px; margin: 0; }
+.range-custom .btn { flex: 0 0 auto; }
+.seg--mini { margin: 0; padding: 3px; background: var(--surface-2); }
+.seg--mini .seg__btn { padding: 6px 10px; font-size: 13px; }
+
+/* Карточка графика */
+.dash-card {
+  background: var(--surface);
+  border-radius: var(--radius);
+  padding: 16px;
+  margin-bottom: 16px;
+}
+.dash-card__head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.dash-card__title { font-size: 16px; font-weight: 700; margin: 0; }
+.chart-grid { display: grid; grid-template-columns: 1fr; gap: 16px; }
+@media (min-width: 760px) { .chart-grid { grid-template-columns: 1fr 1fr; } }
+
+/* Линейно-столбчатый график */
+.chart { position: relative; }
+.chart__svg { width: 100%; height: auto; display: block; }
+.chart__grid { stroke: var(--border); stroke-width: 1; }
+.chart__ytick, .chart__xtick { fill: var(--muted); font-size: 11px; }
+.chart__bar { fill: var(--primary); transition: opacity .1s; }
+.chart__line--margin { stroke: var(--ok); stroke-width: 2; }
+.chart__crosshair { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 3 3; }
+.chart__legend { display: flex; gap: 16px; justify-content: center; margin-top: 8px; font-size: 13px; color: var(--muted); }
+.dot { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: middle; }
+.dot--rev { background: var(--primary); }
+.dot--mar { background: var(--ok); }
+.chart__tip {
+  position: absolute; top: 6px; right: 6px; z-index: 5;
+  background: var(--bg); border: 1px solid var(--border); border-radius: 10px;
+  padding: 8px 10px; font-size: 13px; box-shadow: var(--shadow-sm); pointer-events: none; min-width: 120px;
+}
+.chart__tip > b { display: block; margin-bottom: 4px; }
+
+/* Рейтинг-столбики (горизонтальные) */
+.rankbars { display: flex; flex-direction: column; gap: 12px; }
+.rankbar__top { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; }
+.rankbar__label { font-weight: 600; font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rankbar__val { font-weight: 700; flex: 0 0 auto; }
+.rankbar__track { height: 10px; background: var(--surface-2); border-radius: 6px; overflow: hidden; margin-top: 5px; }
+.rankbar__fill { height: 100%; background: var(--primary); border-radius: 6px; min-width: 2px; }
+.rankbar__sub { color: var(--muted); font-size: 12px; margin-top: 3px; }
+
+/* Кольцо оплат */
+.donut { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+.donut__svg { width: 160px; height: 160px; flex: 0 0 auto; }
+.donut__seg { stroke: var(--surface); stroke-width: 2; }
+.donut__center { fill: var(--text); font-size: 22px; font-weight: 800; }
+.donut__centerlabel { fill: var(--muted); font-size: 11px; }
+.donut__legend { flex: 1 1 160px; display: flex; flex-direction: column; gap: 8px; }
+.donut__row { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+.donut__row b { margin-left: auto; }
+
 .list-item--alert { border-left: 3px solid var(--danger); }
 .log-details { color: var(--muted); font-size: 13px; margin-top: 4px; }
 
@@ -584,7 +649,7 @@ select:focus { outline: none; border-color: var(--primary); }
 
   .btn--clear { margin-top: 12px; flex: 0 0 auto; align-self: flex-start; padding: 10px 18px; }
 
-  .kpi-grid { grid-template-columns: repeat(3, 1fr); }
+  .kpi-grid { grid-template-columns: repeat(4, 1fr); }
 }
 
 /* Панель оплаты (модалка на телефоне, постоянная колонка на десктопе). */

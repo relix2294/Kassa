@@ -1,6 +1,15 @@
 import type { Product, User, LogRow } from './types';
 import { getToken, logout } from './auth';
 
+// Период аналитики: пресет ('today'|'yesterday'|'7d'|'30d'|'90d'|'year'|'all')
+// или произвольный диапазон дат ('custom' + from/to в формате YYYY-MM-DD).
+export type Range = { period: string; from?: string; to?: string };
+function rangeQS(r: Range): string {
+  const q = new URLSearchParams({ period: r.period });
+  if (r.period === 'custom' && r.from && r.to) { q.set('from', r.from); q.set('to', r.to); }
+  return q.toString();
+}
+
 // Тонкий клиент к серверному API. Базовый путь идёт через прокси Vite (/api).
 async function req<T>(path: string, options?: RequestInit): Promise<T> {
   const token = getToken();
@@ -115,15 +124,29 @@ export const api = {
   rejectShiftRequest: (id: string) => req<{ ok: boolean }>(`/shifts/requests/${id}/reject`, { method: 'POST' }),
   openShifts: () => req<any[]>('/shifts/open'),
   listShifts: (limit = 100) => req<any[]>(`/shifts?limit=${limit}`),
-  summary: (period: string) =>
+  summary: (range: Range) =>
     req<{
-      period: string; receipts: number; revenue: number; margin: number;
+      from: string; to: string; receipts: number; revenue: number; net_revenue: number;
+      margin: number; margin_pct: number; avg_check: number; items: number;
       cash: number; card: number; refunds_count: number; refunds_total: number;
-    }>(`/dashboard/summary?period=${period}`),
-  topProducts: (period: string) =>
-    req<{ name: string; barcode: string; unit: 'pcs' | 'kg'; qty: number; revenue: number; margin: number }[]>(
-      `/dashboard/top-products?period=${period}`,
+      prev: { revenue: number; margin: number; receipts: number; revenue_change: number | null; margin_change: number | null };
+    }>(`/dashboard/summary?${rangeQS(range)}`),
+  timeseries: (range: Range) =>
+    req<{ bucket: 'hour' | 'day'; points: { bucket: string; revenue: number; margin: number; receipts: string }[] }>(
+      `/dashboard/timeseries?${rangeQS(range)}`,
     ),
+  topProducts: (range: Range, sort: 'revenue' | 'margin' | 'qty' = 'revenue', limit = 10) =>
+    req<{ name: string; barcode: string; unit: 'pcs' | 'kg'; qty: number; revenue: number; margin: number }[]>(
+      `/dashboard/top-products?${rangeQS(range)}&sort=${sort}&limit=${limit}`,
+    ),
+  byCategory: (range: Range) =>
+    req<{ category: string; revenue: number; margin: number }[]>(`/dashboard/by-category?${rangeQS(range)}`),
+  byCashier: (range: Range) =>
+    req<{ cashier: string; receipts: string; revenue: number; margin: number }[]>(`/dashboard/by-cashier?${rangeQS(range)}`),
+  byHour: (range: Range) =>
+    req<{ hour: number; revenue: number; receipts: string }[]>(`/dashboard/by-hour?${rangeQS(range)}`),
+  paymentSplit: (range: Range) =>
+    req<{ method: string; receipts: string; total: number }[]>(`/dashboard/payment-split?${rangeQS(range)}`),
   recentSales: (limit = 20) =>
     req<{ id: string; total: number; payment_method: string; created_at: string; username: string | null; full_name: string | null; items: string }[]>(
       `/dashboard/recent-sales?limit=${limit}`,
