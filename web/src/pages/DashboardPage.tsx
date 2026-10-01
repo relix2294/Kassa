@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db';
 import { api, type Range } from '../api';
@@ -71,6 +72,8 @@ export default function DashboardPage() {
       <ShiftRequests />
       <ReturnRequests />
 
+      <AlertsStrip onStock={() => setTab('stock')} />
+
       <RangeControl range={range} onChange={setRange} />
 
       {summary && <KpiRow s={summary} />}
@@ -131,6 +134,40 @@ export default function DashboardPage() {
       {tab === 'returns' && <ReturnsTab />}
       {tab === 'stock' && <StockTab />}
       {tab === 'log' && <LogTab />}
+    </div>
+  );
+}
+
+// Проактивные подсказки владельцу: что пора закупить и сколько должны
+// поставщикам. Показываем, только когда есть о чём сказать.
+function AlertsStrip({ onStock }: { onStock: () => void }) {
+  const navigate = useNavigate();
+  const products = useLiveQuery(() => db.products.toArray(), [], [] as Product[]);
+  const [debt, setDebt] = useState(0);
+
+  useEffect(() => {
+    api.listSuppliers().then((r) => setDebt(Number(r.total_debt) || 0)).catch(() => {});
+    const off = onRealtimeEvent((t) => {
+      if (t === 'data_updated') api.listSuppliers().then((r) => setDebt(Number(r.total_debt) || 0)).catch(() => {});
+    });
+    return off;
+  }, []);
+
+  const low = products.filter((p) => !p.is_archived && p.min_stock > 0 && p.stock <= p.min_stock);
+  if (low.length === 0 && debt <= 0) return null;
+
+  return (
+    <div className="alerts-strip">
+      {low.length > 0 && (
+        <button className="alert-chip alert-chip--warn" onClick={onStock}>
+          🛒 Пора закупить: <b>{low.length}</b> {low.length === 1 ? 'товар' : 'товаров'}
+        </button>
+      )}
+      {debt > 0 && (
+        <button className="alert-chip alert-chip--debt" onClick={() => navigate('/debts')}>
+          💰 Долг поставщикам: <b>{money(debt)}</b>
+        </button>
+      )}
     </div>
   );
 }
