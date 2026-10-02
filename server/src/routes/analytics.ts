@@ -9,32 +9,199 @@ export const analyticsRouter = Router();
 // Аналитика — только владелец (закупочные цены, маржа, потери).
 analyticsRouter.use(requireOwner);
 
-// «Пора закупить»: остаток ниже или равен минимуму.
-// Считаем средний расход в день за 30 дней, чтобы прикинуть, на сколько хватит.
+// Прогноз «закончится через N дней» поднимает тревогу даже без заданного
+// минимума: у нового магазина минимумы обычно никто не проставил, а ходовой
+// товар заканчивается за пару дней. Заказ советуем на COVER_DAYS вперёд.
+const RESTOCK_ALERT_DAYS = 3;
+const RESTOCK_COVER_DAYS = 7;
+
+// «Пора закупить»: остаток на минимуме или ниже, либо по темпу продаж
+// товара хватит меньше чем на RESTOCK_ALERT_DAYS дней.
 analyticsRouter.get('/restock', async (_req, res) => {
   const rows = await query(
-    `WITH sold AS (
+    `WITH observed AS (
+       -- Сколько дней магазин реально торгует (в пределах 30). Делить на 30
+       -- у магазина, открытого неделю назад, — занизить расход в 4 раза.
+       -- Не меньше 3 дней, чтобы первый день торговли не давал бешеный темп.
+       SELECT GREATEST(LEAST(EXTRACT(EPOCH FROM now() - MIN(created_at)) / 86400.0, 30), 3) AS days
+         FROM sales
+        WHERE created_at >= now() - interval '30 days'
+     ),
+     sold AS (
        SELECT si.product_id, SUM(si.qty) AS qty_30d
          FROM sale_items si
          JOIN sales s ON s.id = si.sale_id
         WHERE s.created_at >= now() - interval '30 days'
         GROUP BY si.product_id
+     ),
+     calc AS (
+       SELECT p.id, p.barcode, p.name, p.category, p.stock, p.min_stock, p.cost_price, p.unit,
+              COALESCE(sold.qty_30d, 0) AS sold_30d,
+              -- Прогноз имеет смысл только если товар продавался регулярно.
+              -- Для одной-двух продаж за месяц он вводит в заблуждение (п.25).
+              CASE WHEN COALESCE(sold.qty_30d,0) >= 5
+                   THEN sold.qty_30d / observed.days
+                   ELSE NULL END AS per_day
+         FROM products p
+         CROSS JOIN observed
+         LEFT JOIN sold ON sold.product_id = p.id
+        WHERE p.is_archived = false
      )
-     SELECT p.id, p.barcode, p.name, p.category, p.stock, p.min_stock, p.cost_price, p.unit,
-            COALESCE(sold.qty_30d, 0) AS sold_30d,
-            -- Прогноз имеет смысл только если товар продавался регулярно.
-            -- Для одной-двух продаж за месяц он вводит в заблуждение (п.25).
-            CASE WHEN COALESCE(sold.qty_30d,0) >= 5
-                 THEN ROUND(p.stock / (sold.qty_30d / 30.0), 1)
-                 ELSE NULL END AS days_left
-       FROM products p
-       LEFT JOIN sold ON sold.product_id = p.id
-      WHERE p.is_archived = false
-        AND p.min_stock > 0
-        AND p.stock <= p.min_stock
-      ORDER BY (p.stock - p.min_stock), p.name`,
+     SELECT id, barcode, name, category, stock, min_stock, cost_price, unit, sold_30d,
+            ROUND(per_day, 2) AS per_day,
+            CASE WHEN per_day IS NOT NULL THEN ROUND(GREATEST(stock, 0) / per_day, 1) END AS days_left,
+            (min_stock > 0 AND stock <= min_stock) AS below_min,
+            -- Сколько заказать, чтобы хватило на неделю (и не меньше минимума).
+            CASE WHEN per_day IS NOT NULL
+                 THEN GREATEST(CEIL(per_day * ${RESTOCK_COVER_DAYS} - GREATEST(stock, 0)),
+                               CEIL(min_stock - stock), 0)
+                 ELSE GREATEST(CEIL(min_stock - stock), 0) END AS suggest_qty
+       FROM calc
+      WHERE (min_stock > 0 AND stock <= min_stock)
+         OR (per_day IS NOT NULL AND GREATEST(stock, 0) / per_day < ${RESTOCK_ALERT_DAYS})
+      ORDER BY COALESCE(GREATEST(stock, 0) / per_day, 999), (stock - min_stock), name`,
   );
   res.json(rows);
+});
+
+// «Что покупают вместе». Обзор: по каждому ходовому товару — в скольких
+// чеках он был и в какой доле из них взяли что-то ещё. Плюс общие цифры
+// по чекам: среднее число позиций и доля чеков из одного товара.
+// days — за сколько последних дней считать (по умолчанию 30).
+function basketDays(raw: unknown): number {
+  return Math.min(Math.max(Number(raw) || 30, 1), 365);
+}
+
+analyticsRouter.get('/basket', async (req, res) => {
+  const days = basketDays(req.query.days);
+  const since = [String(days)];
+
+  // Позиции считаем как разные товары в чеке, а не сумму qty:
+  // 3 Pepsi или 0,5 кг курута — это одна позиция.
+  const totals = (
+    await query(
+      `WITH per_sale AS (
+         SELECT s.id, s.total, COUNT(DISTINCT si.product_id) AS positions
+           FROM sales s
+           JOIN sale_items si ON si.sale_id = s.id
+          WHERE s.created_at >= now() - ($1 || ' days')::interval
+          GROUP BY s.id, s.total
+       )
+       SELECT COUNT(*) AS receipts,
+              COALESCE(ROUND(AVG(positions), 2), 0) AS avg_positions,
+              COALESCE(ROUND(AVG(total), 2), 0) AS avg_check,
+              COUNT(*) FILTER (WHERE positions = 1) AS single_receipts
+         FROM per_sale`,
+      since,
+    )
+  )[0];
+
+  const products = await query(
+    `WITH per_sale AS (
+       SELECT s.id, s.total, COUNT(DISTINCT si.product_id) AS positions
+         FROM sales s
+         JOIN sale_items si ON si.sale_id = s.id
+        WHERE s.created_at >= now() - ($1 || ' days')::interval
+        GROUP BY s.id, s.total
+     ),
+     anchor AS (
+       SELECT DISTINCT si.product_id, si.sale_id
+         FROM sale_items si
+         JOIN per_sale ps ON ps.id = si.sale_id
+     )
+     SELECT p.id, p.name, p.unit,
+            COUNT(*) AS receipts,
+            COUNT(*) FILTER (WHERE ps.positions > 1) AS with_others,
+            ROUND(100.0 * COUNT(*) FILTER (WHERE ps.positions > 1) / COUNT(*), 0) AS attach_pct,
+            ROUND(AVG(ps.total), 2) AS avg_check
+       FROM anchor a
+       JOIN per_sale ps ON ps.id = a.sale_id
+       JOIN products p ON p.id = a.product_id
+      GROUP BY p.id, p.name, p.unit
+      ORDER BY receipts DESC, p.name
+      LIMIT 30`,
+    since,
+  );
+
+  res.json({
+    days,
+    receipts: Number(totals.receipts),
+    avg_positions: Number(totals.avg_positions),
+    avg_check: Number(totals.avg_check),
+    single_receipts: Number(totals.single_receipts),
+    products,
+  });
+});
+
+// Детально по одному товару: с чем его берут. share — доля чеков с товаром,
+// в которых был и сопутствующий. Маржа — только по сопутствующему товару:
+// именно её «привёл» товар-магнит.
+analyticsRouter.get('/basket/:productId', async (req, res) => {
+  const days = basketDays(req.query.days);
+  // Кривой id не должен превращаться в 500 от Postgres.
+  if (!/^[0-9a-f-]{36}$/i.test(req.params.productId)) {
+    return res.status(404).json({ error: 'Товар не найден' });
+  }
+  const params = [req.params.productId, String(days)];
+
+  const anchor = (
+    await query(
+      `WITH sales_with AS (
+         SELECT DISTINCT s.id, s.total
+           FROM sales s
+           JOIN sale_items si ON si.sale_id = s.id
+          WHERE si.product_id = $1
+            AND s.created_at >= now() - ($2 || ' days')::interval
+       )
+       SELECT p.id, p.name, p.unit,
+              (SELECT COUNT(*) FROM sales_with) AS receipts,
+              (SELECT COUNT(*) FROM sales_with sw
+                WHERE EXISTS (SELECT 1 FROM sale_items x
+                               WHERE x.sale_id = sw.id AND x.product_id <> $1)) AS with_others,
+              (SELECT COALESCE(ROUND(AVG(total), 2), 0) FROM sales_with) AS avg_check
+         FROM products p WHERE p.id = $1`,
+      params,
+    )
+  )[0];
+  if (!anchor) return res.status(404).json({ error: 'Товар не найден' });
+
+  const companions = await query(
+    `WITH sales_with AS (
+       SELECT DISTINCT s.id
+         FROM sales s
+         JOIN sale_items si ON si.sale_id = s.id
+        WHERE si.product_id = $1
+          AND s.created_at >= now() - ($2 || ' days')::interval
+     )
+     SELECT si.product_id AS id, MAX(si.name) AS name, MAX(p.unit) AS unit,
+            COUNT(DISTINCT si.sale_id) AS receipts,
+            SUM(si.qty) AS qty,
+            SUM(si.line_total) AS revenue,
+            SUM(si.line_total - si.unit_cost * si.qty) AS margin
+       FROM sale_items si
+       JOIN sales_with sw ON sw.id = si.sale_id
+       LEFT JOIN products p ON p.id = si.product_id
+      WHERE si.product_id <> $1
+      GROUP BY si.product_id
+      ORDER BY receipts DESC, revenue DESC
+      LIMIT 20`,
+    params,
+  );
+
+  const receipts = Number(anchor.receipts);
+  res.json({
+    days,
+    product: { id: anchor.id, name: anchor.name, unit: anchor.unit },
+    receipts,
+    with_others: Number(anchor.with_others),
+    attach_pct: receipts ? Math.round((100 * Number(anchor.with_others)) / receipts) : 0,
+    avg_check: Number(anchor.avg_check),
+    companions: companions.map((c: any) => ({
+      ...c,
+      receipts: Number(c.receipts),
+      share_pct: receipts ? Math.round((100 * Number(c.receipts)) / receipts) : 0,
+    })),
+  });
 });
 
 // «Залежалый товар»: есть остаток, но давно не продавался.

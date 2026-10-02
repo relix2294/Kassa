@@ -97,9 +97,22 @@ export const api = {
     req<User>(`/users/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
   listLogs: (limit = 200) => req<LogRow[]>(`/logs?limit=${limit}`),
   restock: () =>
-    req<{ id: string; barcode: string; name: string; category: string | null; stock: number; min_stock: number; cost_price: number; unit: 'pcs' | 'kg'; sold_30d: number; days_left: number | null }[]>(
-      '/analytics/restock',
-    ),
+    req<{
+      id: string; barcode: string; name: string; category: string | null; stock: number; min_stock: number;
+      cost_price: number; unit: 'pcs' | 'kg'; sold_30d: number; per_day: number | null; days_left: number | null;
+      below_min: boolean; suggest_qty: number;
+    }[]>('/analytics/restock'),
+  basket: (days: number) =>
+    req<{
+      days: number; receipts: number; avg_positions: number; avg_check: number; single_receipts: number;
+      products: { id: string; name: string; unit: 'pcs' | 'kg'; receipts: number; with_others: number; attach_pct: number; avg_check: number }[];
+    }>(`/analytics/basket?days=${days}`),
+  basketFor: (productId: string, days: number) =>
+    req<{
+      days: number; product: { id: string; name: string; unit: 'pcs' | 'kg' };
+      receipts: number; with_others: number; attach_pct: number; avg_check: number;
+      companions: { id: string; name: string; unit: 'pcs' | 'kg'; receipts: number; share_pct: number; qty: number; revenue: number; margin: number }[];
+    }>(`/analytics/basket/${productId}?days=${days}`),
   stale: (days: number) =>
     req<{ id: string; barcode: string; name: string; category: string | null; stock: number; cost_price: number; sale_price: number; unit: 'pcs' | 'kg'; last_sold_at: string | null; total_sold: number; frozen_money: number; days_since_sale: number | null }[]>(
       `/analytics/stale?days=${days}`,

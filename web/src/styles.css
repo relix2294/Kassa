@@ -158,7 +158,7 @@ input:focus, .search:focus { outline: none; border-color: var(--primary); }
 }
 .list-item__name { font-weight: 600; font-size: 16px; }
 .list-item__side { text-align: right; }
-.stock { font-weight: 700; font-size: 16px; }
+.stock { font-weight: 700; font-size: 16px; white-space: nowrap; }
 .stock--low { color: var(--off); }
 
 .tabbar {

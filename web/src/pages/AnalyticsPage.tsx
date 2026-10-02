@@ -4,7 +4,7 @@ import { onRealtimeEvent } from '../sync';
 import InventoryPanel from './InventoryPanel';
 import BulkPricePanel from './BulkPricePanel';
 
-type Tab = 'restock' | 'stale' | 'tools';
+type Tab = 'restock' | 'basket' | 'stale' | 'tools';
 
 export default function AnalyticsPage() {
   const [tab, setTab] = useState<Tab>('restock');
@@ -21,7 +21,10 @@ export default function AnalyticsPage() {
 
       <div className="seg">
         <button className={`seg__btn ${tab === 'restock' ? 'seg__btn--on' : ''}`} onClick={() => setTab('restock')}>
-          Пора закупить
+          Закупить
+        </button>
+        <button className={`seg__btn ${tab === 'basket' ? 'seg__btn--on' : ''}`} onClick={() => setTab('basket')}>
+          Вместе
         </button>
         <button className={`seg__btn ${tab === 'stale' ? 'seg__btn--on' : ''}`} onClick={() => setTab('stale')}>
           Залежалый
@@ -32,6 +35,7 @@ export default function AnalyticsPage() {
       </div>
 
       {tab === 'restock' && <RestockTab />}
+      {tab === 'basket' && <BasketTab />}
       {tab === 'stale' && <StaleTab />}
       {tab === 'tools' && <ToolsTab onDone={flash} />}
 
@@ -51,26 +55,189 @@ function RestockTab() {
   useEffect(() => onRealtimeEvent((t) => (t === 'product_upsert' || t === 'sale') && load()), [load]);
 
   if (rows.length === 0) {
-    return <p className="hint">Всё в порядке — товаров ниже минимума нет.</p>;
+    return <p className="hint">Всё в порядке — ничего не заканчивается.</p>;
   }
 
   return (
     <>
-      <p className="hint">Остаток на минимуме или ниже. Пора заказывать.</p>
+      <p className="hint">
+        Товар на минимуме или закончится в ближайшие 3 дня по темпу продаж. «Заказать» — чтобы хватило на неделю.
+      </p>
       <div className="list">
-        {rows.map((p) => (
-          <div key={p.id} className="list-item list-item--static list-item--alert">
-            <div className="list-item__main">
-              <div className="list-item__name">{p.name}</div>
-              <div className="muted">
-                минимум {p.min_stock} · продано за 30 дн: {p.sold_30d}
-                {p.days_left != null && ` · хватит на ~${p.days_left} дн`}
+        {rows.map((p) => {
+          const u = p.unit === 'kg' ? 'кг' : 'шт';
+          return (
+            <div key={p.id} className="list-item list-item--static list-item--alert">
+              <div className="list-item__main">
+                <div className="list-item__name">{p.name}</div>
+                <div className="muted">
+                  {p.days_left != null
+                    ? Number(p.days_left) < 1
+                      ? 'закончится сегодня'
+                      : `хватит на ~${p.days_left} дн`
+                    : `минимум ${p.min_stock}`}
+                  {p.per_day != null && ` · продаётся ~${p.per_day} ${u}/день`}
+                  {p.below_min && p.days_left != null && ` · ниже минимума ${p.min_stock}`}
+                </div>
+                {Number(p.suggest_qty) > 0 && (
+                  <div className="muted">
+                    заказать: <b>{p.suggest_qty} {u}</b>
+                  </div>
+                )}
               </div>
+              <div className="stock stock--low">{p.stock} {u}</div>
             </div>
-            <div className="stock stock--low">{p.stock} {p.unit === 'kg' ? 'кг' : 'шт'}</div>
-          </div>
+          );
+        })}
+      </div>
+    </>
+  );
+}
+
+// «Что покупают вместе»: работает ли товар-магнит (дешёвые сигареты и т.п.)
+// и что предлагать к нему на кассе.
+function BasketTab() {
+  const [days, setDays] = useState(7);
+  const [data, setData] = useState<Awaited<ReturnType<typeof api.basket>> | null>(null);
+  const [selected, setSelected] = useState<string | null>(null);
+
+  const load = useCallback(() => {
+    api.basket(days).then(setData).catch(() => {});
+  }, [days]);
+  useEffect(() => {
+    load();
+  }, [load]);
+  useEffect(() => onRealtimeEvent((t) => t === 'sale' && load()), [load]);
+
+  if (selected) {
+    return <BasketDetail productId={selected} days={days} onBack={() => setSelected(null)} />;
+  }
+
+  const singlePct = data && data.receipts ? Math.round((100 * data.single_receipts) / data.receipts) : 0;
+
+  return (
+    <>
+      <div className="seg">
+        {[3, 7, 14, 30].map((d) => (
+          <button key={d} className={`seg__btn ${days === d ? 'seg__btn--on' : ''}`} onClick={() => setDays(d)}>
+            {d} дн
+          </button>
         ))}
       </div>
+
+      {data && data.receipts === 0 && <p className="hint">За этот период чеков нет.</p>}
+
+      {data && data.receipts > 0 && (
+        <>
+          <div className="kpi-grid">
+            <div className="kpi">
+              <div className="kpi__label">Товаров в чеке</div>
+              <div className="kpi__value">{data.avg_positions}</div>
+            </div>
+            <div className="kpi">
+              <div className="kpi__label">Средний чек</div>
+              <div className="kpi__value">{data.avg_check.toFixed(2)}</div>
+            </div>
+            <div className="kpi">
+              <div className="kpi__label">Чеков</div>
+              <div className="kpi__value">{data.receipts}</div>
+            </div>
+            <div className="kpi">
+              <div className="kpi__label">Чеков из 1 товара</div>
+              <div className="kpi__value">{singlePct}%</div>
+            </div>
+          </div>
+
+          <h2 className="sect">Берут ли что-то ещё</h2>
+          <p className="hint">
+            Доля чеков с товаром, где купили и другое. Меньше 40% — товар приводит покупателя, но не продаёт остальное.
+            Нажмите на товар — покажу, что к нему берут.
+          </p>
+          <div className="list">
+            {data.products.map((p) => {
+              const pct = Number(p.attach_pct);
+              return (
+                <button key={p.id} className="list-item" onClick={() => setSelected(p.id)}>
+                  <div className="list-item__main">
+                    <div className="list-item__name">{p.name}</div>
+                    <div className="muted">
+                      в {p.receipts} чеках · средний чек {Number(p.avg_check).toFixed(2)}
+                    </div>
+                  </div>
+                  <div className={`stock ${pct < 40 ? 'stock--low' : ''}`}>{pct}%</div>
+                </button>
+              );
+            })}
+          </div>
+        </>
+      )}
+    </>
+  );
+}
+
+function BasketDetail({ productId, days, onBack }: { productId: string; days: number; onBack: () => void }) {
+  const [data, setData] = useState<Awaited<ReturnType<typeof api.basketFor>> | null>(null);
+
+  useEffect(() => {
+    api.basketFor(productId, days).then(setData).catch(() => {});
+  }, [productId, days]);
+
+  const companionsMargin = data ? data.companions.reduce((s, c) => s + Number(c.margin), 0) : 0;
+
+  return (
+    <>
+      <button className="btn btn--ghost" onClick={onBack}>
+        ← Назад
+      </button>
+
+      {data && (
+        <>
+          <h2 className="sect">{data.product.name}</h2>
+          <div className="kpi-grid">
+            <div className="kpi">
+              <div className="kpi__label">Чеков с товаром</div>
+              <div className="kpi__value">{data.receipts}</div>
+            </div>
+            <div className="kpi">
+              <div className="kpi__label">Взяли что-то ещё</div>
+              <div className={`kpi__value ${data.attach_pct >= 40 ? 'kpi__value--accent' : 'kpi__value--danger'}`}>
+                {data.attach_pct}%
+              </div>
+            </div>
+            <div className="kpi">
+              <div className="kpi__label">Средний чек с ним</div>
+              <div className="kpi__value">{data.avg_check.toFixed(2)}</div>
+            </div>
+            <div className="kpi">
+              <div className="kpi__label">Маржа с покупок к нему</div>
+              <div className="kpi__value">{companionsMargin.toFixed(2)}</div>
+            </div>
+          </div>
+
+          {data.companions.length === 0 ? (
+            <p className="hint" style={{ marginTop: 12 }}>К этому товару пока ничего не берут.</p>
+          ) : (
+            <>
+              <h2 className="sect">Что берут вместе</h2>
+              <p className="hint">Самые частые — их и предлагать на кассе, и ставить рядом.</p>
+              <div className="list">
+                {data.companions.map((c) => (
+                  <div key={c.id} className="list-item list-item--static">
+                    <div className="list-item__main">
+                      <div className="list-item__name">{c.name}</div>
+                      <div className="muted">
+                        в {c.receipts} чеках · {Number(c.qty)} {c.unit === 'kg' ? 'кг' : 'шт'} · маржа{' '}
+                        {Number(c.margin).toFixed(2)}
+                      </div>
+                    </div>
+                    <div className="stock">{c.share_pct}%</div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </>
+      )}
     </>
   );
 }
