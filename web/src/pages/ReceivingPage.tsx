@@ -93,7 +93,7 @@ export default function ReceivingPage() {
                 product_id: product.id,
                 qty,
                 // Закупочную цену задаёт только владелец.
-                cost_price: user?.role === 'owner' ? cost : undefined,
+                cost_price: user?.role === 'owner' && Number.isFinite(cost) ? cost : undefined,
               });
               flash(r.queued ? 'Нет сети — приём в очереди' : `Принято: ${product.name} +${qty}`);
               reset();
@@ -161,7 +161,9 @@ function ReceiveExisting({
       className="card"
       onSubmit={(e) => {
         e.preventDefault();
-        onSubmit(Number(qty), Number(cost));
+        // Пустая закупочная — не трогаем себестоимость. Раньше пустое поле
+        // уходило как 0 и обрушивало среднюю себестоимость и маржу.
+        onSubmit(Number(qty), cost.trim() === '' ? NaN : Number(cost));
       }}
     >
       <div className="product-head">
@@ -289,7 +291,7 @@ function CreateProduct({
       </label>
       <div className="row">
         <label className="field">
-          <span>Цена продажи</span>
+          <span>Цена продажи — обязательно</span>
           <NumberInput value={salePrice} onValue={setSalePrice} />
         </label>
         <label className="field">
@@ -315,7 +317,7 @@ function CreateProduct({
         <button
           type="submit"
           className="btn btn--primary"
-          disabled={busy || !name.trim() || !(Number(salePrice) >= 0)}
+          disabled={busy || !name.trim() || !(Number(salePrice) > 0)}
         >
           Завести товар
         </button>

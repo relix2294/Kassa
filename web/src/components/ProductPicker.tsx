@@ -28,8 +28,14 @@ export default function ProductPicker({
   // Сначала показываем товары без штрихкода — их иначе никак не продать.
   const list = useMemo(() => {
     const s = q.trim().toLowerCase();
+    // Ищем и по штрихкоду: если сканер не читает этикетку, кассир набирает цифры.
     const matched = s
-      ? products.filter((p) => p.name.toLowerCase().includes(s) || (p.category ?? '').toLowerCase().includes(s))
+      ? products.filter(
+          (p) =>
+            p.name.toLowerCase().includes(s) ||
+            (p.category ?? '').toLowerCase().includes(s) ||
+            (p.barcode ?? '').includes(s),
+        )
       : products;
     return [...matched]
       .sort((a, b) => Number(!!a.barcode) - Number(!!b.barcode))
@@ -39,12 +45,18 @@ export default function ProductPicker({
   // Выбран весовой товар — спрашиваем вес.
   if (picked && picked.unit === 'kg') {
     const kg = Number(amount) || 0;
-    const sum = Number((kg * Number(picked.sale_price)).toFixed(2));
+    // Сумма — по той же цене, что пробьёт чек: с учётом действующей скидки.
+    const discounted =
+      picked.discount_price != null && (picked.discount_left == null || picked.discount_left > 0);
+    const price = discounted ? Number(picked.discount_price) : Number(picked.sale_price);
+    const sum = Number((kg * price).toFixed(2));
     return (
       <div className="modal-backdrop" onClick={onClose}>
         <div className="modal" onClick={(e) => e.stopPropagation()}>
           <h2>{picked.name}</h2>
-          <div className="muted">{picked.sale_price} за кг · на складе {picked.stock} кг</div>
+          <div className="muted">
+            {discounted ? <><s>{picked.sale_price}</s> {price}</> : price} за кг · на складе {picked.stock} кг
+          </div>
 
           <div className="field">
             <span>Вес, кг</span>
@@ -73,11 +85,11 @@ export default function ProductPicker({
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
-        <h2>Товар без штрихкода</h2>
+        <h2>Найти товар</h2>
         <input
           ref={searchRef}
           className="search"
-          placeholder="Название или категория…"
+          placeholder="Название, категория или цифры штрихкода…"
           value={q}
           onChange={(e) => setQ(e.target.value)}
         />
@@ -104,7 +116,9 @@ export default function ProductPicker({
               </div>
               <div className="list-item__side">
                 <div className="stock">{p.sale_price}{p.unit === 'kg' ? ' /кг' : ''}</div>
-                <div className="muted">{p.stock} {p.unit === 'kg' ? 'кг' : 'шт'}</div>
+                <div className={`muted ${p.stock <= 0 ? 'diff-neg' : ''}`}>
+                  {p.stock <= 0 ? 'нет на складе' : `${p.stock} ${p.unit === 'kg' ? 'кг' : 'шт'}`}
+                </div>
               </div>
             </button>
           ))}

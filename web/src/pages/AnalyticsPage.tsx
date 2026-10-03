@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api } from '../api';
 import { onRealtimeEvent } from '../sync';
 import InventoryPanel from './InventoryPanel';
 import BulkPricePanel from './BulkPricePanel';
 
-type Tab = 'restock' | 'basket' | 'stale' | 'tools';
+type Tab = 'restock' | 'movers' | 'basket' | 'stale' | 'tools';
 
 export default function AnalyticsPage() {
   const [tab, setTab] = useState<Tab>('restock');
@@ -19,9 +19,14 @@ export default function AnalyticsPage() {
     <div className="page">
       <h1>Аналитика</h1>
 
-      <div className="seg">
+      {/* Вкладок пять — на телефоне переносим во вторую строку, а не прячем
+          за горизонтальной прокруткой, которую никто не замечает. */}
+      <div className="seg seg--wrap">
         <button className={`seg__btn ${tab === 'restock' ? 'seg__btn--on' : ''}`} onClick={() => setTab('restock')}>
           Закупить
+        </button>
+        <button className={`seg__btn ${tab === 'movers' ? 'seg__btn--on' : ''}`} onClick={() => setTab('movers')}>
+          Ходовые
         </button>
         <button className={`seg__btn ${tab === 'basket' ? 'seg__btn--on' : ''}`} onClick={() => setTab('basket')}>
           Вместе
@@ -35,6 +40,7 @@ export default function AnalyticsPage() {
       </div>
 
       {tab === 'restock' && <RestockTab />}
+      {tab === 'movers' && <MoversTab />}
       {tab === 'basket' && <BasketTab />}
       {tab === 'stale' && <StaleTab />}
       {tab === 'tools' && <ToolsTab onDone={flash} />}
@@ -90,6 +96,113 @@ function RestockTab() {
           );
         })}
       </div>
+    </>
+  );
+}
+
+type MoverSort = 'receipts' | 'qty' | 'revenue' | 'margin';
+const MOVER_SORT: { key: MoverSort; label: string }[] = [
+  { key: 'receipts', label: 'Чаще берут' },
+  { key: 'qty', label: 'Больше штук' },
+  { key: 'revenue', label: 'Выручка' },
+  { key: 'margin', label: 'Маржа' },
+];
+const MOVERS_SHOWN = 50;
+
+// «Ходовые»: что быстрее всего уходит — его брать больше и не допускать «закончилось».
+// «Чаще берут» — по числу чеков: не зависит от того, штучный товар или весовой.
+function MoversTab() {
+  const [days, setDays] = useState(7);
+  const [sort, setSort] = useState<MoverSort>('receipts');
+  const [q, setQ] = useState('');
+  const [all, setAll] = useState(false);
+  const [rows, setRows] = useState<Awaited<ReturnType<typeof api.movers>>>([]);
+  const [loaded, setLoaded] = useState(false);
+
+  const load = useCallback(() => {
+    api
+      .movers(days)
+      .then((r) => {
+        setRows(r);
+        setLoaded(true);
+      })
+      .catch(() => {});
+  }, [days]);
+  useEffect(() => {
+    load();
+  }, [load]);
+  useEffect(() => onRealtimeEvent((t) => t === 'sale' && load()), [load]);
+
+  const sorted = useMemo(() => {
+    const s = q.trim().toLowerCase();
+    const list = s ? rows.filter((r) => r.name.toLowerCase().includes(s)) : rows;
+    return [...list].sort((a, b) => Number(b[sort]) - Number(a[sort]));
+  }, [rows, sort, q]);
+  const shown = all ? sorted : sorted.slice(0, MOVERS_SHOWN);
+
+  return (
+    <>
+      <div className="seg">
+        {[7, 14, 30].map((d) => (
+          <button key={d} className={`seg__btn ${days === d ? 'seg__btn--on' : ''}`} onClick={() => setDays(d)}>
+            {d} дн
+          </button>
+        ))}
+      </div>
+      <div className="reasons" style={{ margin: '10px 0' }}>
+        {MOVER_SORT.map((o) => (
+          <button key={o.key} className={`chip ${sort === o.key ? 'chip--on' : ''}`} onClick={() => setSort(o.key)}>
+            {o.label}
+          </button>
+        ))}
+      </div>
+
+      {loaded && rows.length === 0 && <p className="hint">За этот период продаж нет.</p>}
+
+      {rows.length > 0 && (
+        <>
+          <input className="search" placeholder="Найти товар…" value={q} onChange={(e) => setQ(e.target.value)} />
+          <p className="hint">
+            Справа — остаток и на сколько дней его хватит при таком темпе. Красным — меньше 3 дней: брать больше.
+          </p>
+          {sorted.length === 0 && <p className="hint">Ничего не нашлось.</p>}
+          <div className="list">
+            {shown.map((r, i) => {
+              const u = r.unit === 'kg' ? 'кг' : 'шт';
+              const left = r.days_left != null ? Number(r.days_left) : null;
+              return (
+                <div key={r.id} className="list-item list-item--static">
+                  <div className="list-item__main">
+                    <div className="list-item__name">
+                      <span className="muted">{i + 1}.</span> {r.name}
+                    </div>
+                    <div className="muted">
+                      в {r.receipts} чеках · {Number(r.qty)} {u} (~{r.per_day}/день)
+                    </div>
+                    <div className="muted">
+                      выручка {Number(r.revenue).toFixed(2)} · маржа {Number(r.margin).toFixed(2)}
+                      {r.margin_pct != null && ` (${r.margin_pct}%)`}
+                    </div>
+                  </div>
+                  <div className="list-item__side">
+                    <div className={`stock ${left != null && left < 3 ? 'stock--low' : ''}`}>
+                      {r.stock} {u}
+                    </div>
+                    <div className="muted">
+                      {Number(r.stock) <= 0 ? 'нет на складе' : left != null ? `на ~${left} дн` : ''}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          {!all && sorted.length > MOVERS_SHOWN && (
+            <button className="btn btn--ghost" style={{ marginTop: 12 }} onClick={() => setAll(true)}>
+              Показать все ({sorted.length})
+            </button>
+          )}
+        </>
+      )}
     </>
   );
 }

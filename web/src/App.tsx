@@ -33,8 +33,19 @@ function ThemeButton() {
   );
 }
 
+// Разделы, которые на телефоне владельца уезжают в «Ещё». Восемь вкладок
+// в 375px не помещаются: раньше половина пряталась за прокруткой вбок,
+// и разделы «терялись». На компьютере (боковое меню) видны все.
+const EXTRA_TABS = [
+  { to: '/shift', icon: '🕐', label: 'Смена' },
+  { to: '/receiving', icon: '📦', label: 'Приём' },
+  { to: '/bulk', icon: '⚡', label: 'Завод' },
+  { to: '/staff', icon: '👥', label: 'Сотрудники' },
+];
+
 export default function App() {
   const user = useAuth();
+  const [moreOpen, setMoreOpen] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -65,6 +76,9 @@ export default function App() {
   if (!user) return <LoginPage />;
 
   const owner = user.role === 'owner';
+  const extraActive = owner && EXTRA_TABS.some((t) => location.pathname.startsWith(t.to));
+  // У владельца эти вкладки на телефоне прячутся в «Ещё», у кассира их всего три.
+  const extraCls = owner ? 'tab tab--extra' : 'tab';
 
   return (
     <div className="app">
@@ -107,11 +121,11 @@ export default function App() {
           <span className="tab__icon">🧾</span>
           <span>Продажа</span>
         </NavLink>
-        <NavLink to="/shift" className="tab">
+        <NavLink to="/shift" className={extraCls}>
           <span className="tab__icon">🕐</span>
           <span>Смена</span>
         </NavLink>
-        <NavLink to="/receiving" className="tab">
+        <NavLink to="/receiving" className={extraCls}>
           <span className="tab__icon">📦</span>
           <span>Приём</span>
         </NavLink>
@@ -122,7 +136,7 @@ export default function App() {
           </NavLink>
         )}
         {owner && (
-          <NavLink to="/bulk" className="tab">
+          <NavLink to="/bulk" className={extraCls}>
             <span className="tab__icon">⚡</span>
             <span>Завод</span>
           </NavLink>
@@ -134,12 +148,38 @@ export default function App() {
           </NavLink>
         )}
         {owner && (
-          <NavLink to="/staff" className="tab">
+          <NavLink to="/staff" className={extraCls}>
             <span className="tab__icon">👥</span>
             <span>Сотрудники</span>
           </NavLink>
         )}
+        {owner && (
+          <button className={`tab tab--more ${extraActive ? 'active' : ''}`} onClick={() => setMoreOpen(true)}>
+            <span className="tab__icon">☰</span>
+            <span>Ещё</span>
+          </button>
+        )}
       </nav>
+
+      {moreOpen && (
+        <div className="modal-backdrop" onClick={() => setMoreOpen(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <h2>Ещё разделы</h2>
+            <div className="list">
+              {EXTRA_TABS.map((t) => (
+                <NavLink key={t.to} to={t.to} className="list-item more-link" onClick={() => setMoreOpen(false)}>
+                  <span className="list-item__name">
+                    {t.icon} {t.label}
+                  </span>
+                </NavLink>
+              ))}
+            </div>
+            <button className="btn" onClick={() => setMoreOpen(false)}>
+              Закрыть
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

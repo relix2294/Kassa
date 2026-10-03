@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import NumberInput from '../components/NumberInput';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db';
@@ -11,14 +12,46 @@ import type { Product } from '../types';
 // ~2000 товаров: рисовать их все — значит подвесить экран на слабом ноуте.
 const RENDER_LIMIT = 100;
 
+type Filter = 'all' | 'low' | 'out' | 'noprice' | 'discount' | 'archived';
+type Sort = 'name' | 'stock';
+
+const isLow = (p: Product) => p.min_stock > 0 && p.stock <= p.min_stock && p.stock > 0;
+const FILTERS: { key: Filter; label: string; test?: (p: Product) => boolean }[] = [
+  { key: 'all', label: 'Все' },
+  { key: 'low', label: 'Ниже минимума', test: isLow },
+  { key: 'out', label: 'Закончились', test: (p) => p.stock <= 0 },
+  // Товар с нулевой ценой на кассе пробьётся бесплатно — такие надо видеть сразу.
+  { key: 'noprice', label: 'Без цены', test: (p) => !(Number(p.sale_price) > 0) },
+  { key: 'discount', label: 'Со скидкой', test: (p) => p.discount_price != null },
+  { key: 'archived', label: 'Убранные' },
+];
+
 export default function ProductsPage() {
   const [q, setQ] = useState('');
   const [query, setQuery] = useState(''); // отложенное значение поиска
   const [editing, setEditing] = useState<Product | null>(null);
   const [adding, setAdding] = useState(false);
+  const [restoring, setRestoring] = useState<Product | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [filter, setFilter] = useState<Filter>('all');
+  const [category, setCategory] = useState('');
+  const [sort, setSort] = useState<Sort>('name');
+  const [archived, setArchived] = useState<Product[]>([]);
 
   const products = useLiveQuery(() => db.products.orderBy('name').toArray(), [], [] as Product[]);
+
+  // Убранные товары живут только на сервере — в кассу они не попадают.
+  const loadArchived = useCallback(() => {
+    api.listArchived().then(setArchived).catch(() => {});
+  }, []);
+  useEffect(() => {
+    if (filter === 'archived') loadArchived();
+  }, [filter, loadArchived]);
+
+  const categories = useMemo(
+    () => [...new Set(products.map((p) => (p.category ?? '').trim()).filter(Boolean))].sort(),
+    [products],
+  );
 
   // Поиск с задержкой: иначе фильтр по 2000 позициям пересчитывается
   // на каждое нажатие клавиши.
@@ -29,14 +62,20 @@ export default function ProductsPage() {
 
   const filtered = useMemo(() => {
     const s = query.trim().toLowerCase();
-    if (!s) return products;
-    return products.filter(
+    const base = filter === 'archived' ? archived : products;
+    const test = FILTERS.find((f) => f.key === filter)?.test;
+    const list = base.filter(
       (p) =>
-        p.name.toLowerCase().includes(s) ||
-        (p.barcode ?? '').includes(s) ||
-        (p.category ?? '').toLowerCase().includes(s),
+        (!test || test(p)) &&
+        (!category || (p.category ?? '').trim() === category) &&
+        (!s ||
+          p.name.toLowerCase().includes(s) ||
+          (p.barcode ?? '').includes(s) ||
+          (p.category ?? '').toLowerCase().includes(s)),
     );
-  }, [products, query]);
+    // «По остатку» — сначала то, что заканчивается.
+    return sort === 'stock' ? [...list].sort((a, b) => a.stock - b.stock) : list;
+  }, [products, archived, query, filter, category, sort]);
 
   const shown = filtered.slice(0, RENDER_LIMIT);
   const hidden = filtered.length - shown.length;
@@ -51,7 +90,7 @@ export default function ProductsPage() {
       <div className="sale-head">
         <h1>Товары</h1>
         <div className="staff-actions">
-          <a className="btn btn--ghost" href="/bulk">Быстрый завод</a>
+          <Link className="btn btn--ghost" to="/bulk">Быстрый завод</Link>
           <button className="btn btn--ghost" onClick={() => setAdding(true)}>
             + Товар
           </button>
@@ -65,22 +104,66 @@ export default function ProductsPage() {
         onChange={(e) => setQ(e.target.value)}
       />
 
-      {products.length === 0 && (
+      <div className="reasons" style={{ margin: '10px 0' }}>
+        {FILTERS.map((f) => {
+          const n = f.test ? products.filter(f.test).length : null;
+          return (
+            <button key={f.key} className={`chip ${filter === f.key ? 'chip--on' : ''}`} onClick={() => setFilter(f.key)}>
+              {f.label}
+              {n != null && ` · ${n}`}
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="filter-row">
+        {categories.length > 0 && (
+          <select value={category} onChange={(e) => setCategory(e.target.value)}>
+            <option value="">Все категории</option>
+            {categories.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
+        )}
+        <div className="seg seg--inline">
+          <button className={`seg__btn ${sort === 'name' ? 'seg__btn--on' : ''}`} onClick={() => setSort('name')}>
+            По названию
+          </button>
+          <button className={`seg__btn ${sort === 'stock' ? 'seg__btn--on' : ''}`} onClick={() => setSort('stock')}>
+            По остатку
+          </button>
+        </div>
+      </div>
+
+      {filter === 'archived' && (
+        <p className="hint">Убранные товары не видны на кассе. Нажмите на товар, чтобы вернуть его в работу.</p>
+      )}
+
+      {products.length === 0 && filter !== 'archived' && (
         <p className="hint">
           Пока пусто. Заведите товар кнопкой «+ Товар» или отсканируйте новый штрихкод на вкладке «Приём».
         </p>
       )}
-      {products.length > 0 && filtered.length === 0 && <p className="hint">Ничего не нашлось.</p>}
+      {(products.length > 0 || filter === 'archived') && filtered.length === 0 && (
+        <p className="hint">{filter === 'archived' && !query && !category ? 'Убранных товаров нет.' : 'Ничего не нашлось.'}</p>
+      )}
 
       <div className="list">
         {shown.map((p) => {
           const low = p.stock <= p.min_stock && p.min_stock > 0;
           return (
-            <button key={p.id} className="list-item" onClick={() => setEditing(p)}>
+            <button
+              key={p.id}
+              className="list-item"
+              onClick={() => (filter === 'archived' ? setRestoring(p) : setEditing(p))}
+            >
               <div className="list-item__main">
                 <div className="list-item__name">
                   {p.name}
                   {p.discount_price != null && <span className="badge badge--sale">скидка</span>}
+                  {!(Number(p.sale_price) > 0) && <span className="badge badge--sale">нет цены</span>}
                 </div>
                 <div className="muted">
                   {p.barcode || 'без штрихкода'}
@@ -120,6 +203,27 @@ export default function ProductsPage() {
         />
       )}
 
+      {restoring && (
+        <Confirm
+          title="Вернуть товар в работу?"
+          text={`«${restoring.name}» снова появится на кассе и в списках.`}
+          confirmLabel="Вернуть"
+          onConfirm={async () => {
+            const p = restoring;
+            setRestoring(null);
+            try {
+              await api.archiveProduct(p.id, false);
+              await pullProducts();
+              loadArchived();
+              flash(`Возвращён: ${p.name}`);
+            } catch (e: any) {
+              flash(`Ошибка: ${e.message}`);
+            }
+          }}
+          onCancel={() => setRestoring(null)}
+        />
+      )}
+
       {editing && (
         <EditModal
           product={editing}
@@ -151,6 +255,11 @@ function AddProduct({ onClose, onDone }: { onClose: () => void; onDone: (name: s
   async function save() {
     if (!name.trim()) {
       setErr('Название обязательно');
+      return;
+    }
+    // Без цены товар на кассе пробивается за 0 — деньги мимо кассы.
+    if (!(Number(sale) > 0)) {
+      setErr('Укажите цену продажи');
       return;
     }
     setBusy(true);
@@ -256,6 +365,7 @@ function EditModal({
   const [unit, setUnit] = useState<'pcs' | 'kg'>(product.unit === 'kg' ? 'kg' : 'pcs');
   const [busy, setBusy] = useState(false);
   const [askArchive, setAskArchive] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
 
   // Скидка на товар (только владелец). Отдельная кнопка — назначить/снять.
   const [discPrice, setDiscPrice] = useState(product.discount_price != null ? String(product.discount_price) : '');
@@ -316,10 +426,13 @@ function EditModal({
                 disabled={busy}
                 onClick={async () => {
                   setBusy(true);
+                  setDiscErr(null);
                   try {
                     await api.setDiscount(product.id, { clear: true });
                     await pullProducts();
                     onSaved('Скидка снята');
+                  } catch (e: any) {
+                    setDiscErr(e.message);
                   } finally {
                     setBusy(false);
                   }
@@ -364,6 +477,8 @@ function EditModal({
           </button>
         </div>
 
+        {err && <div className="change change--neg">{err}</div>}
+
         <div className="row">
           <button className="btn" onClick={onClose} disabled={busy}>
             Отмена
@@ -372,7 +487,13 @@ function EditModal({
             className="btn btn--primary"
             disabled={busy}
             onClick={async () => {
+              // Пустое поле раньше молча превращалось в 0: цена продажи 0 —
+              // товар пробивается бесплатно, закупочная 0 — маржа врёт.
+              if (!name.trim()) return setErr('Название не может быть пустым');
+              if (!(Number(sale) > 0)) return setErr('Укажите цену продажи');
+              if (cost.trim() === '') return setErr('Укажите закупочную цену');
               setBusy(true);
+              setErr(null);
               try {
                 await updateProductRemote(product.id, {
                   name: name.trim(),
@@ -383,6 +504,8 @@ function EditModal({
                   min_stock: Number(min),
                 });
                 onSaved('Сохранено');
+              } catch (e: any) {
+                setErr(e.message || 'Не удалось сохранить');
               } finally {
                 setBusy(false);
               }
@@ -410,6 +533,8 @@ function EditModal({
                 await db.products.delete(product.id);
                 await pullProducts();
                 onSaved('Товар убран из работы');
+              } catch (e: any) {
+                setErr(e.message || 'Не удалось убрать товар');
               } finally {
                 setBusy(false);
               }

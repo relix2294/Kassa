@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { periodClause } from './dashboard.js';
 import { query, withTx } from '../db.js';
 import { writeLog } from '../lib/log.js';
 import { broadcast } from '../lib/realtime.js';
@@ -12,6 +13,9 @@ export const returnsRouter = Router();
 // видеть каждый возврат целиком (кто, что, сколько, почему).
 returnsRouter.get('/', requireOwner, async (req, res) => {
   const limit = Math.min(Number(req.query.limit) || 100, 500);
+  // Период тот же, что у сводки в кабинете: иначе сверху «возвраты за
+  // сегодня — 0», а в списке ниже — вчерашние.
+  const where = periodClause(String(req.query.period || 'all')).replace(/created_at/g, 'r.created_at');
   const rows = await query(
     `SELECT r.id, r.total, r.reason, r.created_at,
             u.username, u.full_name,
@@ -24,6 +28,7 @@ returnsRouter.get('/', requireOwner, async (req, res) => {
        FROM returns r
        LEFT JOIN users u ON u.id = r.user_id
        LEFT JOIN return_items ri ON ri.return_id = r.id
+      WHERE ${where}
       GROUP BY r.id, u.username, u.full_name
       ORDER BY r.created_at DESC
       LIMIT $1`,

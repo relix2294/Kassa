@@ -56,12 +56,12 @@ export const api = {
     req<Product>(`/products/${id}/archive`, { method: 'POST', body: JSON.stringify({ archive }) }),
   listArchived: () => req<Product[]>('/products/archived'),
   listSales: (limit = 100) => req<any[]>(`/sales?limit=${limit}`),
-  listReturns: (limit = 100) =>
+  listReturns: (limit = 100, period = 'all') =>
     req<{
       id: string; total: number; reason: string | null; created_at: string;
       username: string | null; full_name: string | null;
       items: { name: string; qty: number; line_total: number }[];
-    }[]>(`/returns?limit=${limit}`),
+    }[]>(`/returns?limit=${limit}&period=${period}`),
   currentShift: () => req<{ shift: any | null; expected?: number; stats?: any }>('/shifts/current'),
   openShift: (opening_cash: number) =>
     req<{ shift: any }>('/shifts/open', { method: 'POST', body: JSON.stringify({ opening_cash }) }),
@@ -102,6 +102,12 @@ export const api = {
       cost_price: number; unit: 'pcs' | 'kg'; sold_30d: number; per_day: number | null; days_left: number | null;
       below_min: boolean; suggest_qty: number;
     }[]>('/analytics/restock'),
+  movers: (days: number) =>
+    req<{
+      id: string; name: string; category: string | null; unit: 'pcs' | 'kg'; stock: number; sale_price: number;
+      receipts: number; qty: number; per_day: number; revenue: number; margin: number;
+      margin_pct: number | null; days_left: number | null;
+    }[]>(`/analytics/movers?days=${days}`),
   basket: (days: number) =>
     req<{
       days: number; receipts: number; avg_positions: number; avg_check: number; single_receipts: number;

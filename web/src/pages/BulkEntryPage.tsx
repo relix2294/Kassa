@@ -51,9 +51,14 @@ export default function BulkEntryPage() {
 
   const [existing, setExisting] = useState<Product | null>(null);
   const [added, setAdded] = useState<Added[]>([]);
+  // Счётчик отдельно от списка: список хранит только последние 8 строк,
+  // и раньше «заведено: 8» застывало на восьмом товаре.
+  const [addedCount, setAddedCount] = useState(0);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
+  // Единица текущей строки: у знакомого товара — его собственная.
+  const lineUnit = existing ? (existing.unit === 'kg' ? 'kg' : 'pcs') : unit;
   const barcodeRef = useRef<HTMLInputElement>(null);
   const nameRef = useRef<HTMLInputElement>(null);
   const costRef = useRef<HTMLInputElement>(null);
@@ -79,10 +84,11 @@ export default function BulkEntryPage() {
       .then((p) => {
         if (!alive) return;
         setExisting(p ?? null);
+        // Единицу пачки не трогаем: знакомый весовой товар не должен
+        // переключать на «кг» все следующие новые товары.
         if (p) {
           setName(p.name);
           setSale(String(p.sale_price));
-          setUnit(p.unit === 'kg' ? 'kg' : 'pcs');
         }
       });
     return () => {
@@ -120,6 +126,12 @@ export default function BulkEntryPage() {
       nameRef.current?.focus();
       return;
     }
+    // Без цены новый товар пробивался бы на кассе за 0.
+    if (!existing && !(Number(sale) > 0)) {
+      setErr('Введите цену продажи (или закупочную — продажа посчитается по наценке)');
+      (cost ? saleRef : costRef).current?.focus();
+      return;
+    }
 
     setBusy(true);
     setErr(null);
@@ -137,6 +149,7 @@ export default function BulkEntryPage() {
           cost_price: Number(cost) || undefined,
         });
         setAdded((a) => [{ name: existing.name, qty: qtyNum, isReceipt: true }, ...a].slice(0, 8));
+        setAddedCount((n) => n + 1);
       } else {
         const res = await createProduct({
           barcode: bc || undefined,
@@ -150,6 +163,7 @@ export default function BulkEntryPage() {
           await receiveGoods({ product_id: res.product.id, qty: qtyNum, cost_price: Number(cost) || undefined });
         }
         setAdded((a) => [{ name: name.trim(), qty: qtyNum, isReceipt: false }, ...a].slice(0, 8));
+        setAddedCount((n) => n + 1);
       }
       resetLine();
     } catch (e: any) {
@@ -173,7 +187,7 @@ export default function BulkEntryPage() {
     <div className="page">
       <div className="sale-head">
         <h1>Быстрый завод</h1>
-        <span className="badge badge--ok">заведено: {added.length}</span>
+        <span className="badge badge--ok">сохранено: {addedCount}</span>
       </div>
 
       <p className="hint">
@@ -276,7 +290,7 @@ export default function BulkEntryPage() {
 
         <div className="row">
           <label className="field">
-            <span>Закупочная{unit === 'kg' ? ' за кг' : ''}</span>
+            <span>Закупочная{lineUnit === 'kg' ? ' за кг' : ''}</span>
             <NumberInput
               ref={costRef}
               value={cost}
@@ -285,7 +299,7 @@ export default function BulkEntryPage() {
             />
           </label>
           <label className="field">
-            <span>Продажа{unit === 'kg' ? ' за кг' : ''}</span>
+            <span>Продажа{lineUnit === 'kg' ? ' за кг' : ''}</span>
             <NumberInput
               ref={saleRef}
               value={sale}
@@ -297,7 +311,7 @@ export default function BulkEntryPage() {
         </div>
 
         <label className="field">
-          <span>Сколько принято{unit === 'kg' ? ', кг' : ', шт'} — можно пропустить</span>
+          <span>Сколько принято{lineUnit === 'kg' ? ', кг' : ', шт'} — можно пропустить</span>
           <NumberInput
             ref={qtyRef}
             value={qty}

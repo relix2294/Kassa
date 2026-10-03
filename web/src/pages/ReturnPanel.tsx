@@ -105,7 +105,7 @@ export default function ReturnPanel({ onClose, onDone }: { onClose: () => void; 
 
         {/* Весовой товар и выпечку сканером не вернуть — выбираем из списка. */}
         <button className="btn btn--ghost btn--pick" onClick={() => setPickerOpen(true)}>
-          Товар без штрихкода
+          Найти по названию
         </button>
 
         {err && <div className="change change--neg">{err}</div>}

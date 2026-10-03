@@ -20,7 +20,7 @@ export default function BulkPricePanel({ onClose, onDone }: { onClose: () => voi
   const products = useLiveQuery(() => db.products.toArray(), [], [] as Product[]);
   const preview = (() => {
     const num = Number(value);
-    if (!category || !Number.isFinite(num)) return [];
+    if (!category || value.trim() === '' || !Number.isFinite(num)) return [];
     return products
       .filter((p) => (p.category ?? '') === category)
       .slice(0, 8)
@@ -42,8 +42,14 @@ export default function BulkPricePanel({ onClose, onDone }: { onClose: () => voi
       setErr('Выберите категорию');
       return;
     }
-    if (!Number.isFinite(num)) {
+    // Пустое поле — это не 0: в режиме «задать значение» оно обнулило бы
+    // цены всей категории.
+    if (value.trim() === '' || !Number.isFinite(num)) {
       setErr('Введите число');
+      return;
+    }
+    if (mode === 'set' && !(num > 0)) {
+      setErr('Цена должна быть больше 0');
       return;
     }
     setBusy(true);

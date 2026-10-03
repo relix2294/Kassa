@@ -28,9 +28,13 @@ export default function StaffPage() {
   }
 
   async function toggleBlock(u: Staff) {
-    await api.updateUser(u.id, { is_blocked: !u.is_blocked });
-    flash(u.is_blocked ? 'Разблокирован' : 'Заблокирован');
-    reload();
+    try {
+      await api.updateUser(u.id, { is_blocked: !u.is_blocked });
+      flash(u.is_blocked ? 'Разблокирован' : 'Заблокирован');
+      reload();
+    } catch (e: any) {
+      flash(`Ошибка: ${e.message}`);
+    }
   }
 
   return (
@@ -163,13 +167,17 @@ function AddCashier({ onClose, onDone }: { onClose: () => void; onDone: () => vo
 function ResetPin({ user, onClose, onDone }: { user: Staff; onClose: () => void; onDone: () => void }) {
   const [pin, setPin] = useState('');
   const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
 
   async function save() {
     if (pin.length < 4) return;
     setBusy(true);
+    setErr(null);
     try {
       await api.updateUser(user.id, { pin });
       onDone();
+    } catch (e: any) {
+      setErr(e.message || 'Не удалось сменить PIN');
     } finally {
       setBusy(false);
     }
@@ -182,6 +190,7 @@ function ResetPin({ user, onClose, onDone }: { user: Staff; onClose: () => void;
         <p className="muted">Минимум 4 цифры.</p>
         <PinDots pin={pin} />
         <Keypad value={pin} onChange={setPin} />
+        {err && <div className="change change--neg">{err}</div>}
         <div className="row">
           <button className="btn" onClick={onClose} disabled={busy}>
             Отмена

@@ -13,7 +13,7 @@ dashboardRouter.use(requireOwner);
 // и выручка за день съезжает, если сервер в другой зоне (п.27 аудита).
 const TZ = process.env.STORE_TIMEZONE || 'Asia/Dushanbe';
 
-function periodClause(period: string): string {
+export function periodClause(period: string): string {
   switch (period) {
     case 'today':
       return `created_at >= date_trunc('day', now() AT TIME ZONE '${TZ}') AT TIME ZONE '${TZ}'`;

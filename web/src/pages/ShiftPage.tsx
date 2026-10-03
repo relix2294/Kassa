@@ -13,6 +13,8 @@ export default function ShiftPage() {
   const [closed, setClosed] = useState<any | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  // Счётчик для перезагрузки истории смен, когда владелец закрыл чужую.
+  const [historyVer, setHistoryVer] = useState(0);
 
   // Промежуточный расчёт по открытой смене.
   async function loadStats() {
@@ -151,8 +153,16 @@ export default function ShiftPage() {
       )}
 
       {/* Владелец: чужие незакрытые смены и история */}
-      {user?.role === 'owner' && <OpenShifts meId={user.id} onDone={() => setErr(null)} />}
-      {user?.role === 'owner' && <OwnerShifts />}
+      {user?.role === 'owner' && (
+        <OpenShifts
+          meId={user.id}
+          onDone={() => {
+            setErr(null);
+            setHistoryVer((v) => v + 1);
+          }}
+        />
+      )}
+      {user?.role === 'owner' && <OwnerShifts version={historyVer} />}
     </div>
   );
 }
@@ -173,6 +183,7 @@ function OpenShifts({ meId, onDone }: { meId: string; onDone: () => void }) {
   const [closing, setClosing] = useState<any | null>(null);
   const [amount, setAmount] = useState('');
   const [busy, setBusy] = useState(false);
+  const [closeErr, setCloseErr] = useState<string | null>(null);
 
   const load = () => api.openShifts().then((r) => setRows(r.filter((s: any) => s.user_id !== meId))).catch(() => {});
   useEffect(() => { load(); }, []);
@@ -189,7 +200,7 @@ function OpenShifts({ meId, onDone }: { meId: string; onDone: () => void }) {
               <div className="list-item__name">{s.full_name || s.username}</div>
               <div className="muted">открыта {new Date(s.opened_at).toLocaleString('ru-RU')}</div>
             </div>
-            <button className="btn btn--ghost" onClick={() => { setClosing(s); setAmount(''); }}>
+            <button className="btn btn--ghost" onClick={() => { setClosing(s); setAmount(''); setCloseErr(null); }}>
               Закрыть
             </button>
           </div>
@@ -205,6 +216,7 @@ function OpenShifts({ meId, onDone }: { meId: string; onDone: () => void }) {
               <div className="keypad-value">{amount || '0'}</div>
             </label>
             <Keypad value={amount} onChange={setAmount} allowDecimal />
+            {closeErr && <div className="change change--neg">{closeErr}</div>}
             <div className="row">
               <button className="btn" onClick={() => setClosing(null)} disabled={busy}>Отмена</button>
               <button
@@ -212,11 +224,15 @@ function OpenShifts({ meId, onDone }: { meId: string; onDone: () => void }) {
                 disabled={busy}
                 onClick={async () => {
                   setBusy(true);
+                  setCloseErr(null);
                   try {
                     await closeShift(Number(amount) || 0, closing.user_id);
                     setClosing(null);
                     load();
                     onDone();
+                  } catch (e: any) {
+                    // Раньше ошибка гасилась: модалка висела, и было непонятно почему.
+                    setCloseErr(e?.message || 'Не удалось закрыть смену');
                   } finally {
                     setBusy(false);
                   }
@@ -232,22 +248,53 @@ function OpenShifts({ meId, onDone }: { meId: string; onDone: () => void }) {
   );
 }
 
-function OwnerShifts() {
+function OwnerShifts({ version }: { version: number }) {
   const [shifts, setShifts] = useState<any[]>([]);
+  const [who, setWho] = useState('');
+  const [onlyDiff, setOnlyDiff] = useState(false);
   useEffect(() => {
     api.listShifts().then(setShifts).catch(() => {});
-  }, []);
+  }, [version]);
   const closed = shifts.filter((s) => s.status === 'closed');
   if (closed.length === 0) return null;
+
+  const nameOf = (s: any) => s.full_name || s.username;
+  const people = [...new Set(closed.map(nameOf))].sort();
+  const shown = closed.filter((s) => (!who || nameOf(s) === who) && (!onlyDiff || Number(s.difference) !== 0));
+  const shortage = shown.reduce((sum, s) => sum + Math.min(Number(s.difference) || 0, 0), 0);
+
   return (
     <div className="shift-history">
       <h2>Закрытые смены</h2>
+      <div className="reasons" style={{ marginBottom: 10 }}>
+        {people.length > 1 && (
+          <>
+            <button className={`chip ${who === '' ? 'chip--on' : ''}`} onClick={() => setWho('')}>
+              Все
+            </button>
+            {people.map((p) => (
+              <button key={p} className={`chip ${who === p ? 'chip--on' : ''}`} onClick={() => setWho(p)}>
+                {p}
+              </button>
+            ))}
+          </>
+        )}
+        <button className={`chip ${onlyDiff ? 'chip--on' : ''}`} onClick={() => setOnlyDiff((v) => !v)}>
+          Только с расхождением
+        </button>
+      </div>
+      {shortage < 0 && <p className="hint">Недостача по показанным сменам: {shortage.toFixed(2)}</p>}
+      {shown.length === 0 && <p className="hint">Под фильтр ничего не попало.</p>}
       <div className="list">
-        {closed.map((s) => (
+        {shown.map((s) => (
           <div key={s.id} className="list-item list-item--static">
             <div className="list-item__main">
-              <div className="list-item__name">{s.full_name || s.username}</div>
-              <div className="muted">{new Date(s.opened_at).toLocaleDateString('ru-RU')} · ожид. {s.expected_cash} / посч. {s.counted_cash}</div>
+              <div className="list-item__name">{nameOf(s)}</div>
+              <div className="muted">
+                {new Date(s.opened_at).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                {s.closed_at && `–${new Date(s.closed_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}`}
+                {' · '}ожид. {s.expected_cash} / посч. {s.counted_cash}
+              </div>
             </div>
             <div className={`stock ${s.difference < 0 ? 'stock--low' : ''}`}>
               {s.difference > 0 ? '+' : ''}{s.difference}

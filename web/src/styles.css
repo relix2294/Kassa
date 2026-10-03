@@ -371,6 +371,7 @@ input:focus, .search:focus { outline: none; border-color: var(--primary); }
 }
 .seg::-webkit-scrollbar { display: none; }
 .seg--tabs { margin-top: 20px; }
+.seg--wrap { flex-wrap: wrap; overflow-x: visible; }
 .seg__btn {
   flex: 1 0 auto;
   border: none;
@@ -936,3 +937,24 @@ kbd {
 .cust__change { margin-top: 3vh; }
 .cust__change span { display: block; font-size: 4vh; color: var(--muted); }
 .cust__change b { font-size: 12vh; font-weight: 800; color: var(--primary); line-height: 1; }
+
+/* Строка фильтров над списком товаров: категория + сортировка. */
+.filter-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
+.filter-row select { flex: 1 1 180px; width: auto; }
+.seg--inline { margin-bottom: 0; flex: 1 1 220px; }
+
+/* «Ещё» на телефоне владельца: второстепенные разделы прячутся в меню. */
+.tab--more { display: none; background: none; border: none; font: inherit; cursor: pointer; }
+.tab.tab--more { font-size: 12px; }
+.app .tab--extra { display: none; }
+.app .tab--more { display: flex; }
+.more-link { text-decoration: none; }
+.more-link.active { outline: 2px solid var(--primary); }
+@media (min-width: 768px) {
+  .app .tab--extra { display: flex; }
+  .app .tab--more { display: none; }
+}
+.force-desktop .app .tab--extra { display: flex; }
+.force-desktop .app .tab--more { display: none; }
+.force-mobile .app .tab--extra { display: none; }
+.force-mobile .app .tab--more { display: flex; }

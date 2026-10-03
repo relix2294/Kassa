@@ -171,7 +171,7 @@ export default function SalePage() {
     </form>
     {/* Весовой товар и выпечка — без штрихкода, сканером их не пробить. */}
     <button className="btn btn--ghost btn--pick" onClick={() => setPickerOpen(true)}>
-      Товар без штрихкода
+      Найти по названию
     </button>
     </>
   );

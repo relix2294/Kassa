@@ -64,6 +64,46 @@ analyticsRouter.get('/restock', async (_req, res) => {
   res.json(rows);
 });
 
+// «Ходовые»: что продаётся чаще всего и быстрее всего уходит со склада.
+// По каждому товару за период: в скольких чеках был (как часто берут),
+// сколько продано, темп в день, выручка, маржа и на сколько хватит остатка.
+// Сортирует экран — сервер отдаёт все проданные за период позиции.
+analyticsRouter.get('/movers', async (req, res) => {
+  const days = basketDays(req.query.days);
+  const rows = await query(
+    `WITH observed AS (
+       -- Темп в день — по дням, которые магазин реально торговал в периоде,
+       -- а не по длине периода: иначе у нового магазина он занижен.
+       SELECT GREATEST(LEAST(EXTRACT(EPOCH FROM now() - MIN(created_at)) / 86400.0, $1::numeric), 1) AS days
+         FROM sales
+        WHERE created_at >= now() - ($1 || ' days')::interval
+     )
+     SELECT p.id, p.name, p.category, p.unit, p.stock, p.sale_price,
+            COUNT(DISTINCT si.sale_id) AS receipts,
+            SUM(si.qty) AS qty,
+            ROUND(SUM(si.qty) / MAX(observed.days), 2) AS per_day,
+            SUM(si.line_total) AS revenue,
+            SUM(si.line_total - si.unit_cost * si.qty) AS margin,
+            CASE WHEN SUM(si.line_total) > 0
+                 THEN ROUND(100 * SUM(si.line_total - si.unit_cost * si.qty) / SUM(si.line_total), 1)
+                 END AS margin_pct,
+            CASE WHEN SUM(si.qty) > 0
+                 THEN ROUND(GREATEST(p.stock, 0) / (SUM(si.qty) / MAX(observed.days)), 1)
+                 END AS days_left
+       FROM sale_items si
+       JOIN sales s ON s.id = si.sale_id
+       JOIN products p ON p.id = si.product_id
+       CROSS JOIN observed
+      WHERE s.created_at >= now() - ($1 || ' days')::interval
+      GROUP BY p.id
+      ORDER BY receipts DESC, qty DESC`,
+    [String(days)],
+  );
+  res.json(
+    rows.map((r: any) => ({ ...r, receipts: Number(r.receipts) })),
+  );
+});
+
 // «Что покупают вместе». Обзор: по каждому ходовому товару — в скольких
 // чеках он был и в какой доле из них взяли что-то ещё. Плюс общие цифры
 // по чекам: среднее число позиций и доля чеков из одного товара.
