@@ -108,30 +108,34 @@ export function RankBars({
   );
 }
 
-// Кольцо разбивки оплат с легендой и прямыми подписями (вторичное кодирование).
-const PAY = [
-  { key: 'cash', label: 'Наличные', cssVar: 'var(--ok)' },
-  { key: 'card', label: 'Безнал', cssVar: 'var(--primary)' },
-  { key: 'mixed', label: 'Смешанная', cssVar: 'var(--off)' },
-];
-export function Donut({ data }: { data: { method: string; total: number; receipts: number }[] }) {
-  const total = data.reduce((s, d) => s + Number(d.total), 0);
+// Универсальное кольцо с легендой и прямыми подписями (вторичное кодирование).
+// data — произвольные доли одного целого: {label, value, color}.
+export function Donut({
+  data, centerLabel = 'всего',
+}: {
+  data: { label: string; value: number; color: string }[];
+  centerLabel?: string;
+}) {
+  const total = data.reduce((s, d) => s + Number(d.value), 0);
   if (total === 0) return <Empty />;
   const R = 60, r = 38, C = 80;
   let acc = 0;
-  const segs = PAY.map((p) => {
-    const d = data.find((x) => x.method === p.key);
-    const val = d ? Number(d.total) : 0;
-    const frac = val / total;
-    const seg = { ...p, val, frac, start: acc };
-    acc += frac;
-    return seg;
-  }).filter((s) => s.val > 0);
+  const segs = data
+    .map((d) => {
+      const val = Number(d.value);
+      const frac = val / total;
+      const seg = { ...d, val, frac, start: acc };
+      acc += frac;
+      return seg;
+    })
+    .filter((s) => s.val > 0);
 
   const arc = (start: number, frac: number) => {
+    // Полный круг одним сегментом рисуем как почти-полный, иначе дуга схлопнется.
+    const f = Math.min(frac, 0.9999);
     const a0 = start * 2 * Math.PI - Math.PI / 2;
-    const a1 = (start + frac) * 2 * Math.PI - Math.PI / 2;
-    const large = frac > 0.5 ? 1 : 0;
+    const a1 = (start + f) * 2 * Math.PI - Math.PI / 2;
+    const large = f > 0.5 ? 1 : 0;
     const p = (ang: number, rad: number) => `${C + rad * Math.cos(ang)},${C + rad * Math.sin(ang)}`;
     return `M ${p(a0, R)} A ${R} ${R} 0 ${large} 1 ${p(a1, R)} L ${p(a1, r)} A ${r} ${r} 0 ${large} 0 ${p(a0, r)} Z`;
   };
@@ -139,16 +143,16 @@ export function Donut({ data }: { data: { method: string; total: number; receipt
   return (
     <div className="donut">
       <svg viewBox="0 0 160 160" className="donut__svg">
-        {segs.map((s) => (
-          <path key={s.key} d={arc(s.start, s.frac)} fill={s.cssVar} className="donut__seg" />
+        {segs.map((s, i) => (
+          <path key={i} d={arc(s.start, s.frac)} fill={s.color} className="donut__seg" />
         ))}
         <text x={C} y={C - 2} className="donut__center" textAnchor="middle">{fmt(total)}</text>
-        <text x={C} y={C + 16} className="donut__centerlabel" textAnchor="middle">всего</text>
+        <text x={C} y={C + 16} className="donut__centerlabel" textAnchor="middle">{centerLabel}</text>
       </svg>
       <div className="donut__legend">
-        {segs.map((s) => (
-          <div key={s.key} className="donut__row">
-            <i className="dot" style={{ background: s.cssVar }} />
+        {segs.map((s, i) => (
+          <div key={i} className="donut__row">
+            <i className="dot" style={{ background: s.color }} />
             <span>{s.label}</span>
             <b>{fmt(s.val)}</b>
             <span className="muted">{Math.round(s.frac * 100)}%</span>

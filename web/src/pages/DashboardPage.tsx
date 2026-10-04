@@ -116,6 +116,22 @@ export default function DashboardPage() {
     }, {}),
   ).sort((a, b) => b.total - a.total);
 
+  // Данные для трёх колец структуры.
+  const PAY_META: Record<string, [string, string]> = {
+    cash: ['Наличные', 'var(--ok)'], card: ['Безнал', 'var(--primary)'], mixed: ['Смешанная', 'var(--off)'],
+  };
+  const payData = pay.map((p: any) => ({
+    label: PAY_META[p.method]?.[0] ?? p.method, value: Number(p.total), color: PAY_META[p.method]?.[1] ?? 'var(--muted)',
+  }));
+  const revData = summary ? [
+    { label: 'Маржа', value: Number(summary.margin), color: 'var(--ok)' },
+    { label: 'Себестоимость', value: Math.max(0, Number(summary.revenue) - Number(summary.margin)), color: 'var(--primary)' },
+  ] : [];
+  const profitData = summary ? [
+    { label: 'Чистая прибыль', value: Math.max(0, Number(summary.net_profit)), color: 'var(--ok)' },
+    { label: 'Расходы', value: Number(summary.expenses), color: 'var(--off)' },
+  ] : [];
+
   // Временной ряд → точки для графика (подпись = дата/час).
   const points = (series?.points ?? []).map((p: any) => ({
     label: series.bucket === 'hour'
@@ -155,16 +171,23 @@ export default function DashboardPage() {
             <ColumnChart points={points} />
           </Card>
 
-          <div className="chart-grid">
+          <div className="donut-grid">
             <Card title="Чем платят">
-              <Donut data={pay} />
+              <Donut data={payData} centerLabel="продажи" />
             </Card>
-            <Card title="Выручка по часам дня">
-              <RankBars items={hours
-                .filter((h: any) => Number(h.revenue) > 0)
-                .map((h: any) => ({ label: `${String(h.hour).padStart(2, '0')}:00`, value: Number(h.revenue), sub: `${h.receipts} чек.` }))} />
+            <Card title="Из чего выручка">
+              <Donut data={revData} centerLabel="выручка" />
+            </Card>
+            <Card title="Прибыль и расходы">
+              <Donut data={profitData} centerLabel="маржа" />
             </Card>
           </div>
+
+          <Card title="Выручка по часам дня">
+            <RankBars items={hours
+              .filter((h: any) => Number(h.revenue) > 0)
+              .map((h: any) => ({ label: `${String(h.hour).padStart(2, '0')}:00`, value: Number(h.revenue), sub: `${h.receipts} чек.` }))} />
+          </Card>
 
           <Card
             title="Топ товаров"
