@@ -87,6 +87,14 @@ dashboardRouter.get('/summary', async (req, res) => {
     )
   )[0];
 
+  const expensesRow = (
+    await query(
+      `SELECT COALESCE(SUM(amount),0) AS total
+         FROM expenses WHERE status='approved' AND created_at >= $1 AND created_at < $2`,
+      [lo, hi],
+    )
+  )[0];
+
   const revenue = Number(cur.revenue);
   const cost = Number(cur.cost);
   const margin = Number((revenue - cost).toFixed(2));
@@ -94,6 +102,7 @@ dashboardRouter.get('/summary', async (req, res) => {
   const refundsTotal = Number(refunds.total);
   const prevRevenue = Number(prev.revenue);
   const prevMargin = Number((Number(prev.revenue) - Number(prev.cost)).toFixed(2));
+  const expensesTotal = Number(expensesRow.total);
 
   res.json({
     from: lo,
@@ -109,6 +118,9 @@ dashboardRouter.get('/summary', async (req, res) => {
     card: Number(cur.card),
     refunds_count: Number(refunds.count),
     refunds_total: refundsTotal,
+    expenses: expensesTotal,
+    // Чистая прибыль = маржа − расходы (операционные затраты точки).
+    net_profit: Number((margin - expensesTotal).toFixed(2)),
     // Сравнение с прошлым периодом (в процентах; null — не с чем сравнивать).
     prev: {
       revenue: prevRevenue,
@@ -214,6 +226,19 @@ dashboardRouter.get('/by-hour', async (req, res) => {
        FROM sales
       WHERE created_at >= $1 AND created_at < $2
       GROUP BY 1 ORDER BY 1`,
+    [lo, hi],
+  );
+  res.json(rows);
+});
+
+// Расходы точки за период по категориям (только одобренные).
+dashboardRouter.get('/expenses', async (req, res) => {
+  const { lo, hi } = await resolveBounds(req.query);
+  const rows = await query(
+    `SELECT category, kind, COUNT(*) AS count, COALESCE(SUM(amount),0) AS total
+       FROM expenses
+      WHERE status='approved' AND created_at >= $1 AND created_at < $2
+      GROUP BY category, kind ORDER BY total DESC`,
     [lo, hi],
   );
   res.json(rows);

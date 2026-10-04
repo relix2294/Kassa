@@ -6,6 +6,9 @@ import { useCurrentUser } from '../session';
 import ShiftWaiting from '../components/ShiftWaiting';
 import ShiftRequests from '../components/ShiftRequests';
 import ReturnRequests from '../components/ReturnRequests';
+import ExpenseRequests from '../components/ExpenseRequests';
+
+const EXPENSE_CATEGORIES = ['Аренда', 'Электричество', 'Вода', 'Зарплата', 'Хозтовары', 'Прочее'];
 
 type Stats = { expectedCash: number; expectedWallet: number; stats: any } | null;
 
@@ -20,6 +23,7 @@ export default function ShiftPage() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [withdrawOpen, setWithdrawOpen] = useState(false);
+  const [expenseOpen, setExpenseOpen] = useState(false);
   // Ожидание подтверждения владельца при расхождении (кассир сам не проходит).
   const [pending, setPending] = useState<{ action: 'open' | 'close'; request: any; message?: string | null } | null>(null);
 
@@ -93,9 +97,10 @@ export default function ShiftPage() {
 
       {err && <div className="change change--neg">{err}</div>}
 
-      {/* Владельцу: запросы кассиров на кассу с расхождением и на возврат */}
+      {/* Владельцу: запросы кассиров на кассу с расхождением, возврат и расход */}
       {user?.role === 'owner' && <ShiftRequests />}
       {user?.role === 'owner' && <ReturnRequests />}
+      {user?.role === 'owner' && <ExpenseRequests />}
 
       {/* Итог только что закрытой смены */}
       {closed && (
@@ -145,15 +150,22 @@ export default function ShiftPage() {
               <Row label="Возвраты" value={stats.stats.refunds} />
               {Number(stats.stats.withdrawn) > 0 && <Row label="Изъято наличных" value={stats.stats.withdrawn} />}
               {Number(stats.stats.wallet_withdrawn) > 0 && <Row label="Изъято безнал" value={stats.stats.wallet_withdrawn} />}
+              {Number(stats.stats.spent_cash) > 0 && <Row label="Расходы наличными" value={stats.stats.spent_cash} />}
+              {Number(stats.stats.spent_wallet) > 0 && <Row label="Расходы безнал" value={stats.stats.spent_wallet} />}
               <div className="shift-expected">Ожидается наличными: <b>{stats.expectedCash}</b></div>
               <div className="shift-expected">Ожидается на кошельках: <b>{stats.expectedWallet}</b></div>
             </>
           )}
+          <button className="btn btn--ghost" onClick={() => setExpenseOpen(true)}>➖ Записать расход</button>
           {user?.role === 'owner' && (
             <button className="btn btn--ghost" onClick={() => setWithdrawOpen(true)}>Изъять из кассы</button>
           )}
           <button className="btn btn--primary btn--big" onClick={() => setMode('close')}>Закрыть смену</button>
         </div>
+      )}
+
+      {expenseOpen && (
+        <ExpenseModal onClose={() => setExpenseOpen(false)} onDone={() => { setExpenseOpen(false); loadStats(); }} />
       )}
 
       {withdrawOpen && stats && (
@@ -239,6 +251,88 @@ function WithdrawModal({ maxCash, maxWallet, onClose, onDone }: {
         <div className="row">
           <button className="btn" onClick={onClose} disabled={busy}>Отмена</button>
           <button className="btn btn--primary" onClick={save} disabled={busy}>Изъять</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Записать расход точки. Кассир → запрос владельцу, владелец → сразу.
+function ExpenseModal({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
+  const user = useCurrentUser();
+  const [amount, setAmount] = useState('');
+  const [kind, setKind] = useState<'cash' | 'wallet'>('cash');
+  const [category, setCategory] = useState('');
+  const [note, setNote] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [pending, setPending] = useState<{ request: any; message?: string | null } | null>(null);
+
+  async function save() {
+    const a = Number(amount) || 0;
+    if (!(a > 0)) { setErr('Укажите сумму'); return; }
+    if (!category.trim()) { setErr('Выберите категорию'); return; }
+    setBusy(true); setErr(null);
+    try {
+      const res = await api.createExpense({ amount: a, kind, category: category.trim(), note: note.trim() || undefined });
+      if (res.pending) setPending({ request: res.request, message: res.message });
+      else onDone();
+    } catch (e: any) {
+      setErr(e?.body?.error || e?.message || 'Не удалось записать расход');
+    } finally { setBusy(false); }
+  }
+
+  if (pending) {
+    return (
+      <div className="modal-backdrop" onClick={(e) => e.stopPropagation()}>
+        <div className="modal" onClick={(e) => e.stopPropagation()}>
+          <ShiftWaiting
+            request={pending.request}
+            message={pending.message}
+            poll={api.myExpenseRequest}
+            cancel={api.cancelExpenseRequest}
+            whatHappens="расход проведётся"
+            onApproved={onDone}
+            onRejected={() => { setPending(null); setErr('Владелец отклонил расход.'); }}
+            onCancelled={onClose}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <h2>Расход</h2>
+        <p className="muted">
+          {user?.role === 'owner'
+            ? 'Деньги уйдут из кассы и уменьшат ожидаемый остаток.'
+            : 'Запрос уйдёт владельцу. Деньги спишутся из кассы только после его подтверждения.'}
+        </p>
+        <div className="seg">
+          <button className={`seg__btn ${kind === 'cash' ? 'seg__btn--on' : ''}`} onClick={() => setKind('cash')}>Наличные</button>
+          <button className={`seg__btn ${kind === 'wallet' ? 'seg__btn--on' : ''}`} onClick={() => setKind('wallet')}>Безнал</button>
+        </div>
+        <label className="field"><span>Сумма</span><NumberInput value={amount} onValue={setAmount} autoFocus /></label>
+        <div className="field">
+          <span>Категория</span>
+          <div className="reasons">
+            {EXPENSE_CATEGORIES.map((c) => (
+              <button key={c} type="button" className={`chip ${category === c ? 'chip--on' : ''}`} onClick={() => setCategory(c)}>{c}</button>
+            ))}
+          </div>
+          <input value={category} onChange={(e) => setCategory(e.target.value)} placeholder="или впишите свою" />
+        </div>
+        <label className="field"><span>Комментарий</span>
+          <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="напр. за октябрь" />
+        </label>
+        {err && <div className="change change--neg">{err}</div>}
+        <div className="row">
+          <button className="btn" onClick={onClose} disabled={busy}>Отмена</button>
+          <button className="btn btn--primary" onClick={save} disabled={busy}>
+            {user?.role === 'owner' ? 'Записать' : 'Отправить владельцу'}
+          </button>
         </div>
       </div>
     </div>

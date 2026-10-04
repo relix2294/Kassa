@@ -48,7 +48,8 @@ async function getLastClosing(): Promise<{ cash: number; wallet: number }> {
 }
 
 // Сколько должно быть по чекам этой смены — отдельно наличные и безнал (кошельки).
-async function computeExpected(shift: any): Promise<{ cash: number; wallet: number }> {
+// Учитываем изъятия И одобренные расходы (деньги ушли из кассы на нужды точки).
+export async function computeExpected(shift: any): Promise<{ cash: number; wallet: number }> {
   const s = (
     await query<{ cash_sales: number; card_sales: number; refunds: number }>(
       `SELECT
@@ -65,9 +66,18 @@ async function computeExpected(shift: any): Promise<{ cash: number; wallet: numb
   const cashWd = Number(wd.find((r) => r.kind === 'cash')?.sum ?? 0);
   const walletWd = Number(wd.find((r) => r.kind === 'wallet')?.sum ?? 0);
 
+  // Одобренные расходы — тоже вышли из кассы.
+  const ex = await query<{ kind: string; sum: number }>(
+    `SELECT kind, COALESCE(SUM(amount),0) AS sum FROM expenses
+      WHERE shift_id = $1 AND status = 'approved' GROUP BY kind`,
+    [shift.id],
+  );
+  const cashEx = Number(ex.find((r) => r.kind === 'cash')?.sum ?? 0);
+  const walletEx = Number(ex.find((r) => r.kind === 'wallet')?.sum ?? 0);
+
   // Возврат отдаётся наличными из кассы — уменьшает наличные.
-  const cash = Number((Number(shift.opening_cash) + Number(s.cash_sales) - Number(s.refunds) - cashWd).toFixed(2));
-  const wallet = Number((Number(shift.opening_wallet ?? 0) + Number(s.card_sales) - walletWd).toFixed(2));
+  const cash = Number((Number(shift.opening_cash) + Number(s.cash_sales) - Number(s.refunds) - cashWd - cashEx).toFixed(2));
+  const wallet = Number((Number(shift.opening_wallet ?? 0) + Number(s.card_sales) - walletWd - walletEx).toFixed(2));
   return { cash, wallet };
 }
 
@@ -100,7 +110,9 @@ shiftsRouter.get('/current', async (req, res) => {
          (SELECT COALESCE(SUM(COALESCE(card_amount, 0)),0) FROM sales WHERE shift_id = $1) AS card_sales,
          (SELECT COALESCE(SUM(total),0) FROM returns WHERE shift_id = $1) AS refunds,
          (SELECT COALESCE(SUM(amount),0) FROM cash_withdrawals WHERE shift_id = $1 AND kind='cash') AS withdrawn,
-         (SELECT COALESCE(SUM(amount),0) FROM cash_withdrawals WHERE shift_id = $1 AND kind='wallet') AS wallet_withdrawn`,
+         (SELECT COALESCE(SUM(amount),0) FROM cash_withdrawals WHERE shift_id = $1 AND kind='wallet') AS wallet_withdrawn,
+         (SELECT COALESCE(SUM(amount),0) FROM expenses WHERE shift_id = $1 AND status='approved' AND kind='cash') AS spent_cash,
+         (SELECT COALESCE(SUM(amount),0) FROM expenses WHERE shift_id = $1 AND status='approved' AND kind='wallet') AS spent_wallet`,
       [shift.id],
     )
   )[0];

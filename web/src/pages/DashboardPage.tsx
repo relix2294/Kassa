@@ -6,6 +6,7 @@ import { api, type Range } from '../api';
 import { onRealtimeEvent } from '../sync';
 import ShiftRequests from '../components/ShiftRequests';
 import ReturnRequests from '../components/ReturnRequests';
+import ExpenseRequests from '../components/ExpenseRequests';
 import { ColumnChart, RankBars, Donut } from '../components/charts';
 import type { LogRow, Product } from '../types';
 
@@ -36,17 +37,18 @@ export default function DashboardPage() {
   const [hours, setHours] = useState<any[]>([]);
   const [weekday, setWeekday] = useState<any[]>([]);
   const [pay, setPay] = useState<any[]>([]);
+  const [expenses, setExpenses] = useState<any[]>([]);
   const [recent, setRecent] = useState<any[]>([]);
 
   const load = useCallback(async () => {
     try {
-      const [s, ts, t, c, ca, h, wd, p, r] = await Promise.all([
+      const [s, ts, t, c, ca, h, wd, p, ex, r] = await Promise.all([
         api.summary(range), api.timeseries(range), api.topProducts(range, topSort, 10),
         api.byCategory(range), api.byCashier(range), api.byHour(range),
-        api.byWeekday(range), api.paymentSplit(range), api.recentSales(15),
+        api.byWeekday(range), api.paymentSplit(range), api.expensesByCategory(range), api.recentSales(15),
       ]);
       setSummary(s); setSeries(ts); setTop(t); setCats(c); setCashiers(ca);
-      setHours(h); setWeekday(wd); setPay(p); setRecent(r);
+      setHours(h); setWeekday(wd); setPay(p); setExpenses(ex); setRecent(r);
     } catch { /* ignore */ }
   }, [range, topSort]);
 
@@ -75,6 +77,7 @@ export default function DashboardPage() {
     rows.push(['Показатель', 'Значение']);
     rows.push(['Выручка (за вычетом возвратов)', String(summary.net_revenue)]);
     rows.push(['Маржа', String(summary.margin)], ['Маржа, %', String(summary.margin_pct)]);
+    rows.push(['Расходы', String(summary.expenses)], ['Чистая прибыль', String(summary.net_profit)]);
     rows.push(['Средний чек', String(summary.avg_check)], ['Чеков', String(summary.receipts)]);
     rows.push(['Наличные', String(summary.cash)], ['Безнал', String(summary.card)]);
     rows.push(['Товаров продано', String(summary.items)], ['Возвраты', String(summary.refunds_total)]);
@@ -90,6 +93,9 @@ export default function DashboardPage() {
     rows.push([]);
     rows.push(['День недели', 'Выручка', 'Маржа', 'Чеков']);
     weekday.forEach((w: any) => rows.push([WEEKDAYS[w.dow] || String(w.dow), String(w.revenue), String(w.margin), String(w.receipts)]));
+    rows.push([]);
+    rows.push(['Расход (категория)', 'Сумма']);
+    expenseByCat.forEach((e) => rows.push([e.category, String(e.total)]));
 
     const csv = '﻿' + rows.map((r) => r.map(esc).join(';')).join('\r\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
@@ -99,6 +105,16 @@ export default function DashboardPage() {
     a.click();
     URL.revokeObjectURL(a.href);
   }
+
+  // Расходы: сворачиваем по категории (суммируем нал+безнал).
+  const expenseByCat = Object.values(
+    expenses.reduce((acc: Record<string, { category: string; total: number }>, e: any) => {
+      const k = e.category;
+      acc[k] = acc[k] || { category: k, total: 0 };
+      acc[k].total += Number(e.total);
+      return acc;
+    }, {}),
+  ).sort((a, b) => b.total - a.total);
 
   // Временной ряд → точки для графика (подпись = дата/час).
   const points = (series?.points ?? []).map((p: any) => ({
@@ -114,6 +130,7 @@ export default function DashboardPage() {
 
       <ShiftRequests />
       <ReturnRequests />
+      <ExpenseRequests />
 
       <AlertsStrip onStock={() => setTab('stock')} />
 
@@ -181,6 +198,10 @@ export default function DashboardPage() {
               value: Number(w.revenue),
               sub: `маржа ${money(w.margin)} · ${w.receipts} чек.`,
             }))} />
+          </Card>
+
+          <Card title="Расходы по категориям">
+            <RankBars items={expenseByCat.map((e) => ({ label: e.category, value: e.total }))} />
           </Card>
         </>
       )}
@@ -267,6 +288,8 @@ function KpiRow({ s }: { s: any }) {
       <Kpi label="Безнал" value={money(s.card)} />
       <Kpi label="Товаров продано" value={money(s.items)} />
       <Kpi label="Возвраты" value={money(s.refunds_total)} danger={s.refunds_total > 0} />
+      <Kpi label="Расходы" value={money(s.expenses)} danger={s.expenses > 0} />
+      <Kpi label="Чистая прибыль" value={money(s.net_profit)} big accent />
     </div>
   );
 }

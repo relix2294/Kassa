@@ -1,7 +1,7 @@
 import { test, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  haveDb, resetDb, addProduct, startServer, stopServer, login, api, db,
+  haveDb, resetDb, addProduct, startServer, stopServer, login, api, db, BASE,
 } from './helpers.ts';
 
 // Тесты денежных путей: продажи, остатки, смены, возвраты, права доступа.
@@ -26,7 +26,7 @@ if (!haveDb) {
   test('вход: верный PIN даёт токен, неверный — 401', async () => {
     const tok = await login('owner', '1234');
     assert.ok(tok, 'owner получил токен');
-    const bad = await fetch('http://127.0.0.1:4555/api/auth/login', {
+    const bad = await fetch(`${BASE}/auth/login`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username: 'owner', pin: '0000' }),
     });
@@ -142,6 +142,59 @@ if (!haveDb) {
     assert.equal(appr.status, 200);
     row = await db().query('SELECT stock FROM products WHERE id=$1', [p.id]);
     assert.equal(Number(row.rows[0].stock), 4, 'после одобрения товар вернулся на склад');
+  });
+
+  test('расход кассира: до одобрения касса не меняется, после — уменьшается', async () => {
+    const c = await login('kassir', '5678');
+    const o = await login('owner', '1234');
+    await addProduct('Печенье', 10, 6, 10, '777');
+    const shift = await openShift(c);
+    // продаём на 30 наличными, чтобы было из чего платить расход
+    await api(c, '/sales', 'POST', {
+      client_id: 'e-sale', items: [{ barcode: '777', qty: 3 }],
+      payment_method: 'cash', cash_received: 30, shift_id: shift,
+    });
+    let cur = await api(c, '/shifts/current');
+    assert.equal(cur.body.expected_cash, 30, 'в кассе 30');
+    // кассир вносит расход 10 (аренда) → запрос, касса пока 30
+    const exp = await api(c, '/expenses', 'POST', { amount: 10, kind: 'cash', category: 'Аренда' });
+    assert.equal(exp.status, 202);
+    assert.equal(exp.body.pending, true);
+    cur = await api(c, '/shifts/current');
+    assert.equal(cur.body.expected_cash, 30, 'до одобрения касса не изменилась');
+    // владелец одобряет → касса стала 20
+    const reqs = await api(o, '/expenses/requests');
+    assert.equal(reqs.body.length, 1);
+    const appr = await api(o, `/expenses/requests/${reqs.body[0].id}/approve`, 'POST');
+    assert.equal(appr.status, 200);
+    cur = await api(c, '/shifts/current');
+    assert.equal(cur.body.expected_cash, 20, 'после одобрения 30−10=20');
+  });
+
+  test('расход: владелец вносит сам — сразу одобрен и уменьшает кассу', async () => {
+    const o = await login('owner', '1234');
+    await addProduct('Сахар', 12, 8, 10, '888');
+    const shift = await openShift(o);
+    await api(o, '/sales', 'POST', {
+      client_id: 'e2-sale', items: [{ barcode: '888', qty: 2 }],
+      payment_method: 'cash', cash_received: 24, shift_id: shift,
+    });
+    const r = await api(o, '/expenses', 'POST', { amount: 15, kind: 'cash', category: 'Электричество' });
+    assert.equal(r.status, 201, 'владелец — сразу одобрено');
+    const cur = await api(o, '/shifts/current');
+    assert.equal(cur.body.expected_cash, 9, '24−15=9');
+  });
+
+  test('расход: нельзя потратить больше, чем в кассе', async () => {
+    const o = await login('owner', '1234');
+    await addProduct('Соль', 5, 3, 10, '999');
+    const shift = await openShift(o);
+    await api(o, '/sales', 'POST', {
+      client_id: 'e3-sale', items: [{ barcode: '999', qty: 1 }],
+      payment_method: 'cash', cash_received: 5, shift_id: shift,
+    });
+    const r = await api(o, '/expenses', 'POST', { amount: 100, kind: 'cash', category: 'Прочее' });
+    assert.equal(r.status, 400, 'расход больше кассы отклоняется');
   });
 
   test('возврат: владелец отклоняет — ничего не меняется', async () => {

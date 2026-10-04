@@ -311,3 +311,24 @@ CREATE TABLE IF NOT EXISTS return_requests (
 CREATE INDEX IF NOT EXISTS idx_ret_req_status ON return_requests(status);
 CREATE INDEX IF NOT EXISTS idx_ret_req_user ON return_requests(user_id);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_ret_req_client ON return_requests(client_id) WHERE client_id IS NOT NULL;
+
+-- Расходы точки: деньги уходят из кассы на операционные нужды (аренда,
+-- электричество, вода, хозтовары и т.п.). Расход кассира сам по себе не
+-- вступает в силу — владелец подтверждает (status=approved). Только
+-- одобренные расходы уменьшают ожидаемую кассу при сверке смены.
+CREATE TABLE IF NOT EXISTS expenses (
+  id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  shift_id     uuid REFERENCES shifts(id) ON DELETE SET NULL,
+  user_id      uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE, -- кто внёс
+  kind         text NOT NULL DEFAULT 'cash',    -- 'cash' (наличные) | 'wallet' (безнал)
+  amount       numeric(12,2) NOT NULL,
+  category     text NOT NULL,                   -- аренда / электричество / ...
+  note         text,
+  status       text NOT NULL DEFAULT 'pending', -- pending|approved|rejected|cancelled
+  approved_by  uuid REFERENCES users(id),       -- кто дал добро
+  resolved_at  timestamptz,
+  created_at   timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_expenses_status ON expenses(status);
+CREATE INDEX IF NOT EXISTS idx_expenses_shift ON expenses(shift_id);
+CREATE INDEX IF NOT EXISTS idx_expenses_created ON expenses(created_at);

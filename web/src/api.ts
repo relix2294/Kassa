@@ -110,6 +110,17 @@ export const api = {
     ),
   withdrawCash: (amount: number, kind: 'cash' | 'wallet', note?: string) =>
     req<{ ok: boolean }>('/shifts/withdraw', { method: 'POST', body: JSON.stringify({ amount, kind, note }) }),
+  // Расходы точки: кассир вносит → владелец подтверждает.
+  createExpense: (p: { amount: number; kind: 'cash' | 'wallet'; category: string; note?: string }) =>
+    req<{ expense?: any; pending?: boolean; request?: any; message?: string }>('/expenses', { method: 'POST', body: JSON.stringify(p) }),
+  currentExpenses: () => req<any[]>('/expenses/current'),
+  myExpenseRequest: () => req<{ request: any | null }>('/expenses/my-request'),
+  cancelExpenseRequest: (id: string) => req<{ ok: boolean }>(`/expenses/requests/${id}/cancel`, { method: 'POST' }),
+  expenseRequests: () => req<any[]>('/expenses/requests'),
+  approveExpenseRequest: (id: string) => req<{ ok: boolean; expense: any }>(`/expenses/requests/${id}/approve`, { method: 'POST' }),
+  rejectExpenseRequest: (id: string) => req<{ ok: boolean }>(`/expenses/requests/${id}/reject`, { method: 'POST' }),
+  expensesByCategory: (range: Range) =>
+    req<{ category: string; kind: string; count: string; total: number }[]>(`/dashboard/expenses?${rangeQS(range)}`),
   closeShift: (counted_cash: number, counted_wallet: number, user_id?: string) =>
     req<{ shift?: any; pending?: boolean; request?: any; message?: string }>('/shifts/close', {
       method: 'POST',
