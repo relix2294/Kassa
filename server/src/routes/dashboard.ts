@@ -231,6 +231,24 @@ dashboardRouter.get('/by-hour', async (req, res) => {
   res.json(rows);
 });
 
+// Полный список расходов за период (для раздела «Расходы»): кто внёс/одобрил,
+// категория, сумма, касса, статус. Одобренные + отклонённые.
+dashboardRouter.get('/expenses-list', async (req, res) => {
+  const { lo, hi } = await resolveBounds(req.query);
+  const rows = await query(
+    `SELECT e.id, e.amount, e.kind, e.category, e.note, e.status, e.created_at,
+            u.full_name AS by_name, u.username AS by_username,
+            a.full_name AS approver_name, a.username AS approver_username
+       FROM expenses e
+       LEFT JOIN users u ON u.id = e.user_id
+       LEFT JOIN users a ON a.id = e.approved_by
+      WHERE e.status IN ('approved','rejected') AND e.created_at >= $1 AND e.created_at < $2
+      ORDER BY e.created_at DESC`,
+    [lo, hi],
+  );
+  res.json(rows);
+});
+
 // Расходы точки за период по категориям (только одобренные).
 dashboardRouter.get('/expenses', async (req, res) => {
   const { lo, hi } = await resolveBounds(req.query);

@@ -33,28 +33,34 @@ expensesRouter.post('/', async (req, res) => {
   if (!category) return res.status(400).json({ error: 'Укажите категорию расхода' });
 
   const shift = await getOpenShift(req.user!.id);
-  if (!shift) return res.status(409).json({ error: 'no_shift', message: 'Нет открытой смены' });
-
   const isOwner = req.user!.role === 'owner';
 
+  // Кассир может записать расход только в свою открытую смену.
+  if (!isOwner && !shift) return res.status(409).json({ error: 'no_shift', message: 'Нет открытой смены' });
+
   if (isOwner) {
-    const { ok, avail } = await enoughInTill(shift, kind, amount);
-    if (!ok) {
-      const label = kind === 'wallet' ? 'на кошельках' : 'наличными';
-      return res.status(400).json({ error: `В кассе ${label} только ${avail.toFixed(2)} — на расход ${amount.toFixed(2)} не хватает` });
+    // Если смена открыта — расход привязан к ней и уменьшает её кассу (с проверкой
+    // остатка). Если смены нет — это общий расход точки (напр. аренда из сейфа):
+    // в сверке кассы не участвует, но идёт в аналитику и прибыль.
+    if (shift) {
+      const { ok, avail } = await enoughInTill(shift, kind, amount);
+      if (!ok) {
+        const label = kind === 'wallet' ? 'на кошельках' : 'наличными';
+        return res.status(400).json({ error: `В кассе ${label} только ${avail.toFixed(2)} — на расход ${amount.toFixed(2)} не хватает` });
+      }
     }
     const row = (
       await query(
         `INSERT INTO expenses (shift_id, user_id, kind, amount, category, note, status, approved_by, resolved_at)
          VALUES ($1,$2,$3,$4,$5,$6,'approved',$2, now()) RETURNING *`,
-        [shift.id, req.user!.id, kind, amount, category, note],
+        [shift?.id ?? null, req.user!.id, kind, amount, category, note],
       )
     )[0];
     await writeLog({
       type: 'expense', entity: 'expense', entityId: row.id, userId: req.user!.id,
-      details: { amount, kind, category, note },
+      details: { amount, kind, category, note, general: !shift || undefined },
     });
-    broadcast('shift', shift);
+    if (shift) broadcast('shift', shift);
     return res.status(201).json({ expense: row });
   }
 

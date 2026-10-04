@@ -121,6 +121,11 @@ export const api = {
   rejectExpenseRequest: (id: string) => req<{ ok: boolean }>(`/expenses/requests/${id}/reject`, { method: 'POST' }),
   expensesByCategory: (range: Range) =>
     req<{ category: string; kind: string; count: string; total: number }[]>(`/dashboard/expenses?${rangeQS(range)}`),
+  expensesList: (range: Range) =>
+    req<{
+      id: string; amount: number; kind: string; category: string; note: string | null; status: string; created_at: string;
+      by_name: string | null; by_username: string | null; approver_name: string | null; approver_username: string | null;
+    }[]>(`/dashboard/expenses-list?${rangeQS(range)}`),
   closeShift: (counted_cash: number, counted_wallet: number, user_id?: string) =>
     req<{ shift?: any; pending?: boolean; request?: any; message?: string }>('/shifts/close', {
       method: 'POST',
