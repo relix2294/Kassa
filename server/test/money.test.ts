@@ -197,6 +197,43 @@ if (!haveDb) {
     assert.equal(r.status, 400, 'расход больше кассы отклоняется');
   });
 
+  test('оплата поставщику из кассы уменьшает кассу; со стороны — не трогает', async () => {
+    const o = await login('owner', '1234');
+    await addProduct('Кефир', 10, 6, 10, 'sup1');
+    const shift = await openShift(o);
+    // продаём на 40 наличными
+    await api(o, '/sales', 'POST', {
+      client_id: 'sp-sale', items: [{ barcode: 'sup1', qty: 4 }],
+      payment_method: 'cash', cash_received: 40, shift_id: shift,
+    });
+    let cur = await api(o, '/shifts/current');
+    assert.equal(cur.body.expected_cash, 40);
+
+    // поставщик + накладная с долгом 100
+    const sup = await api(o, '/suppliers', 'POST', { name: 'Молзавод' });
+    const inv = await api(o, `/suppliers/${sup.body.id}/invoices`, 'POST', { total: 100, paid: 0 });
+
+    // платёж 15 ИЗ КАССЫ наличными → касса 40−15=25
+    const p1 = await api(o, `/suppliers/invoices/${inv.body.id}/payments`, 'POST', { amount: 15, source: 'cash' });
+    assert.equal(p1.status, 201);
+    cur = await api(o, '/shifts/current');
+    assert.equal(cur.body.expected_cash, 25, 'из кассы уменьшает ожидаемый остаток');
+
+    // платёж 50 СО СТОРОНЫ → касса не меняется (25)
+    const p2 = await api(o, `/suppliers/invoices/${inv.body.id}/payments`, 'POST', { amount: 50, source: 'external' });
+    assert.equal(p2.status, 201);
+    cur = await api(o, '/shifts/current');
+    assert.equal(cur.body.expected_cash, 25, 'со стороны кассу не трогает');
+
+    // нельзя заплатить из кассы больше, чем в ней есть (осталось 25)
+    const p3 = await api(o, `/suppliers/invoices/${inv.body.id}/payments`, 'POST', { amount: 30, source: 'cash' });
+    assert.equal(p3.status, 400, 'из кассы нельзя больше остатка');
+
+    // долг: 100 − 15 − 50 = 35
+    const det = await api(o, `/suppliers/${sup.body.id}`);
+    assert.equal(Number(det.body.debt), 35);
+  });
+
   test('возврат: владелец отклоняет — ничего не меняется', async () => {
     const c = await login('kassir', '5678');
     const o = await login('owner', '1234');

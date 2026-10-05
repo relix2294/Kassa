@@ -1,7 +1,9 @@
 import { Router } from 'express';
 import { query, withTx } from '../db.js';
 import { writeLog } from '../lib/log.js';
+import { broadcast } from '../lib/realtime.js';
 import { requireOwner } from '../lib/auth.js';
+import { getAnyOpenShift, computeExpected } from './shifts.js';
 
 // Поставщики и долги (постоплата). Только владелец.
 // Модель проста: у поставщика есть накладные (сумма + сколько оплачено),
@@ -93,10 +95,28 @@ suppliersRouter.post('/:id/invoices', async (req, res) => {
 });
 
 // Внести платёж по накладной — гасит долг.
+// source: 'cash'/'wallet' — заплатили ИЗ КАССЫ (уменьшает смену, нужна сверка)
+//         'external'      — со стороны (банк/перевод), кассу не трогает.
 suppliersRouter.post('/invoices/:invoiceId/payments', async (req, res) => {
   const amount = Number(req.body?.amount);
   const note = String(req.body?.note ?? '').trim() || null;
+  const source = req.body?.source === 'cash' || req.body?.source === 'wallet' ? req.body.source : 'external';
   if (!(amount > 0)) return res.status(400).json({ error: 'Сумма платежа должна быть больше нуля' });
+
+  // Платёж из кассы: привязываем к активной смене и проверяем, что хватает.
+  let shift: any = null;
+  if (source !== 'external') {
+    shift = await getAnyOpenShift();
+    if (!shift) {
+      return res.status(409).json({ error: 'no_shift', message: 'Нет открытой смены — заплатить из кассы нельзя. Выберите «со стороны» или откройте смену.' });
+    }
+    const exp = await computeExpected(shift);
+    const avail = source === 'wallet' ? exp.wallet : exp.cash;
+    const label = source === 'wallet' ? 'на кошельках' : 'наличными';
+    if (amount > avail + 1e-9) {
+      return res.status(400).json({ error: `В кассе ${label} только ${avail.toFixed(2)} — оплатить ${amount.toFixed(2)} нельзя` });
+    }
+  }
 
   try {
     const result = await withTx(async (client) => {
@@ -111,17 +131,20 @@ suppliersRouter.post('/invoices/:invoiceId/payments', async (req, res) => {
       ).rows[0];
       const pay = (
         await client.query(
-          `INSERT INTO supplier_payments (invoice_id, amount, note, user_id) VALUES ($1,$2,$3,$4) RETURNING *`,
-          [inv.id, amount, note, req.user!.id],
+          `INSERT INTO supplier_payments (invoice_id, amount, note, source, shift_id, user_id)
+           VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
+          [inv.id, amount, note, source, shift?.id ?? null, req.user!.id],
         )
       ).rows[0];
       await writeLog(
         { type: 'supplier_payment', entity: 'supplier', entityId: inv.supplier_id, userId: req.user!.id,
-          details: { amount, remaining: Number((Number(upd.total) - Number(upd.paid)).toFixed(2)) } },
+          details: { amount, source, from_till: source !== 'external' || undefined, remaining: Number((Number(upd.total) - Number(upd.paid)).toFixed(2)) } },
         client,
       );
       return { invoice: upd, payment: pay };
     });
+    // Из кассы — подсказываем кабинету/смене обновить цифры.
+    if (shift) broadcast('shift', shift);
     res.status(201).json(result);
   } catch (err: any) {
     if (err?.status) return res.status(err.status).json({ error: err.message });

@@ -151,6 +151,8 @@ export default function ShiftPage() {
               {Number(stats.stats.wallet_withdrawn) > 0 && <Row label="Изъято безнал" value={stats.stats.wallet_withdrawn} />}
               {Number(stats.stats.spent_cash) > 0 && <Row label="Расходы наличными" value={stats.stats.spent_cash} />}
               {Number(stats.stats.spent_wallet) > 0 && <Row label="Расходы безнал" value={stats.stats.spent_wallet} />}
+              {Number(stats.stats.supplier_cash) > 0 && <Row label="Поставщикам наличными" value={stats.stats.supplier_cash} />}
+              {Number(stats.stats.supplier_wallet) > 0 && <Row label="Поставщикам безнал" value={stats.stats.supplier_wallet} />}
               <div className="shift-expected">Ожидается наличными: <b>{stats.expectedCash}</b></div>
               <div className="shift-expected">Ожидается на кошельках: <b>{stats.expectedWallet}</b></div>
             </>

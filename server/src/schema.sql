@@ -259,15 +259,24 @@ CREATE INDEX IF NOT EXISTS idx_sup_inv_supplier ON supplier_invoices(supplier_id
 CREATE INDEX IF NOT EXISTS idx_sup_inv_created ON supplier_invoices(created_at);
 
 -- Платежи по накладной (история погашения долга).
+-- source: откуда платили — 'cash'/'wallet' (из кассы, уменьшает смену) или
+-- 'external' (со стороны: банк/перевод, кассу не трогает). shift_id — смена,
+-- из кассы которой заплатили (для сверки). Платёж поставщику НЕ операционный
+-- расход в прибыли: себестоимость товара уже учтена в марже при продаже.
 CREATE TABLE IF NOT EXISTS supplier_payments (
   id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   invoice_id  uuid NOT NULL REFERENCES supplier_invoices(id) ON DELETE CASCADE,
   amount      numeric(12,2) NOT NULL,
   note        text,
+  source      text NOT NULL DEFAULT 'external',
+  shift_id    uuid REFERENCES shifts(id) ON DELETE SET NULL,
   user_id     uuid REFERENCES users(id),
   created_at  timestamptz NOT NULL DEFAULT now()
 );
+ALTER TABLE supplier_payments ADD COLUMN IF NOT EXISTS source text NOT NULL DEFAULT 'external';
+ALTER TABLE supplier_payments ADD COLUMN IF NOT EXISTS shift_id uuid REFERENCES shifts(id) ON DELETE SET NULL;
 CREATE INDEX IF NOT EXISTS idx_sup_pay_invoice ON supplier_payments(invoice_id);
+CREATE INDEX IF NOT EXISTS idx_sup_pay_shift ON supplier_payments(shift_id);
 
 -- Запросы кассира на действие со сменой при расхождении.
 -- Кассир сам открыть/закрыть смену с расхождением не может — создаётся запрос,

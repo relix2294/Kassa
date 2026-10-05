@@ -222,9 +222,12 @@ function AddInvoice({ supplierId, onClose, onDone }: { supplierId: string; onClo
   );
 }
 
+type PaySource = 'cash' | 'wallet' | 'external';
+
 function PayInvoice({ invoice, onClose, onDone }: { invoice: any; onClose: () => void; onDone: () => void }) {
   const [amount, setAmount] = useState('');
   const [note, setNote] = useState('');
+  const [source, setSource] = useState<PaySource>('cash');
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const remaining = Number(invoice.remaining);
@@ -235,9 +238,9 @@ function PayInvoice({ invoice, onClose, onDone }: { invoice: any; onClose: () =>
     if (a > remaining) { setErr(`Осталось всего ${remaining.toFixed(2)}`); return; }
     setBusy(true); setErr(null);
     try {
-      await api.payInvoice(invoice.id, { amount: a, note: note.trim() || undefined });
+      await api.payInvoice(invoice.id, { amount: a, note: note.trim() || undefined, source });
       onDone();
-    } catch (e: any) { setErr(e.message); } finally { setBusy(false); }
+    } catch (e: any) { setErr(e?.body?.error || e?.body?.message || e.message); } finally { setBusy(false); }
   }
 
   return (
@@ -245,6 +248,21 @@ function PayInvoice({ invoice, onClose, onDone }: { invoice: any; onClose: () =>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <h2>Оплата поставщику</h2>
         <p className="muted">По накладной осталось: <b>{remaining.toFixed(2)}</b></p>
+
+        <div className="field">
+          <span>Откуда деньги</span>
+          <div className="seg">
+            <button className={`seg__btn ${source === 'cash' ? 'seg__btn--on' : ''}`} onClick={() => setSource('cash')}>Из кассы · нал</button>
+            <button className={`seg__btn ${source === 'wallet' ? 'seg__btn--on' : ''}`} onClick={() => setSource('wallet')}>Из кассы · безнал</button>
+            <button className={`seg__btn ${source === 'external' ? 'seg__btn--on' : ''}`} onClick={() => setSource('external')}>Со стороны</button>
+          </div>
+          <p className="hint">
+            {source === 'external'
+              ? 'Оплата не из кассового ящика (банк/перевод/свои). Кассу не трогает — только гасит долг.'
+              : 'Деньги уйдут из кассы смены и уменьшат ожидаемый остаток при сверке. В прибыль как расход не идёт (товар уже учтён в себестоимости).'}
+          </p>
+        </div>
+
         <div className="row">
           <button className="btn btn--ghost" onClick={() => setAmount(String(remaining))}>Погасить всё</button>
         </div>

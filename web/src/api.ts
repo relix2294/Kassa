@@ -243,7 +243,7 @@ export const api = {
     }>(`/suppliers/${id}`),
   addInvoice: (id: string, payload: { total: number; paid?: number; note?: string }) =>
     req<any>(`/suppliers/${id}/invoices`, { method: 'POST', body: JSON.stringify(payload) }),
-  payInvoice: (invoiceId: string, payload: { amount: number; note?: string }) =>
+  payInvoice: (invoiceId: string, payload: { amount: number; note?: string; source?: 'cash' | 'wallet' | 'external' }) =>
     req<any>(`/suppliers/invoices/${invoiceId}/payments`, { method: 'POST', body: JSON.stringify(payload) }),
   writeOff: (payload: { product_id?: string; barcode?: string; qty: number; reason: string }) =>
     req<{ write_off: any; product: Product }>('/analytics/write-off', {
