@@ -1156,13 +1156,13 @@ kbd {
   display: flex; flex-direction: column; gap: 8px; text-align: left;
 }
 .tag__name { font-size: 13px; font-weight: 700; min-height: 32px; line-height: 1.2; }
-.tag__body { display: flex; align-items: flex-end; justify-content: space-between; gap: 8px; }
-.tag__barcode { height: 38px; width: auto; max-width: 52%; flex: 0 0 auto; }
-.tag__price { display: flex; flex-direction: column; align-items: flex-end; text-align: right; min-width: 0; }
-.tag__price-row { display: flex; align-items: baseline; gap: 3px; }
-.tag__price-val { font-size: 42px; font-weight: 800; line-height: 1; letter-spacing: -1.5px; font-variant-numeric: tabular-nums; }
-.tag__cur { font-size: 13px; font-weight: 700; color: #222; }
-.tag__per { font-size: 10px; color: #555; margin-top: 3px; }
+/* Цена — своей строкой, крупно, справа. Не делит строку со штрих-кодом,
+   поэтому длинное название или большая цена ни на что не налезают. */
+.tag__price { display: flex; align-items: baseline; justify-content: flex-end; gap: 4px; margin-top: 2px; }
+.tag__price-val { font-size: 40px; font-weight: 800; line-height: 1; letter-spacing: -1.5px; font-variant-numeric: tabular-nums; }
+.tag__cur { font-size: 14px; font-weight: 700; color: #222; }
+.tag__per { text-align: right; font-size: 10px; color: #555; }
+.tag__barcode { height: 34px; width: auto; max-width: 100%; align-self: flex-start; margin-top: 4px; }
 
 @media print {
   .no-print, .topbar, .tabbar { display: none !important; }

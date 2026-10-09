@@ -155,16 +155,12 @@ function Tag({ product }: { product: Product }) {
   return (
     <div className="tag">
       <div className="tag__name">{product.name}</div>
-      <div className="tag__body">
-        <svg ref={ref} className="tag__barcode" />
-        <div className="tag__price">
-          <div className="tag__price-row">
-            <span className="tag__price-val">{product.sale_price}</span>
-            <span className="tag__cur">TJS</span>
-          </div>
-          <div className="tag__per">{product.unit === 'kg' ? 'Цена за кг' : 'Цена за шт.'}</div>
-        </div>
+      <div className="tag__price">
+        <span className="tag__price-val">{product.sale_price}</span>
+        <span className="tag__cur">TJS</span>
       </div>
+      <div className="tag__per">{product.unit === 'kg' ? 'Цена за кг' : 'Цена за шт.'}</div>
+      <svg ref={ref} className="tag__barcode" />
     </div>
   );
 }
