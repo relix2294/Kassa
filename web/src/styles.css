@@ -1145,18 +1145,24 @@ kbd {
 .calc__btn--op { background: var(--surface); color: var(--primary); font-weight: 800; }
 .calc__btn--eq { background: var(--primary); color: var(--primary-ink); font-weight: 800; }
 
-/* Ценники (печать со штрих-кодом) */
+/* Ценники (печать со штрих-кодом). Магазинный ценник: название сверху,
+   крупная цена (видно издалека), штрих-код компактно слева. */
 .tags-print {
-  display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px; margin-top: 12px;
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; margin-top: 12px;
 }
 .tag {
-  border: 1px dashed var(--border); border-radius: 8px; padding: 8px; text-align: center;
+  border: 1px solid #c9c9c9; border-radius: 8px; padding: 10px 12px;
   break-inside: avoid; background: #fff; color: #000;
+  display: flex; flex-direction: column; gap: 8px; text-align: left;
 }
-.tag__name { font-size: 13px; font-weight: 600; min-height: 32px; line-height: 1.2; }
-.tag__price { font-size: 26px; font-weight: 800; }
-.tag__unit { font-size: 12px; font-weight: 500; }
-.tag__barcode { width: 100%; height: auto; }
+.tag__name { font-size: 13px; font-weight: 700; min-height: 32px; line-height: 1.2; }
+.tag__body { display: flex; align-items: flex-end; justify-content: space-between; gap: 8px; }
+.tag__barcode { height: 38px; width: auto; max-width: 52%; flex: 0 0 auto; }
+.tag__price { display: flex; flex-direction: column; align-items: flex-end; text-align: right; min-width: 0; }
+.tag__price-row { display: flex; align-items: baseline; gap: 3px; }
+.tag__price-val { font-size: 42px; font-weight: 800; line-height: 1; letter-spacing: -1.5px; font-variant-numeric: tabular-nums; }
+.tag__cur { font-size: 13px; font-weight: 700; color: #222; }
+.tag__per { font-size: 10px; color: #555; margin-top: 3px; }
 
 @media print {
   .no-print, .topbar, .tabbar { display: none !important; }

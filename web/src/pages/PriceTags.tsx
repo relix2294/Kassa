@@ -141,10 +141,10 @@ function Tag({ product }: { product: Product }) {
     try {
       JsBarcode(ref.current, product.barcode, {
         format: 'CODE128',
-        width: 1.6,
-        height: 38,
-        fontSize: 12,
-        margin: 2,
+        width: 1.1,
+        height: 30,
+        fontSize: 11,
+        margin: 0,
         displayValue: true,
       });
     } catch {
@@ -155,11 +155,16 @@ function Tag({ product }: { product: Product }) {
   return (
     <div className="tag">
       <div className="tag__name">{product.name}</div>
-      <div className="tag__price">
-        {product.sale_price}
-        <span className="tag__unit">{product.unit === 'kg' ? ' смн/кг' : ' смн'}</span>
+      <div className="tag__body">
+        <svg ref={ref} className="tag__barcode" />
+        <div className="tag__price">
+          <div className="tag__price-row">
+            <span className="tag__price-val">{product.sale_price}</span>
+            <span className="tag__cur">TJS</span>
+          </div>
+          <div className="tag__per">{product.unit === 'kg' ? 'Цена за кг' : 'Цена за шт.'}</div>
+        </div>
       </div>
-      <svg ref={ref} className="tag__barcode" />
     </div>
   );
 }
