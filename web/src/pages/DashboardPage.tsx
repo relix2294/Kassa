@@ -21,6 +21,7 @@ export default function DashboardPage() {
   const [series, setSeries] = useState<any | null>(null);
   const [top, setTop] = useState<any[]>([]);
   const [topSort, setTopSort] = useState<'revenue' | 'margin' | 'qty'>('revenue');
+  const [topOpen, setTopOpen] = useState(false); // «Подробнее»: 10 → 30 товаров
   const [cats, setCats] = useState<any[]>([]);
   const [cashiers, setCashiers] = useState<any[]>([]);
   const [hours, setHours] = useState<any[]>([]);
@@ -32,14 +33,14 @@ export default function DashboardPage() {
   const load = useCallback(async () => {
     try {
       const [s, ts, t, c, ca, h, wd, p, ex, r] = await Promise.all([
-        api.summary(range), api.timeseries(range), api.topProducts(range, topSort, 10),
+        api.summary(range), api.timeseries(range), api.topProducts(range, topSort, topOpen ? 30 : 10),
         api.byCategory(range), api.byCashier(range), api.byHour(range),
         api.byWeekday(range), api.paymentSplit(range), api.expensesByCategory(range), api.recentSales(15),
       ]);
       setSummary(s); setSeries(ts); setTop(t); setCats(c); setCashiers(ca);
       setHours(h); setWeekday(wd); setPay(p); setExpenses(ex); setRecent(r);
     } catch { /* ignore */ }
-  }, [range, topSort]);
+  }, [range, topSort, topOpen]);
 
   useEffect(() => { load(); }, [load]);
   useEffect(
@@ -193,6 +194,13 @@ export default function DashboardPage() {
               value: topSort === 'qty' ? Number(p.qty) : topSort === 'margin' ? Number(p.margin) : Number(p.revenue),
               sub: `${Number(p.qty)} ${p.unit === 'kg' ? 'кг' : 'шт'} · маржа ${money(p.margin)}`,
             }))} unitHint={topSort === 'qty' ? '' : undefined} />
+            {(topOpen || top.length >= 10) && (
+              <div className="top-more">
+                <button className="btn btn--ghost" onClick={() => setTopOpen((v) => !v)}>
+                  {topOpen ? 'Свернуть' : 'Подробнее'}
+                </button>
+              </div>
+            )}
           </Card>
 
           <div className="chart-grid">
