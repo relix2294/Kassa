@@ -158,6 +158,8 @@ input:focus, .search:focus { outline: none; border-color: var(--primary); }
 .badge--new { background: rgba(56, 189, 248, 0.15); color: var(--primary); align-self: flex-start; }
 
 .list { display: flex; flex-direction: column; gap: 8px; }
+.list-more { display: flex; flex-direction: column; align-items: center; gap: 8px; margin: 16px 0 8px; }
+.list-more .btn--big { width: 100%; max-width: 420px; }
 .list-item {
   display: flex;
   justify-content: space-between;

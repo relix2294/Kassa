@@ -18,6 +18,7 @@ export default function ProductsPage() {
   const [editing, setEditing] = useState<Product | null>(null);
   const [adding, setAdding] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [limit, setLimit] = useState(RENDER_LIMIT); // сколько позиций показываем сейчас
 
   const products = useLiveQuery(() => db.products.orderBy('name').toArray(), [], [] as Product[]);
 
@@ -27,6 +28,9 @@ export default function ProductsPage() {
     const t = setTimeout(() => setQuery(q), 200);
     return () => clearTimeout(t);
   }, [q]);
+
+  // При новом поиске снова показываем с начала (а не с раскрытого места).
+  useEffect(() => setLimit(RENDER_LIMIT), [query]);
 
   const filtered = useMemo(() => {
     const s = query.trim().toLowerCase();
@@ -39,7 +43,7 @@ export default function ProductsPage() {
     );
   }, [products, query]);
 
-  const shown = filtered.slice(0, RENDER_LIMIT);
+  const shown = filtered.slice(0, limit);
   const hidden = filtered.length - shown.length;
 
   function flash(m: string) {
@@ -107,9 +111,12 @@ export default function ProductsPage() {
       </div>
 
       {hidden > 0 && (
-        <p className="hint">
-          Показано {shown.length} из {filtered.length}. Уточните поиск, чтобы найти нужный товар.
-        </p>
+        <div className="list-more">
+          <p className="hint">Показано {shown.length} из {filtered.length}</p>
+          <button className="btn btn--ghost btn--big" onClick={() => setLimit((n) => n + RENDER_LIMIT)}>
+            Показать ещё {Math.min(RENDER_LIMIT, hidden)}
+          </button>
+        </div>
       )}
 
       {adding && (
