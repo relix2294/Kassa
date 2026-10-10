@@ -33,6 +33,13 @@ services:
       ROLE: ${ROLE:-store}
       # Общий секрет магазина и зеркала для приёма снимков (нужен обеим сторонам).
       MIRROR_SECRET: ${MIRROR_SECRET:-}
+      # Зона магазина (для «сегодня», итогов дня и расписания Telegram).
+      STORE_TIMEZONE: ${STORE_TIMEZONE:-Asia/Dushanbe}
+      # Telegram-уведомления (работают на роли store). Пусто — выключены.
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
+      TELEGRAM_DAILY_TIME: ${TELEGRAM_DAILY_TIME:-12:00}
+      TELEGRAM_LOW_STOCK_THRESHOLD: ${TELEGRAM_LOW_STOCK_THRESHOLD:-4}
     ports:
       # Слева — внешний порт сервера, справа — порт внутри контейнера.
       - "${HOST_PORT:-8080}:4000"
