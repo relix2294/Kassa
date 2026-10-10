@@ -5,6 +5,7 @@ import { broadcast } from '../lib/realtime.js';
 import { requireOwner } from '../lib/auth.js';
 import { saleFor } from '../lib/sanitize.js';
 import { getOpenShift, recomputeClosedShift } from './shifts.js';
+import { crossedLowStock, notifyLowStock, type LowStockItem } from '../lib/telegram.js';
 
 export const salesRouter = Router();
 
@@ -143,6 +144,7 @@ salesRouter.post('/', async (req, res) => {
       let total = 0;
       let costTotal = 0;
       const changedProducts: any[] = [];
+      const lowStock: LowStockItem[] = [];
       const lineRows: any[] = [];
 
       for (const item of items) {
@@ -202,6 +204,11 @@ salesRouter.post('/', async (req, res) => {
           [p.id, qty, discActive ? qty : 0],
         );
         changedProducts.push(upd.rows[0]);
+        // Остаток упал ниже порога именно этой продажей — отметим для
+        // Telegram-уведомления (шлём после коммита, одним сообщением).
+        if (crossedLowStock(Number(p.stock), Number(upd.rows[0].stock))) {
+          lowStock.push({ name: upd.rows[0].name, unit: upd.rows[0].unit, stock: Number(upd.rows[0].stock) });
+        }
         lineRows.push({ p, qty, unitPrice, unitCost, lineTotal });
       }
 
@@ -269,7 +276,7 @@ salesRouter.post('/', async (req, res) => {
         client,
       );
 
-      return { sale: saleRow, changedProducts };
+      return { sale: saleRow, changedProducts, lowStock };
     });
 
     // Чек доехал в уже закрытую смену — пересчитываем её сверку и отмечаем
@@ -288,6 +295,8 @@ salesRouter.post('/', async (req, res) => {
 
     result.changedProducts.forEach((p) => broadcast('product_upsert', p, 'all'));
     broadcast('sale', result.sale);
+    // Уведомление о низком остатке — вне транзакции, не блокирует ответ кассе.
+    if (result.lowStock.length > 0) void notifyLowStock(result.lowStock);
     res.status(201).json({ sale: saleFor(req, result.sale) });
   } catch (err: any) {
     if (err?.status === 400) return res.status(400).json({ error: err.message });

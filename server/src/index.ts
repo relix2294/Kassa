@@ -22,6 +22,7 @@ import { analyticsRouter } from './routes/analytics.js';
 import { logsRouter } from './routes/logs.js';
 import { usersRouter } from './routes/users.js';
 import { suppliersRouter } from './routes/suppliers.js';
+import { startTelegramScheduler } from './lib/telegram.js';
 
 // Роль процесса:
 //  'store'  — полноценная касса магазина (пишет данные, работает офлайн);
@@ -113,4 +114,10 @@ server.listen(port, '0.0.0.0', () => {
       ? `  Интерфейс раздаётся из ${webDist}`
       : `  Интерфейса нет (${webDist}). Для боевого режима: cd web && npm run build`,
   );
+
+  // Telegram-уведомления (итоги дня) — только на кассе магазина, не на зеркале
+  // и не в тестах. Низкий остаток шлётся прямо из продаж/списаний.
+  if (ROLE === 'store' && process.env.NODE_ENV !== 'test') {
+    startTelegramScheduler();
+  }
 });

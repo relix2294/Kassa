@@ -8,6 +8,9 @@
     "start": "tsx src/index.ts",
     "migrate": "tsx src/migrate.ts",
     "seed": "tsx src/seed.ts",
+    "tg:chatid": "tsx src/telegram-cli.ts chatid",
+    "tg:test": "tsx src/telegram-cli.ts test",
+    "tg:report": "tsx src/telegram-cli.ts report",
     "test": "tsx --test test/*.test.ts"
   },
   "dependencies": {

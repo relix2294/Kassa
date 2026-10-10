@@ -3,6 +3,7 @@ import { query, withTx } from '../db.js';
 import { requireOwner } from '../lib/auth.js';
 import { writeLog } from '../lib/log.js';
 import { broadcast } from '../lib/realtime.js';
+import { crossedLowStock, notifyLowStock } from '../lib/telegram.js';
 
 export const analyticsRouter = Router();
 
@@ -254,11 +255,15 @@ analyticsRouter.post('/write-off', async (req, res) => {
         client,
       );
 
-      return { write_off: row, product: upd.rows[0] };
+      return { write_off: row, product: upd.rows[0], oldStock: Number(p.stock) };
     });
 
     broadcast('product_upsert', result.product, 'all');
-    res.status(201).json(result);
+    // Списание тоже может опустить остаток ниже порога — предупредим в Telegram.
+    if (crossedLowStock(result.oldStock, Number(result.product.stock))) {
+      void notifyLowStock([{ name: result.product.name, unit: result.product.unit, stock: Number(result.product.stock) }]);
+    }
+    res.status(201).json({ write_off: result.write_off, product: result.product });
   } catch (err: any) {
     if (err?.status === 400) return res.status(400).json({ error: err.message });
     throw err;
