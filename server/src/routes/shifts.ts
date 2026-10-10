@@ -114,27 +114,30 @@ export async function getCurrentTill(): Promise<{
 // (расходы «из подотчёта» и оплаты поставщикам «из подотчёта»). Это и есть
 // «сколько у него должно остаться на руках».
 export async function computeAccountable(userId: string): Promise<{
-  withdrawn: number; spent_expenses: number; spent_suppliers: number; on_hand: number;
+  withdrawn: number; spent_expenses: number; spent_suppliers: number; adjustments: number; on_hand: number;
 }> {
   const r = (
-    await query<{ withdrawn: number; spent_expenses: number; spent_suppliers: number }>(
+    await query<{ withdrawn: number; spent_expenses: number; spent_suppliers: number; adjustments: number }>(
       `SELECT
          (SELECT COALESCE(SUM(amount),0) FROM cash_withdrawals WHERE user_id = $1) AS withdrawn,
          (SELECT COALESCE(SUM(amount),0) FROM expenses
             WHERE user_id = $1 AND status = 'approved' AND paid_from = 'hand') AS spent_expenses,
          (SELECT COALESCE(SUM(amount),0) FROM supplier_payments
-            WHERE user_id = $1 AND source = 'hand') AS spent_suppliers`,
+            WHERE user_id = $1 AND source = 'hand') AS spent_suppliers,
+         (SELECT COALESCE(SUM(amount),0) FROM accountable_adjustments WHERE user_id = $1) AS adjustments`,
       [userId],
     )
   )[0];
   const withdrawn = Number(r.withdrawn);
   const spent_expenses = Number(r.spent_expenses);
   const spent_suppliers = Number(r.spent_suppliers);
+  const adjustments = Number(r.adjustments);
   return {
     withdrawn,
     spent_expenses,
     spent_suppliers,
-    on_hand: Number((withdrawn - spent_expenses - spent_suppliers).toFixed(2)),
+    adjustments,
+    on_hand: Number((withdrawn - spent_expenses - spent_suppliers + adjustments).toFixed(2)),
   };
 }
 

@@ -251,7 +251,7 @@ export const api = {
   balance: () =>
     req<{
       till: { cash: number; wallet: number; total: number; has_open_shift: boolean; shift_user: string | null };
-      hands: { user_id: string; name: string; withdrawn: number; spent_expenses: number; spent_suppliers: number; on_hand: number }[];
+      hands: { user_id: string; name: string; withdrawn: number; spent_expenses: number; spent_suppliers: number; adjustments: number; on_hand: number }[];
       hands_total: number;
       supplier_debt: number;
       total_cash: number;
@@ -263,6 +263,11 @@ export const api = {
       withdrawals: { id: string; amount: number; kind: string; note: string | null; created_at: string; full_name: string | null; username: string | null }[];
       expenses: { id: string; amount: number; kind: string; category: string; note: string | null; paid_from: string; created_at: string; full_name: string | null; username: string | null }[];
     }>('/dashboard/balance'),
+  // Сверка подотчёта: привести остаток «на руках» сотрудника к фактическому.
+  adjustAccountable: (payload: { user_id: string; on_hand: number; note?: string }) =>
+    req<{ ok: boolean; on_hand: number; delta: number }>('/dashboard/accountable/adjust', {
+      method: 'POST', body: JSON.stringify(payload),
+    }),
   writeOff: (payload: { product_id?: string; barcode?: string; qty: number; reason: string }) =>
     req<{ write_off: any; product: Product }>('/analytics/write-off', {
       method: 'POST',

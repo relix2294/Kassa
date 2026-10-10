@@ -1,7 +1,9 @@
 import { Router } from 'express';
 import { query } from '../db.js';
 import { requireOwner } from '../lib/auth.js';
-import { getCurrentTill } from './shifts.js';
+import { writeLog } from '../lib/log.js';
+import { broadcast } from '../lib/realtime.js';
+import { getCurrentTill, computeAccountable } from './shifts.js';
 
 export const dashboardRouter = Router();
 
@@ -28,20 +30,22 @@ dashboardRouter.get('/balance', async (_req, res) => {
   // Подотчёт по каждому сотруднику: изъял − потратил из подотчёта.
   const hands = await query<{
     id: string; full_name: string | null; username: string;
-    withdrawn: number; spent_expenses: number; spent_suppliers: number;
+    withdrawn: number; spent_expenses: number; spent_suppliers: number; adjustments: number;
   }>(
     `SELECT u.id, u.full_name, u.username,
             COALESCE(w.withdrawn,0)  AS withdrawn,
             COALESCE(e.spent,0)      AS spent_expenses,
-            COALESCE(sp.paid,0)      AS spent_suppliers
+            COALESCE(sp.paid,0)      AS spent_suppliers,
+            COALESCE(adj.adj,0)      AS adjustments
        FROM users u
        LEFT JOIN (SELECT user_id, SUM(amount) AS withdrawn FROM cash_withdrawals GROUP BY user_id) w  ON w.user_id = u.id
        LEFT JOIN (SELECT user_id, SUM(amount) AS spent FROM expenses
                    WHERE status='approved' AND paid_from='hand' GROUP BY user_id) e  ON e.user_id = u.id
        LEFT JOIN (SELECT user_id, SUM(amount) AS paid FROM supplier_payments
                    WHERE source='hand' GROUP BY user_id) sp ON sp.user_id = u.id
-      WHERE COALESCE(w.withdrawn,0) <> 0 OR COALESCE(e.spent,0) <> 0 OR COALESCE(sp.paid,0) <> 0
-      ORDER BY (COALESCE(w.withdrawn,0) - COALESCE(e.spent,0) - COALESCE(sp.paid,0)) DESC`,
+       LEFT JOIN (SELECT user_id, SUM(amount) AS adj FROM accountable_adjustments GROUP BY user_id) adj ON adj.user_id = u.id
+      WHERE COALESCE(w.withdrawn,0) <> 0 OR COALESCE(e.spent,0) <> 0 OR COALESCE(sp.paid,0) <> 0 OR COALESCE(adj.adj,0) <> 0
+      ORDER BY (COALESCE(w.withdrawn,0) - COALESCE(e.spent,0) - COALESCE(sp.paid,0) + COALESCE(adj.adj,0)) DESC`,
   );
   const handsOut = hands.map((h) => ({
     user_id: h.id,
@@ -49,7 +53,8 @@ dashboardRouter.get('/balance', async (_req, res) => {
     withdrawn: Number(h.withdrawn),
     spent_expenses: Number(h.spent_expenses),
     spent_suppliers: Number(h.spent_suppliers),
-    on_hand: Number((Number(h.withdrawn) - Number(h.spent_expenses) - Number(h.spent_suppliers)).toFixed(2)),
+    adjustments: Number(h.adjustments),
+    on_hand: Number((Number(h.withdrawn) - Number(h.spent_expenses) - Number(h.spent_suppliers) + Number(h.adjustments)).toFixed(2)),
   }));
   const handsTotal = Number(handsOut.reduce((s, h) => s + h.on_hand, 0).toFixed(2));
 
@@ -135,6 +140,36 @@ dashboardRouter.get('/balance', async (_req, res) => {
     withdrawals,
     expenses,
   });
+});
+
+// Сверка подотчёта: владелец приводит остаток «на руках» сотрудника к факту.
+// Тело: { user_id, on_hand (фактический остаток сейчас), note? }.
+// Система считает разницу с текущим и записывает корректировку. Нужна, когда
+// прошлые траты из подотчёта не были помечены «из подотчёта».
+dashboardRouter.post('/accountable/adjust', async (req, res) => {
+  const userId = String(req.body?.user_id ?? '');
+  const target = Number(req.body?.on_hand);
+  const note = String(req.body?.note ?? '').trim() || null;
+  if (!userId) return res.status(400).json({ error: 'Нужен user_id' });
+  if (!Number.isFinite(target)) return res.status(400).json({ error: 'on_hand должен быть числом' });
+
+  const u = (await query(`SELECT id, full_name, username FROM users WHERE id = $1`, [userId]))[0];
+  if (!u) return res.status(404).json({ error: 'Сотрудник не найден' });
+
+  const acc = await computeAccountable(userId);
+  const delta = Number((target - acc.on_hand).toFixed(2));
+  if (delta === 0) return res.json({ ok: true, on_hand: acc.on_hand, delta: 0 });
+
+  await query(
+    `INSERT INTO accountable_adjustments (user_id, amount, note, created_by) VALUES ($1,$2,$3,$4)`,
+    [userId, delta, note, req.user!.id],
+  );
+  await writeLog({
+    type: 'accountable_adjust', entity: 'user', entityId: userId, userId: req.user!.id,
+    details: { before: acc.on_hand, after: target, delta, note },
+  });
+  broadcast('data_updated', { kind: 'accountable_adjust' });
+  res.json({ ok: true, on_hand: target, delta });
 });
 
 // Границы пресетов в виде SQL-выражений (строки заданы сервером — не ввод).

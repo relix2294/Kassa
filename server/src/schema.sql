@@ -358,3 +358,18 @@ CREATE INDEX IF NOT EXISTS idx_expenses_paid_from ON expenses(paid_from);
 -- (деньги вышли при изъятии) — уменьшает подотчёт сотрудника. Значения source:
 --   'cash'/'wallet' — из кассы смены;  'external' — со стороны (банк/свои);
 --   'hand' — из подотчёта. computeExpected считает кассу только по cash/wallet.
+
+-- Корректировка подотчёта («сверка наличных на руках»): владелец приводит
+-- остаток «на руках» сотрудника к фактическому. amount — изменение остатка
+-- (минус — уменьшает, плюс — увеличивает). Нужна, когда прошлые траты из
+-- подотчёта не были помечены как «из подотчёта» и остаток в системе разошёлся
+-- с реальным. Каждая корректировка — с заметкой и автором, видна в журнале.
+CREATE TABLE IF NOT EXISTS accountable_adjustments (
+  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id     uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  amount      numeric(12,2) NOT NULL,
+  note        text,
+  created_by  uuid REFERENCES users(id),
+  created_at  timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_acc_adj_user ON accountable_adjustments(user_id);

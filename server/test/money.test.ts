@@ -354,4 +354,30 @@ if (!haveDb) {
     assert.equal(b.till.has_open_shift, false, 'смена закрыта');
     assert.equal(b.till.cash, 300, 'касса = сосчитанный остаток последней смены');
   });
+
+  test('баланс: сверка подотчёта приводит «на руках» к факту', async () => {
+    const o = await login('owner', '1234');
+    await addProduct('Кола', 100, 60, 10, 'B6');
+    const shift = await openShift(o);
+    await api(o, '/sales', 'POST', {
+      client_id: 'b6-sale', items: [{ barcode: 'B6', qty: 5 }],
+      payment_method: 'cash', cash_received: 500, shift_id: shift,
+    });
+    await api(o, '/shifts/withdraw', 'POST', { amount: 200, kind: 'cash' });
+
+    let b = (await api(o, '/dashboard/balance')).body;
+    assert.equal(b.hands[0].on_hand, 200, 'на руках 200 до сверки');
+    assert.equal(b.total_cash, 500);
+
+    // Фактически на руках осталось 50 (остальное потрачено, но не отмечено).
+    const uid = b.hands[0].user_id;
+    const adj = await api(o, '/dashboard/accountable/adjust', 'POST', { user_id: uid, on_hand: 50 });
+    assert.equal(adj.status, 200);
+    assert.equal(adj.body.delta, -150, 'разница −150');
+
+    b = (await api(o, '/dashboard/balance')).body;
+    assert.equal(b.hands[0].on_hand, 50, 'на руках приведено к 50');
+    assert.equal(b.hands[0].adjustments, -150);
+    assert.equal(b.total_cash, 350, 'всего = касса 300 + на руках 50');
+  });
 }

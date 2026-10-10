@@ -432,7 +432,7 @@ const LOG_LABEL: Record<string, string> = {
   receiving: 'Приём товара', product_create: 'Новый товар', product_update: 'Изменена карточка',
   price_change: 'Изменена цена', stock_adjust: 'Правка остатка', shift_open: 'Открыта смена',
   shift_close: 'Закрыта смена', cash_discrepancy: 'Расхождение по кассе', handover_discrepancy: 'Расхождение при приёме',
-  cash_withdraw: 'Изъятие из кассы', shift_request: 'Запрос по смене', return_request: 'Запрос на возврат',
+  cash_withdraw: 'Изъятие из кассы', accountable_adjust: 'Сверка подотчёта', shift_request: 'Запрос по смене', return_request: 'Запрос на возврат',
   catalog_import: 'Импорт каталога', write_off: 'Списание', inventory: 'Инвентаризация',
   user_create: 'Добавлен сотрудник', user_block: 'Сотрудник заблокирован', user_unblock: 'Сотрудник разблокирован',
   user_pin_reset: 'Смена PIN',

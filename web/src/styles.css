@@ -1232,3 +1232,12 @@ kbd {
   margin: 12px 0 4px; font-size: 14px;
   background: rgba(251, 191, 36, 0.12); border-radius: 12px; padding: 10px 14px;
 }
+
+/* Сверка подотчёта: инлайн-форма правки остатка на руках */
+.hand-edit { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px; }
+.hand-edit input {
+  flex: 1 1 160px; min-width: 140px; padding: 8px 10px;
+  border-radius: 10px; border: 1px solid var(--border);
+  background: var(--surface); color: var(--text); font-size: 15px;
+}
+.hand-edit .btn { flex: 0 0 auto; padding: 8px 14px; }

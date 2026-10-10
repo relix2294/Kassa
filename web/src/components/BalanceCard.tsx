@@ -42,8 +42,61 @@ export default function BalanceCard() {
         {!b.till.has_open_shift && <div className="balance-card__hint">Смена закрыта — касса по последней сверке</div>}
       </button>
 
-      {open && <BalanceDetail b={b} onClose={() => setOpen(false)} />}
+      {open && <BalanceDetail b={b} onClose={() => setOpen(false)} onReload={load} />}
     </>
+  );
+}
+
+// Строка подотчёта сотрудника с кнопкой «Поправить» (сверка наличных на руках).
+function HandRow({ h, onReload }: { h: Balance['hands'][number]; onReload: () => void }) {
+  const [editing, setEditing] = useState(false);
+  const [val, setVal] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function save() {
+    const n = Number(val.replace(',', '.'));
+    if (!Number.isFinite(n) || n < 0) { setErr('Введите сумму (0 или больше)'); return; }
+    setBusy(true); setErr(null);
+    try {
+      await api.adjustAccountable({ user_id: h.user_id, on_hand: n, note: 'сверка наличных на руках' });
+      setEditing(false);
+      onReload();
+    } catch (e: any) {
+      setErr(e?.body?.error || e?.message || 'Не удалось');
+    } finally { setBusy(false); }
+  }
+
+  return (
+    <div className="balance-row balance-row--strong">
+      <div className="balance-row__main">
+        <span>{h.name}</span>
+        <span className="muted">
+          изъял {money(h.withdrawn)} · расходы {money(h.spent_expenses)} · поставщикам {money(h.spent_suppliers)}
+          {h.adjustments !== 0 ? ` · сверка ${h.adjustments > 0 ? '+' : ''}${money(h.adjustments)}` : ''}
+        </span>
+        {!editing && (
+          <button className="btn btn--link" onClick={() => { setVal(String(h.on_hand)); setEditing(true); }}>
+            Поправить остаток
+          </button>
+        )}
+        {editing && (
+          <div className="hand-edit">
+            <input
+              inputMode="decimal"
+              value={val}
+              onChange={(e) => setVal(e.target.value)}
+              placeholder="сколько реально на руках"
+              autoFocus
+            />
+            <button className="btn btn--primary" onClick={save} disabled={busy}>ОК</button>
+            <button className="btn" onClick={() => { setEditing(false); setErr(null); }} disabled={busy}>Отмена</button>
+          </div>
+        )}
+        {err && <span className="diff-neg">{err}</span>}
+      </div>
+      <span className="balance-row__val">{money(h.on_hand)}</span>
+    </div>
   );
 }
 
@@ -59,7 +112,7 @@ function Row({ label, value, neg, sub, strong }: { label: string; value: string;
   );
 }
 
-function BalanceDetail({ b, onClose }: { b: Balance; onClose: () => void }) {
+function BalanceDetail({ b, onClose, onReload }: { b: Balance; onClose: () => void; onReload: () => void }) {
   const t = b.today;
   return (
     <div className="modal-backdrop" onClick={onClose}>
@@ -112,15 +165,10 @@ function BalanceDetail({ b, onClose }: { b: Balance; onClose: () => void }) {
         {b.hands.length > 0 && (
           <>
             <h3 className="sect">Подотчёт по сотрудникам</h3>
+            <p className="hint">«Поправить остаток» — если прошлые траты не отмечались «из подотчёта»: укажите, сколько у человека реально на руках сейчас.</p>
             <div className="balance-list">
               {b.hands.map((h) => (
-                <Row
-                  key={h.user_id}
-                  label={h.name}
-                  value={money(h.on_hand)}
-                  strong
-                  sub={`изъял ${money(h.withdrawn)} · расходы ${money(h.spent_expenses)} · поставщикам ${money(h.spent_suppliers)}`}
-                />
+                <HandRow key={h.user_id} h={h} onReload={onReload} />
               ))}
             </div>
           </>
