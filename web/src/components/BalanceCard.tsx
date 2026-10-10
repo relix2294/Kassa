@@ -37,7 +37,6 @@ export default function BalanceCard() {
         <div className="balance-card__rows">
           <span className="balance-chip">💵 Касса: <b>{money(b.till.total)}</b></span>
           {b.hands_total !== 0 && <span className="balance-chip">✋ На руках: <b>{money(b.hands_total)}</b></span>}
-          {b.supplier_debt > 0 && <span className="balance-chip balance-chip--debt">💰 Долг: <b>{money(b.supplier_debt)}</b></span>}
         </div>
         {!b.till.has_open_shift && <div className="balance-card__hint">Смена закрыта — касса по последней сверке</div>}
       </button>

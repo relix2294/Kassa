@@ -106,6 +106,15 @@ productsRouter.post('/', requireOwner, async (req, res) => {
   }
   const cleanBarcode = typeof barcode === 'string' && barcode.trim() ? barcode.trim() : null;
   const cleanUnit = unit === 'kg' ? 'kg' : 'pcs';
+
+  // Числовые поля клиенту не доверяем: цена/остаток не могут быть отрицательными
+  // или не-числом (иначе ломается маржа, сверка и аналитика).
+  for (const [label, v] of [['цена продажи', sale_price], ['закупочная цена', cost_price], ['минимальный остаток', min_stock]] as const) {
+    if (v !== undefined && v !== null && v !== '' && !(Number.isFinite(Number(v)) && Number(v) >= 0)) {
+      return res.status(400).json({ error: `Поле «${label}» должно быть числом не меньше нуля` });
+    }
+  }
+
   try {
     const rows = await query(
       `INSERT INTO products (barcode, name, category, sale_price, cost_price, min_stock, unit)
@@ -144,6 +153,13 @@ productsRouter.patch('/:id', requireOwner, async (req, res) => {
     stockNum = Number(stock);
     if (!Number.isFinite(stockNum) || stockNum < 0) {
       return res.status(400).json({ error: 'Остаток не может быть отрицательным' });
+    }
+  }
+
+  // Цены и минимум — число не меньше нуля (если переданы).
+  for (const [label, v] of [['цена продажи', sale_price], ['закупочная цена', cost_price], ['минимальный остаток', min_stock]] as const) {
+    if (v !== undefined && v !== null && v !== '' && !(Number.isFinite(Number(v)) && Number(v) >= 0)) {
+      return res.status(400).json({ error: `Поле «${label}» должно быть числом не меньше нуля` });
     }
   }
 
