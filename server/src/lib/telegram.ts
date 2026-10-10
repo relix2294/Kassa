@@ -85,6 +85,101 @@ export async function notifyLowStock(items: LowStockItem[]): Promise<void> {
   await sendTelegram(`${head}\n${lines.join('\n')}\n\nПора закупить.`);
 }
 
+// --- Мгновенные уведомления «шефу» ---
+// Каждое — fire-and-forget: вызывается через `void notifyX(...)`, не блокирует
+// кассу и не роняет её (sendTelegram сам глушит ошибки). Без токена — молчат.
+
+// Отмены на кассе бывают частыми (кассир ошибся) — их уведомления можно
+// отключить отдельно: TELEGRAM_NOTIFY_VOIDS=false.
+const VOIDS_ON = (process.env.TELEGRAM_NOTIFY_VOIDS ?? 'true') !== 'false';
+
+async function nameOf(userId: string | null | undefined): Promise<string> {
+  if (!userId) return '—';
+  try {
+    const r = await query<{ full_name: string | null; username: string }>(
+      `SELECT full_name, username FROM users WHERE id = $1`, [userId],
+    );
+    return r[0] ? (r[0].full_name || r[0].username) : '—';
+  } catch { return '—'; }
+}
+
+const signed = (n: number) => `${n > 0 ? '+' : ''}${money(n)}`;
+
+export async function notifyReturn(o: { userId: string; total: number; reason?: string | null; approved?: boolean }): Promise<void> {
+  if (!telegramEnabled()) return;
+  const who = await nameOf(o.userId);
+  const lines = [`↩️ <b>Возврат</b> на ${money(o.total)}`, `${esc(who)}${o.reason ? ` · ${esc(o.reason)}` : ''}`];
+  if (o.approved) lines.push('<i>по одобрению владельца</i>');
+  await sendTelegram(lines.join('\n'));
+}
+
+export async function notifyVoid(o: { userId: string; kind: 'line_cancel' | 'cart_clear'; details?: any }): Promise<void> {
+  if (!telegramEnabled() || !VOIDS_ON) return;
+  const who = await nameOf(o.userId);
+  if (o.kind === 'line_cancel') {
+    const d = o.details || {};
+    await sendTelegram(`✖️ <b>Отмена позиции</b>\n${esc(who)}${d.name ? `: ${esc(d.name)}${d.qty != null ? ` × ${money(d.qty)}` : ''}` : ''}`);
+  } else {
+    await sendTelegram(`✖️ <b>Очистка чека</b>\n${esc(who)}`);
+  }
+}
+
+export async function notifyShiftOpen(o: {
+  userId: string; cash: number; wallet: number; cashDiff: number; walletDiff: number; approved?: boolean;
+}): Promise<void> {
+  if (!telegramEnabled()) return;
+  const who = await nameOf(o.userId);
+  const lines = [`🟢 <b>Смена открыта</b>`, esc(who), `На старте в кассе: нал ${money(o.cash)} · безнал ${money(o.wallet)}`];
+  if (o.cashDiff !== 0 || o.walletDiff !== 0) {
+    lines.push(`⚠️ Не сошлось с остатком прошлой смены: нал ${signed(o.cashDiff)}, безнал ${signed(o.walletDiff)}`);
+  }
+  if (o.approved) lines.push('<i>открытие подтвердил владелец</i>');
+  await sendTelegram(lines.join('\n'));
+}
+
+export async function notifyShiftClose(o: {
+  userId: string; expCash: number; countedCash: number; cashDiff: number;
+  expWallet: number; countedWallet: number; walletDiff: number; approved?: boolean;
+}): Promise<void> {
+  if (!telegramEnabled()) return;
+  const who = await nameOf(o.userId);
+  const lines = [
+    `🔴 <b>Смена закрыта</b>`, esc(who),
+    `Наличные: должно ${money(o.expCash)}, посчитали ${money(o.countedCash)} (${signed(o.cashDiff)})`,
+    `Безнал: должно ${money(o.expWallet)}, посчитали ${money(o.countedWallet)} (${signed(o.walletDiff)})`,
+  ];
+  if (o.cashDiff !== 0 || o.walletDiff !== 0) lines.push(`⚠️ <b>Расхождение по кассе!</b>`);
+  if (o.approved) lines.push('<i>закрытие подтвердил владелец</i>');
+  await sendTelegram(lines.join('\n'));
+}
+
+export async function notifyWithdraw(o: { userId: string; amount: number; kind: 'cash' | 'wallet'; note?: string | null }): Promise<void> {
+  if (!telegramEnabled()) return;
+  const who = await nameOf(o.userId);
+  await sendTelegram(`🏧 <b>Изъятие из кассы</b>\n${esc(who)}: ${money(o.amount)} ${o.kind === 'wallet' ? 'безнал' : 'наличные'}${o.note ? ` · ${esc(o.note)}` : ''}`);
+}
+
+export async function notifyExpense(o: { userId: string; amount: number; category: string; paidFrom: string; approved?: boolean }): Promise<void> {
+  if (!telegramEnabled()) return;
+  const who = await nameOf(o.userId);
+  await sendTelegram(`💸 <b>Расход</b> ${esc(o.category)}\n${esc(who)}: ${money(o.amount)} · ${o.paidFrom === 'hand' ? 'из подотчёта' : 'из кассы'}${o.approved ? ' · <i>одобрил владелец</i>' : ''}`);
+}
+
+export async function notifySupplierPayment(o: { userId: string; amount: number; source: string }): Promise<void> {
+  if (!telegramEnabled()) return;
+  const who = await nameOf(o.userId);
+  const src = o.source === 'cash' ? 'из кассы · нал'
+    : o.source === 'wallet' ? 'из кассы · безнал'
+    : o.source === 'hand' ? 'из подотчёта' : 'со стороны';
+  await sendTelegram(`📦 <b>Оплата поставщику</b>\n${esc(who)}: ${money(o.amount)} (${src})`);
+}
+
+export async function notifyRequest(o: { userId: string; what: string }): Promise<void> {
+  if (!telegramEnabled()) return;
+  const who = await nameOf(o.userId);
+  await sendTelegram(`🔔 <b>Нужно подтверждение</b>\n${esc(who)} просит: ${esc(o.what)}`);
+}
+
 // --- Итоги дня ---
 
 function todayLabel(): string {

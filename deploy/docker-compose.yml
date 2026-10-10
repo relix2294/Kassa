@@ -40,6 +40,7 @@ services:
       TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
       TELEGRAM_DAILY_TIME: ${TELEGRAM_DAILY_TIME:-12:00}
       TELEGRAM_LOW_STOCK_THRESHOLD: ${TELEGRAM_LOW_STOCK_THRESHOLD:-4}
+      TELEGRAM_NOTIFY_VOIDS: ${TELEGRAM_NOTIFY_VOIDS:-true}
     ports:
       # Слева — внешний порт сервера, справа — порт внутри контейнера.
       - "${HOST_PORT:-8080}:4000"

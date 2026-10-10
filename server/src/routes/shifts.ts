@@ -3,6 +3,7 @@ import { query } from '../db.js';
 import { writeLog } from '../lib/log.js';
 import { broadcast } from '../lib/realtime.js';
 import { requireOwner } from '../lib/auth.js';
+import { notifyShiftOpen, notifyShiftClose, notifyWithdraw, notifyRequest } from '../lib/telegram.js';
 
 export const shiftsRouter = Router();
 
@@ -221,6 +222,7 @@ shiftsRouter.post('/open', async (req, res) => {
         details: { kind: 'open', counted_cash: openingCash, counted_wallet: openingWallet, expected_cash: prev.cash, expected_wallet: prev.wallet, cash_diff: cashDiff0, wallet_diff: walletDiff0 },
       });
       broadcast('shift_request', { id: request.id });
+      void notifyRequest({ userId: req.user!.id, what: 'открыть смену с расхождением' });
     }
     return res.status(202).json({
       pending: true,
@@ -279,6 +281,7 @@ async function createOpenShift(
     });
   }
   broadcast('shift', shift);
+  void notifyShiftOpen({ userId, cash: openingCash, wallet: openingWallet, cashDiff, walletDiff, approved: !!approvedBy });
   return shift;
 }
 
@@ -303,6 +306,7 @@ shiftsRouter.post('/withdraw', requireOwner, async (req, res) => {
     [shift.id, amount, note, kind, req.user!.id]);
   await writeLog({ type: 'cash_withdraw', entity: 'shift', entityId: shift.id, userId: req.user!.id, details: { amount, kind, note } });
   broadcast('shift', shift);
+  void notifyWithdraw({ userId: req.user!.id, amount, kind, note });
   res.status(201).json({ ok: true });
 });
 
@@ -344,6 +348,7 @@ shiftsRouter.post('/close', async (req, res) => {
         details: { kind: 'close', shift_id: shift.id, counted_cash: countedCash, counted_wallet: countedWallet, expected_cash: exp.cash, expected_wallet: exp.wallet, cash_diff: cashDiff, wallet_diff: walletDiff },
       });
       broadcast('shift_request', { id: request.id });
+      void notifyRequest({ userId: req.user!.id, what: 'закрыть смену с расхождением' });
     }
     return res.status(202).json({
       pending: true,
@@ -399,6 +404,12 @@ async function closeShiftRow(
     });
   }
   broadcast('shift', closed);
+  void notifyShiftClose({
+    userId: shift.user_id,
+    expCash: exp.cash, countedCash, cashDiff,
+    expWallet: exp.wallet, countedWallet, walletDiff,
+    approved: !!approvedBy,
+  });
   return closed;
 }
 

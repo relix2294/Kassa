@@ -4,6 +4,7 @@ import { writeLog } from '../lib/log.js';
 import { broadcast } from '../lib/realtime.js';
 import { requireOwner } from '../lib/auth.js';
 import { getOpenShift, computeExpected, recomputeClosedShift, computeAccountable } from './shifts.js';
+import { notifyExpense, notifyRequest } from '../lib/telegram.js';
 
 export const expensesRouter = Router();
 
@@ -75,6 +76,7 @@ expensesRouter.post('/', async (req, res) => {
     });
     if (shift && paidFrom === 'register') broadcast('shift', shift);
     else broadcast('data_updated', { kind: 'expense' });
+    void notifyExpense({ userId: req.user!.id, amount, category, paidFrom });
     return res.status(201).json({ expense: row });
   }
 
@@ -91,6 +93,7 @@ expensesRouter.post('/', async (req, res) => {
     details: { amount, kind, category, note },
   });
   broadcast('expense_request', { id: row.id });
+  void notifyRequest({ userId: req.user!.id, what: `расход «${category}» на ${amount}` });
   return res.status(202).json({
     pending: true,
     request: row,
@@ -178,6 +181,7 @@ expensesRouter.post('/requests/:id/approve', requireOwner, async (req, res) => {
     broadcast('shift', shift);
   }
   broadcast('expense_request', { id: e.id });
+  void notifyExpense({ userId: e.user_id, amount: Number(e.amount), category: e.category, paidFrom: e.paid_from, approved: true });
   res.json({ ok: true, expense: upd });
 });
 

@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { query } from '../db.js';
 import { writeLog } from '../lib/log.js';
 import { requireOwner } from '../lib/auth.js';
+import { notifyVoid } from '../lib/telegram.js';
 
 export const logsRouter = Router();
 
@@ -13,6 +14,7 @@ logsRouter.post('/event', async (req, res) => {
   const { type, details } = req.body ?? {};
   if (!CLIENT_EVENTS.has(type)) return res.status(400).json({ error: 'unknown event' });
   const row = await writeLog({ type, entity: 'sale', userId: req.user!.id, details: details ?? null });
+  void notifyVoid({ userId: req.user!.id, kind: type, details });
   res.status(201).json(row);
 });
 

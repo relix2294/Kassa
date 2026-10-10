@@ -4,6 +4,7 @@ import { writeLog } from '../lib/log.js';
 import { broadcast } from '../lib/realtime.js';
 import { getOpenShift, recomputeClosedShift } from './shifts.js';
 import { requireOwner } from '../lib/auth.js';
+import { notifyReturn, notifyRequest } from '../lib/telegram.js';
 
 export const returnsRouter = Router();
 
@@ -152,6 +153,8 @@ async function executeReturn(body: any, userId: string) {
 
     result.changedProducts.forEach((p: any) => broadcast('product_upsert', p, 'all'));
     broadcast('return', result.ret);
+    // Мгновенное уведомление владельцу в Telegram (возврат — движение денег).
+    void notifyReturn({ userId, total: Number(result.ret.total), reason, approved: !!body.__approved_by });
     return result;
 }
 
@@ -201,6 +204,7 @@ returnsRouter.post('/', async (req, res) => {
     details: { total, items: items.length, reason: String(reason).trim() },
   });
   broadcast('return_request', { id: request.id });
+  void notifyRequest({ userId: user_id, what: `возврат на ${total}` });
   return res.status(202).json({
     pending: true,
     request,

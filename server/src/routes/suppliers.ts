@@ -4,6 +4,7 @@ import { writeLog } from '../lib/log.js';
 import { broadcast } from '../lib/realtime.js';
 import { requireOwner } from '../lib/auth.js';
 import { getAnyOpenShift, computeExpected, computeAccountable } from './shifts.js';
+import { notifySupplierPayment } from '../lib/telegram.js';
 
 // Поставщики и долги (постоплата). Только владелец.
 // Модель проста: у поставщика есть накладные (сумма + сколько оплачено),
@@ -161,6 +162,10 @@ suppliersRouter.post('/invoices/:invoiceId/payments', async (req, res) => {
     // меняется баланс «на руках», поэтому тоже шлём обновление кабинету.
     if (shift) broadcast('shift', shift);
     else if (source === 'hand') broadcast('data_updated', { kind: 'supplier_payment' });
+    // Уведомляем, когда платим из наших денег (касса/подотчёт); «со стороны» — молча.
+    if (source === 'cash' || source === 'wallet' || source === 'hand') {
+      void notifySupplierPayment({ userId: req.user!.id, amount, source });
+    }
     res.status(201).json(result);
   } catch (err: any) {
     if (err?.status) return res.status(err.status).json({ error: err.message });
