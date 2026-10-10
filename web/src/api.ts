@@ -111,7 +111,9 @@ export const api = {
   withdrawCash: (amount: number, kind: 'cash' | 'wallet', note?: string) =>
     req<{ ok: boolean }>('/shifts/withdraw', { method: 'POST', body: JSON.stringify({ amount, kind, note }) }),
   // Расходы точки: кассир вносит → владелец подтверждает.
-  createExpense: (p: { amount: number; kind: 'cash' | 'wallet'; category: string; note?: string }) =>
+  // paid_from: 'register' — из кассы (по умолчанию); 'hand' — из подотчёта
+  // (из изъятых на руки денег; доступно только владельцу).
+  createExpense: (p: { amount: number; kind: 'cash' | 'wallet'; category: string; note?: string; paid_from?: 'register' | 'hand' }) =>
     req<{ expense?: any; pending?: boolean; request?: any; message?: string }>('/expenses', { method: 'POST', body: JSON.stringify(p) }),
   currentExpenses: () => req<any[]>('/expenses/current'),
   myExpenseRequest: () => req<{ request: any | null }>('/expenses/my-request'),
@@ -243,8 +245,24 @@ export const api = {
     }>(`/suppliers/${id}`),
   addInvoice: (id: string, payload: { total: number; paid?: number; note?: string }) =>
     req<any>(`/suppliers/${id}/invoices`, { method: 'POST', body: JSON.stringify(payload) }),
-  payInvoice: (invoiceId: string, payload: { amount: number; note?: string; source?: 'cash' | 'wallet' | 'external' }) =>
+  payInvoice: (invoiceId: string, payload: { amount: number; note?: string; source?: 'cash' | 'wallet' | 'external' | 'hand' }) =>
     req<any>(`/suppliers/invoices/${invoiceId}/payments`, { method: 'POST', body: JSON.stringify(payload) }),
+  // Живой баланс: сколько денег у нас прямо сейчас (касса + подотчёт).
+  balance: () =>
+    req<{
+      till: { cash: number; wallet: number; total: number; has_open_shift: boolean; shift_user: string | null };
+      hands: { user_id: string; name: string; withdrawn: number; spent_expenses: number; spent_suppliers: number; on_hand: number }[];
+      hands_total: number;
+      supplier_debt: number;
+      total_cash: number;
+      today: {
+        sales_cash: number; sales_card: number; refunds: number; withdrawn: number;
+        expenses_register: number; expenses_hand: number; supplier_till: number; supplier_hand: number;
+        in_total: number; out_total: number;
+      };
+      withdrawals: { id: string; amount: number; kind: string; note: string | null; created_at: string; full_name: string | null; username: string | null }[];
+      expenses: { id: string; amount: number; kind: string; category: string; note: string | null; paid_from: string; created_at: string; full_name: string | null; username: string | null }[];
+    }>('/dashboard/balance'),
   writeOff: (payload: { product_id?: string; barcode?: string; qty: number; reason: string }) =>
     req<{ write_off: any; product: Product }>('/analytics/write-off', {
       method: 'POST',

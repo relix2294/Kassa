@@ -255,4 +255,103 @@ if (!haveDb) {
     const rets = await db().query('SELECT count(*) AS n FROM returns');
     assert.equal(Number(rets.rows[0].n), 0, 'возврат не создан');
   });
+
+  // --- Баланс и подотчёт («на руках») ---
+  // Ключевое требование владельца: расход «из подотчёта» не считается дважды
+  // (и из кассы, и с рук), а общие деньги = касса + подотчёт — сохраняются.
+
+  test('баланс: изъятие уводит деньги из кассы на руки, общий баланс сохраняется', async () => {
+    const o = await login('owner', '1234');
+    await addProduct('Кола', 100, 60, 10, 'B1');
+    const shift = await openShift(o);
+    await api(o, '/sales', 'POST', {
+      client_id: 'b1-sale', items: [{ barcode: 'B1', qty: 5 }],
+      payment_method: 'cash', cash_received: 500, shift_id: shift,
+    });
+    const wd = await api(o, '/shifts/withdraw', 'POST', { amount: 200, kind: 'cash' });
+    assert.equal(wd.status, 201);
+    const b = (await api(o, '/dashboard/balance')).body;
+    assert.equal(b.till.cash, 300, 'в кассе 500−200=300');
+    assert.equal(b.hands_total, 200, 'на руках 200');
+    assert.equal(b.total_cash, 500, 'всего денег не изменилось: 300+200=500');
+    assert.equal(b.hands[0].on_hand, 200);
+  });
+
+  test('баланс: расход из подотчёта не трогает кассу и не считается дважды', async () => {
+    const o = await login('owner', '1234');
+    await addProduct('Кола', 100, 60, 10, 'B2');
+    const shift = await openShift(o);
+    await api(o, '/sales', 'POST', {
+      client_id: 'b2-sale', items: [{ barcode: 'B2', qty: 5 }],
+      payment_method: 'cash', cash_received: 500, shift_id: shift,
+    });
+    await api(o, '/shifts/withdraw', 'POST', { amount: 200, kind: 'cash' });
+
+    const ex = await api(o, '/expenses', 'POST', { amount: 50, kind: 'cash', category: 'Электричество', paid_from: 'hand' });
+    assert.equal(ex.status, 201);
+    let b = (await api(o, '/dashboard/balance')).body;
+    assert.equal(b.till.cash, 300, 'касса не тронута расходом из подотчёта');
+    assert.equal(b.hands_total, 150, 'на руках 200−50=150');
+    assert.equal(b.total_cash, 450, 'всего 300+150=450 (потратили 50)');
+    assert.equal(b.today.expenses_hand, 50);
+
+    const ex2 = await api(o, '/expenses', 'POST', { amount: 30, kind: 'cash', category: 'Вода', paid_from: 'register' });
+    assert.equal(ex2.status, 201);
+    b = (await api(o, '/dashboard/balance')).body;
+    assert.equal(b.till.cash, 270, 'касса 300−30=270');
+    assert.equal(b.hands_total, 150, 'подотчёт не изменился');
+    assert.equal(b.total_cash, 420, 'всего 270+150=420');
+    assert.equal(b.today.expenses_register, 30);
+  });
+
+  test('баланс: оплата поставщику из подотчёта гасит долг и уменьшает руки, кассу не трогает', async () => {
+    const o = await login('owner', '1234');
+    await addProduct('Кола', 100, 60, 10, 'B3');
+    const shift = await openShift(o);
+    await api(o, '/sales', 'POST', {
+      client_id: 'b3-sale', items: [{ barcode: 'B3', qty: 5 }],
+      payment_method: 'cash', cash_received: 500, shift_id: shift,
+    });
+    await api(o, '/shifts/withdraw', 'POST', { amount: 200, kind: 'cash' });
+
+    const sup = await api(o, '/suppliers', 'POST', { name: 'Оптбаза' });
+    const inv = await api(o, `/suppliers/${sup.body.id}/invoices`, 'POST', { total: 100, paid: 0 });
+    const pay = await api(o, `/suppliers/invoices/${inv.body.id}/payments`, 'POST', { amount: 40, source: 'hand' });
+    assert.equal(pay.status, 201);
+
+    const b = (await api(o, '/dashboard/balance')).body;
+    assert.equal(b.till.cash, 300, 'касса не тронута оплатой из подотчёта');
+    assert.equal(b.hands_total, 160, 'на руках 200−40=160');
+    assert.equal(b.supplier_debt, 60, 'долг 100−40=60');
+    assert.equal(b.total_cash, 460, 'всего 300+160=460');
+    assert.equal(b.today.supplier_hand, 40);
+  });
+
+  test('баланс: нельзя потратить из подотчёта больше, чем на руках', async () => {
+    const o = await login('owner', '1234');
+    await addProduct('Кола', 100, 60, 10, 'B4');
+    const shift = await openShift(o);
+    await api(o, '/sales', 'POST', {
+      client_id: 'b4-sale', items: [{ barcode: 'B4', qty: 5 }],
+      payment_method: 'cash', cash_received: 500, shift_id: shift,
+    });
+    await api(o, '/shifts/withdraw', 'POST', { amount: 100, kind: 'cash' });
+    const ex = await api(o, '/expenses', 'POST', { amount: 150, kind: 'cash', category: 'Прочее', paid_from: 'hand' });
+    assert.equal(ex.status, 400, 'нельзя уйти в минус по подотчёту');
+  });
+
+  test('баланс: без открытой смены касса = остаток последней закрытой', async () => {
+    const o = await login('owner', '1234');
+    await addProduct('Кола', 100, 60, 10, 'B5');
+    const shift = await openShift(o);
+    await api(o, '/sales', 'POST', {
+      client_id: 'b5-sale', items: [{ barcode: 'B5', qty: 3 }],
+      payment_method: 'cash', cash_received: 300, shift_id: shift,
+    });
+    const closed = await api(o, '/shifts/close', 'POST', { counted_cash: 300, counted_wallet: 0 });
+    assert.equal(closed.status, 200);
+    const b = (await api(o, '/dashboard/balance')).body;
+    assert.equal(b.till.has_open_shift, false, 'смена закрыта');
+    assert.equal(b.till.cash, 300, 'касса = сосчитанный остаток последней смены');
+  });
 }

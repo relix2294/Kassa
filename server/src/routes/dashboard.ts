@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { query } from '../db.js';
 import { requireOwner } from '../lib/auth.js';
+import { getCurrentTill } from './shifts.js';
 
 export const dashboardRouter = Router();
 
@@ -14,6 +15,127 @@ const TZ = process.env.STORE_TIMEZONE || 'Asia/Dushanbe';
 // Начало сегодняшнего дня в зоне магазина (как timestamptz).
 const TODAY = `date_trunc('day', now() AT TIME ZONE '${TZ}') AT TIME ZONE '${TZ}'`;
 const TOMORROW = `(${TODAY} + interval '1 day')`;
+
+// --- Баланс: «сколько денег у нас прямо сейчас» (живьём) ---
+// Деньги магазина лежат в трёх местах:
+//   1) касса — наличные в ящике и безнал на кошельках (расчёт смены);
+//   2) подотчёт — деньги, которые сотрудники изъяли из кассы себе на руки,
+//      за вычетом того, что из них потратили (расходы/оплаты «из подотчёта»);
+// Долг поставщикам показываем отдельно — это НЕ наши деньги (мы их должны).
+dashboardRouter.get('/balance', async (_req, res) => {
+  const till = await getCurrentTill();
+
+  // Подотчёт по каждому сотруднику: изъял − потратил из подотчёта.
+  const hands = await query<{
+    id: string; full_name: string | null; username: string;
+    withdrawn: number; spent_expenses: number; spent_suppliers: number;
+  }>(
+    `SELECT u.id, u.full_name, u.username,
+            COALESCE(w.withdrawn,0)  AS withdrawn,
+            COALESCE(e.spent,0)      AS spent_expenses,
+            COALESCE(sp.paid,0)      AS spent_suppliers
+       FROM users u
+       LEFT JOIN (SELECT user_id, SUM(amount) AS withdrawn FROM cash_withdrawals GROUP BY user_id) w  ON w.user_id = u.id
+       LEFT JOIN (SELECT user_id, SUM(amount) AS spent FROM expenses
+                   WHERE status='approved' AND paid_from='hand' GROUP BY user_id) e  ON e.user_id = u.id
+       LEFT JOIN (SELECT user_id, SUM(amount) AS paid FROM supplier_payments
+                   WHERE source='hand' GROUP BY user_id) sp ON sp.user_id = u.id
+      WHERE COALESCE(w.withdrawn,0) <> 0 OR COALESCE(e.spent,0) <> 0 OR COALESCE(sp.paid,0) <> 0
+      ORDER BY (COALESCE(w.withdrawn,0) - COALESCE(e.spent,0) - COALESCE(sp.paid,0)) DESC`,
+  );
+  const handsOut = hands.map((h) => ({
+    user_id: h.id,
+    name: h.full_name || h.username,
+    withdrawn: Number(h.withdrawn),
+    spent_expenses: Number(h.spent_expenses),
+    spent_suppliers: Number(h.spent_suppliers),
+    on_hand: Number((Number(h.withdrawn) - Number(h.spent_expenses) - Number(h.spent_suppliers)).toFixed(2)),
+  }));
+  const handsTotal = Number(handsOut.reduce((s, h) => s + h.on_hand, 0).toFixed(2));
+
+  // Долг поставщикам (всего не оплачено).
+  const debtRow = (
+    await query<{ debt: number }>(`SELECT COALESCE(SUM(total - paid),0) AS debt FROM supplier_invoices`)
+  )[0];
+  const supplierDebt = Number(debtRow.debt);
+
+  // Движение денег за сегодня (в зоне магазина).
+  const t = (
+    await query<Record<string, number>>(
+      `SELECT
+         (SELECT COALESCE(SUM(COALESCE(cash_amount, total)),0) FROM sales
+            WHERE created_at >= ${TODAY} AND created_at < ${TOMORROW}) AS sales_cash,
+         (SELECT COALESCE(SUM(COALESCE(card_amount, 0)),0) FROM sales
+            WHERE created_at >= ${TODAY} AND created_at < ${TOMORROW}) AS sales_card,
+         (SELECT COALESCE(SUM(total),0) FROM returns
+            WHERE created_at >= ${TODAY} AND created_at < ${TOMORROW}) AS refunds,
+         (SELECT COALESCE(SUM(amount),0) FROM cash_withdrawals
+            WHERE created_at >= ${TODAY} AND created_at < ${TOMORROW}) AS withdrawn,
+         (SELECT COALESCE(SUM(amount),0) FROM expenses
+            WHERE status='approved' AND paid_from='register'
+              AND created_at >= ${TODAY} AND created_at < ${TOMORROW}) AS expenses_register,
+         (SELECT COALESCE(SUM(amount),0) FROM expenses
+            WHERE status='approved' AND paid_from='hand'
+              AND created_at >= ${TODAY} AND created_at < ${TOMORROW}) AS expenses_hand,
+         (SELECT COALESCE(SUM(amount),0) FROM supplier_payments
+            WHERE source IN ('cash','wallet')
+              AND created_at >= ${TODAY} AND created_at < ${TOMORROW}) AS supplier_till,
+         (SELECT COALESCE(SUM(amount),0) FROM supplier_payments
+            WHERE source='hand'
+              AND created_at >= ${TODAY} AND created_at < ${TOMORROW}) AS supplier_hand`,
+    )
+  )[0];
+  const today = {
+    sales_cash: Number(t.sales_cash),
+    sales_card: Number(t.sales_card),
+    refunds: Number(t.refunds),
+    withdrawn: Number(t.withdrawn),
+    expenses_register: Number(t.expenses_register),
+    expenses_hand: Number(t.expenses_hand),
+    supplier_till: Number(t.supplier_till),
+    supplier_hand: Number(t.supplier_hand),
+  };
+  // Пришло = продажи (нал+безнал). Ушло = возвраты + расходы + оплаты
+  // поставщикам (изъятие — не расход, деньги лишь перешли в подотчёт).
+  const inTotal = Number((today.sales_cash + today.sales_card).toFixed(2));
+  const outTotal = Number(
+    (today.refunds + today.expenses_register + today.expenses_hand + today.supplier_till + today.supplier_hand).toFixed(2),
+  );
+
+  // Ленты для детализации: изъятия и одобренные расходы по датам/времени.
+  const withdrawals = await query(
+    `SELECT cw.id, cw.amount, cw.kind, cw.note, cw.created_at,
+            u.full_name, u.username
+       FROM cash_withdrawals cw LEFT JOIN users u ON u.id = cw.user_id
+      ORDER BY cw.created_at DESC LIMIT 100`,
+  );
+  const expenses = await query(
+    `SELECT e.id, e.amount, e.kind, e.category, e.note, e.paid_from, e.created_at,
+            u.full_name, u.username
+       FROM expenses e LEFT JOIN users u ON u.id = e.user_id
+      WHERE e.status='approved'
+      ORDER BY e.created_at DESC LIMIT 100`,
+  );
+
+  const tillTotal = Number((Number(till.cash) + Number(till.wallet)).toFixed(2));
+  res.json({
+    till: {
+      cash: Number(till.cash),
+      wallet: Number(till.wallet),
+      total: tillTotal,
+      has_open_shift: !!till.shift,
+      shift_user: till.shift ? (till.shift.full_name || till.shift.username || null) : null,
+    },
+    hands: handsOut,
+    hands_total: handsTotal,
+    supplier_debt: supplierDebt,
+    // Всего наших денег = касса + на руках у сотрудников.
+    total_cash: Number((tillTotal + handsTotal).toFixed(2)),
+    today: { ...today, in_total: inTotal, out_total: outTotal },
+    withdrawals,
+    expenses,
+  });
+});
 
 // Границы пресетов в виде SQL-выражений (строки заданы сервером — не ввод).
 const PRESETS: Record<string, { lo: string; hi: string }> = {

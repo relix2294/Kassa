@@ -3,7 +3,7 @@ import { query, withTx } from '../db.js';
 import { writeLog } from '../lib/log.js';
 import { broadcast } from '../lib/realtime.js';
 import { requireOwner } from '../lib/auth.js';
-import { getAnyOpenShift, computeExpected } from './shifts.js';
+import { getAnyOpenShift, computeExpected, computeAccountable } from './shifts.js';
 
 // Поставщики и долги (постоплата). Только владелец.
 // Модель проста: у поставщика есть накладные (сумма + сколько оплачено),
@@ -96,16 +96,19 @@ suppliersRouter.post('/:id/invoices', async (req, res) => {
 
 // Внести платёж по накладной — гасит долг.
 // source: 'cash'/'wallet' — заплатили ИЗ КАССЫ (уменьшает смену, нужна сверка)
+//         'hand'          — из подотчёта (из изъятых на руки денег): кассу не
+//                           трогает, уменьшает подотчёт сотрудника.
 //         'external'      — со стороны (банк/перевод), кассу не трогает.
 suppliersRouter.post('/invoices/:invoiceId/payments', async (req, res) => {
   const amount = Number(req.body?.amount);
   const note = String(req.body?.note ?? '').trim() || null;
-  const source = req.body?.source === 'cash' || req.body?.source === 'wallet' ? req.body.source : 'external';
+  const src = req.body?.source;
+  const source = src === 'cash' || src === 'wallet' || src === 'hand' ? src : 'external';
   if (!(amount > 0)) return res.status(400).json({ error: 'Сумма платежа должна быть больше нуля' });
 
   // Платёж из кассы: привязываем к активной смене и проверяем, что хватает.
   let shift: any = null;
-  if (source !== 'external') {
+  if (source === 'cash' || source === 'wallet') {
     shift = await getAnyOpenShift();
     if (!shift) {
       return res.status(409).json({ error: 'no_shift', message: 'Нет открытой смены — заплатить из кассы нельзя. Выберите «со стороны» или откройте смену.' });
@@ -115,6 +118,12 @@ suppliersRouter.post('/invoices/:invoiceId/payments', async (req, res) => {
     const label = source === 'wallet' ? 'на кошельках' : 'наличными';
     if (amount > avail + 1e-9) {
       return res.status(400).json({ error: `В кассе ${label} только ${avail.toFixed(2)} — оплатить ${amount.toFixed(2)} нельзя` });
+    }
+  } else if (source === 'hand') {
+    // Платёж из подотчёта: у сотрудника должно хватать денег «на руках».
+    const acc = await computeAccountable(req.user!.id);
+    if (amount > acc.on_hand + 1e-9) {
+      return res.status(400).json({ error: `На руках только ${acc.on_hand.toFixed(2)} — оплатить ${amount.toFixed(2)} из подотчёта нельзя. Сначала изымите деньги из кассы.` });
     }
   }
 
@@ -138,13 +147,20 @@ suppliersRouter.post('/invoices/:invoiceId/payments', async (req, res) => {
       ).rows[0];
       await writeLog(
         { type: 'supplier_payment', entity: 'supplier', entityId: inv.supplier_id, userId: req.user!.id,
-          details: { amount, source, from_till: source !== 'external' || undefined, remaining: Number((Number(upd.total) - Number(upd.paid)).toFixed(2)) } },
+          details: {
+            amount, source,
+            from_till: source === 'cash' || source === 'wallet' || undefined,
+            from_hand: source === 'hand' || undefined,
+            remaining: Number((Number(upd.total) - Number(upd.paid)).toFixed(2)),
+          } },
         client,
       );
       return { invoice: upd, payment: pay };
     });
-    // Из кассы — подсказываем кабинету/смене обновить цифры.
+    // Из кассы — подсказываем кабинету/смене обновить цифры; из подотчёта —
+    // меняется баланс «на руках», поэтому тоже шлём обновление кабинету.
     if (shift) broadcast('shift', shift);
+    else if (source === 'hand') broadcast('data_updated', { kind: 'supplier_payment' });
     res.status(201).json(result);
   } catch (err: any) {
     if (err?.status) return res.status(err.status).json({ error: err.message });

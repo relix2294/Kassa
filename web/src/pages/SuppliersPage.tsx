@@ -222,7 +222,7 @@ function AddInvoice({ supplierId, onClose, onDone }: { supplierId: string; onClo
   );
 }
 
-type PaySource = 'cash' | 'wallet' | 'external';
+type PaySource = 'cash' | 'wallet' | 'hand' | 'external';
 
 function PayInvoice({ invoice, onClose, onDone }: { invoice: any; onClose: () => void; onDone: () => void }) {
   const [amount, setAmount] = useState('');
@@ -251,15 +251,18 @@ function PayInvoice({ invoice, onClose, onDone }: { invoice: any; onClose: () =>
 
         <div className="field">
           <span>Откуда деньги</span>
-          <div className="seg">
+          <div className="seg seg--wrap">
             <button className={`seg__btn ${source === 'cash' ? 'seg__btn--on' : ''}`} onClick={() => setSource('cash')}>Из кассы · нал</button>
             <button className={`seg__btn ${source === 'wallet' ? 'seg__btn--on' : ''}`} onClick={() => setSource('wallet')}>Из кассы · безнал</button>
+            <button className={`seg__btn ${source === 'hand' ? 'seg__btn--on' : ''}`} onClick={() => setSource('hand')}>Из подотчёта</button>
             <button className={`seg__btn ${source === 'external' ? 'seg__btn--on' : ''}`} onClick={() => setSource('external')}>Со стороны</button>
           </div>
           <p className="hint">
             {source === 'external'
               ? 'Оплата не из кассового ящика (банк/перевод/свои). Кассу не трогает — только гасит долг.'
-              : 'Деньги уйдут из кассы смены и уменьшат ожидаемый остаток при сверке. В прибыль как расход не идёт (товар уже учтён в себестоимости).'}
+              : source === 'hand'
+                ? 'Платим из подотчёта — из денег, ранее изъятых из кассы на руки. Кассу не трогает, уменьшает подотчёт.'
+                : 'Деньги уйдут из кассы смены и уменьшат ожидаемый остаток при сверке. В прибыль как расход не идёт (товар уже учтён в себестоимости).'}
           </p>
         </div>
 

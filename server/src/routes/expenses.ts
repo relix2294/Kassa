@@ -3,7 +3,7 @@ import { query } from '../db.js';
 import { writeLog } from '../lib/log.js';
 import { broadcast } from '../lib/realtime.js';
 import { requireOwner } from '../lib/auth.js';
-import { getOpenShift, computeExpected, recomputeClosedShift } from './shifts.js';
+import { getOpenShift, computeExpected, recomputeClosedShift, computeAccountable } from './shifts.js';
 
 export const expensesRouter = Router();
 
@@ -35,14 +35,26 @@ expensesRouter.post('/', async (req, res) => {
   const shift = await getOpenShift(req.user!.id);
   const isOwner = req.user!.role === 'owner';
 
+  // «Из подотчёта» (из денег, изъятых себе на руки) доступно только владельцу/
+  // директору: подотчёт появляется только у того, кто делал изъятие, а изъятие —
+  // право владельца. Кассир платит только из кассы.
+  const paidFrom = isOwner && req.body?.paid_from === 'hand' ? 'hand' : 'register';
+
   // Кассир может записать расход только в свою открытую смену.
   if (!isOwner && !shift) return res.status(409).json({ error: 'no_shift', message: 'Нет открытой смены' });
 
   if (isOwner) {
-    // Если смена открыта — расход привязан к ней и уменьшает её кассу (с проверкой
-    // остатка). Если смены нет — это общий расход точки (напр. аренда из сейфа):
-    // в сверке кассы не участвует, но идёт в аналитику и прибыль.
-    if (shift) {
+    if (paidFrom === 'hand') {
+      // Расход из подотчёта: кассу не трогает, но у человека должно хватать
+      // денег «на руках» (иначе подотчёт ушёл бы в минус — это ошибка учёта).
+      const acc = await computeAccountable(req.user!.id);
+      if (amount > acc.on_hand + 1e-9) {
+        return res.status(400).json({ error: `На руках только ${acc.on_hand.toFixed(2)} — на расход ${amount.toFixed(2)} не хватает. Сначала изымите деньги из кассы.` });
+      }
+    } else if (shift) {
+      // Расход из кассы: если смена открыта — привязан к ней и уменьшает её кассу
+      // (с проверкой остатка). Если смены нет — общий расход точки (напр. аренда
+      // из сейфа): в сверке кассы не участвует, но идёт в аналитику и прибыль.
       const { ok, avail } = await enoughInTill(shift, kind, amount);
       if (!ok) {
         const label = kind === 'wallet' ? 'на кошельках' : 'наличными';
@@ -51,16 +63,18 @@ expensesRouter.post('/', async (req, res) => {
     }
     const row = (
       await query(
-        `INSERT INTO expenses (shift_id, user_id, kind, amount, category, note, status, approved_by, resolved_at)
-         VALUES ($1,$2,$3,$4,$5,$6,'approved',$2, now()) RETURNING *`,
-        [shift?.id ?? null, req.user!.id, kind, amount, category, note],
+        `INSERT INTO expenses (shift_id, user_id, kind, amount, category, note, status, approved_by, resolved_at, paid_from)
+         VALUES ($1,$2,$3,$4,$5,$6,'approved',$2, now(), $7) RETURNING *`,
+        // Расход из подотчёта к смене не привязываем — он не часть сверки кассы.
+        [paidFrom === 'hand' ? null : (shift?.id ?? null), req.user!.id, kind, amount, category, note, paidFrom],
       )
     )[0];
     await writeLog({
       type: 'expense', entity: 'expense', entityId: row.id, userId: req.user!.id,
-      details: { amount, kind, category, note, general: !shift || undefined },
+      details: { amount, kind, category, note, paid_from: paidFrom, general: (paidFrom === 'register' && !shift) || undefined },
     });
-    if (shift) broadcast('shift', shift);
+    if (shift && paidFrom === 'register') broadcast('shift', shift);
+    else broadcast('data_updated', { kind: 'expense' });
     return res.status(201).json({ expense: row });
   }
 

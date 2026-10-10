@@ -341,3 +341,20 @@ CREATE TABLE IF NOT EXISTS expenses (
 CREATE INDEX IF NOT EXISTS idx_expenses_status ON expenses(status);
 CREATE INDEX IF NOT EXISTS idx_expenses_shift ON expenses(shift_id);
 CREATE INDEX IF NOT EXISTS idx_expenses_created ON expenses(created_at);
+
+-- Откуда оплачен расход:
+--   'register' — из кассового ящика/кошелька (как и раньше): уменьшает кассу
+--                смены при сверке;
+--   'hand'     — из подотчёта: из денег, которые сотрудник ранее изъял из кассы
+--                себе на руки (инкассация). Кассу НЕ трогает (деньги уже вышли
+--                при изъятии) — уменьшает личный подотчёт этого сотрудника.
+-- Так расход не считается дважды: либо из ящика, либо из «на руках». Старые
+-- записи остаются 'register' — поведение сверки смены не меняется.
+ALTER TABLE expenses ADD COLUMN IF NOT EXISTS paid_from text NOT NULL DEFAULT 'register';
+CREATE INDEX IF NOT EXISTS idx_expenses_paid_from ON expenses(paid_from);
+
+-- Оплата поставщику тоже может идти из подотчёта (source='hand'): сотрудник
+-- гасит долг из изъятых на руки денег. Как и расход 'hand', кассу не трогает
+-- (деньги вышли при изъятии) — уменьшает подотчёт сотрудника. Значения source:
+--   'cash'/'wallet' — из кассы смены;  'external' — со стороны (банк/свои);
+--   'hand' — из подотчёта. computeExpected считает кассу только по cash/wallet.

@@ -1175,3 +1175,60 @@ kbd {
   .tags-print { grid-template-columns: repeat(3, 1fr); gap: 4mm; }
   .tag { border: 1px solid #999; }
 }
+
+/* ====== Баланс: «сколько денег у нас сейчас» (Кабинет) ====== */
+.balance-card {
+  display: block;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px 18px;
+  margin-bottom: 16px;
+  background:
+    linear-gradient(180deg, rgba(79, 157, 255, 0.14), rgba(79, 157, 255, 0.04)),
+    var(--surface);
+  color: var(--text);
+}
+.balance-card:hover { border-color: var(--primary); }
+.balance-card__head {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+}
+.balance-card__label { color: var(--muted); font-size: 14px; font-weight: 600; }
+.balance-card__more { color: var(--primary); font-size: 13px; font-weight: 700; }
+.balance-card__total { font-size: 34px; font-weight: 800; margin: 6px 0 10px; letter-spacing: 0.2px; }
+.balance-card__rows { display: flex; flex-wrap: wrap; gap: 8px; }
+.balance-chip {
+  background: var(--surface-2); border-radius: 999px; padding: 6px 12px;
+  font-size: 13px; color: var(--muted);
+}
+.balance-chip b { color: var(--text); font-weight: 700; }
+.balance-chip--debt b { color: var(--off); }
+.balance-card__hint { margin-top: 10px; font-size: 12px; color: var(--muted); }
+
+.modal--wide { max-width: 720px; }
+.balance-total-big {
+  display: flex; flex-direction: column; gap: 2px;
+  background: var(--surface-2); border-radius: var(--radius); padding: 14px 16px;
+}
+.balance-total-big b { font-size: 28px; font-weight: 800; }
+.balance-list {
+  display: flex; flex-direction: column;
+  background: var(--surface-2); border-radius: var(--radius); overflow: hidden;
+}
+.balance-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 11px 14px; border-top: 1px solid var(--border);
+}
+.balance-row:first-child { border-top: none; }
+.balance-row__main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.balance-row__main .muted { font-size: 12px; }
+.balance-row__val { font-weight: 700; white-space: nowrap; }
+.balance-row--strong { background: rgba(79, 157, 255, 0.08); }
+.balance-row--strong .balance-row__val,
+.balance-row--strong .balance-row__main > span:first-child { font-weight: 800; }
+.balance-note {
+  margin: 12px 0 4px; font-size: 14px;
+  background: rgba(251, 191, 36, 0.12); border-radius: 12px; padding: 10px 14px;
+}

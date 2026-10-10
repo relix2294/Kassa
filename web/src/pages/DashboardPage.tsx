@@ -7,6 +7,7 @@ import { onRealtimeEvent } from '../sync';
 import ShiftRequests from '../components/ShiftRequests';
 import ReturnRequests from '../components/ReturnRequests';
 import ExpenseRequests from '../components/ExpenseRequests';
+import BalanceCard from '../components/BalanceCard';
 import { ColumnChart, RankBars, Donut } from '../components/charts';
 import RangeControl, { money } from '../components/RangeControl';
 import type { LogRow, Product } from '../types';
@@ -133,6 +134,8 @@ export default function DashboardPage() {
   return (
     <div className="page page--wide">
       <h1>Кабинет</h1>
+
+      <BalanceCard />
 
       <ShiftRequests />
       <ReturnRequests />

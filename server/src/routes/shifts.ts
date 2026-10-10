@@ -35,7 +35,7 @@ export async function getAnyOpenShift() {
 
 // Остаток от прошлой закрытой смены — ожидаемый старт следующей. Деньги
 // физически остаются: и наличные в ящике, и баланс на кошельках (безнал).
-async function getLastClosing(): Promise<{ cash: number; wallet: number }> {
+export async function getLastClosing(): Promise<{ cash: number; wallet: number }> {
   const rows = await query(
     `SELECT counted_cash, counted_wallet FROM shifts
       WHERE status = 'closed' AND counted_cash IS NOT NULL
@@ -66,10 +66,12 @@ export async function computeExpected(shift: any): Promise<{ cash: number; walle
   const cashWd = Number(wd.find((r) => r.kind === 'cash')?.sum ?? 0);
   const walletWd = Number(wd.find((r) => r.kind === 'wallet')?.sum ?? 0);
 
-  // Одобренные расходы — тоже вышли из кассы.
+  // Одобренные расходы «из кассы» — тоже вышли из ящика. Расходы «из подотчёта»
+  // (paid_from='hand') кассу не трогают: деньги вышли ещё при изъятии на руки,
+  // иначе один расход вычелся бы дважды (из ящика и из подотчёта).
   const ex = await query<{ kind: string; sum: number }>(
     `SELECT kind, COALESCE(SUM(amount),0) AS sum FROM expenses
-      WHERE shift_id = $1 AND status = 'approved' GROUP BY kind`,
+      WHERE shift_id = $1 AND status = 'approved' AND paid_from = 'register' GROUP BY kind`,
     [shift.id],
   );
   const cashEx = Number(ex.find((r) => r.kind === 'cash')?.sum ?? 0);
@@ -89,6 +91,50 @@ export async function computeExpected(shift: any): Promise<{ cash: number; walle
   const cash = Number((Number(shift.opening_cash) + Number(s.cash_sales) - Number(s.refunds) - cashWd - cashEx - cashSp).toFixed(2));
   const wallet = Number((Number(shift.opening_wallet ?? 0) + Number(s.card_sales) - walletWd - walletEx - walletSp).toFixed(2));
   return { cash, wallet };
+}
+
+// «Деньги в кассе прямо сейчас» (нал + безнал). Если смена открыта — это её
+// живой расчёт ожидаемого; если открытой смены нет — остаток от последней
+// закрытой смены (деньги физически остались в ящике и на кошельках).
+export async function getCurrentTill(): Promise<{
+  cash: number; wallet: number; shift: any | null;
+}> {
+  const shift = await getAnyOpenShift();
+  if (shift) {
+    const exp = await computeExpected(shift);
+    return { cash: exp.cash, wallet: exp.wallet, shift };
+  }
+  const last = await getLastClosing();
+  return { cash: last.cash, wallet: last.wallet, shift: null };
+}
+
+// Подотчёт сотрудника («на руках») — сквозной, не по сменам: сколько человек
+// изъял из кассы себе на руки за вычетом того, что из этих денег потратил
+// (расходы «из подотчёта» и оплаты поставщикам «из подотчёта»). Это и есть
+// «сколько у него должно остаться на руках».
+export async function computeAccountable(userId: string): Promise<{
+  withdrawn: number; spent_expenses: number; spent_suppliers: number; on_hand: number;
+}> {
+  const r = (
+    await query<{ withdrawn: number; spent_expenses: number; spent_suppliers: number }>(
+      `SELECT
+         (SELECT COALESCE(SUM(amount),0) FROM cash_withdrawals WHERE user_id = $1) AS withdrawn,
+         (SELECT COALESCE(SUM(amount),0) FROM expenses
+            WHERE user_id = $1 AND status = 'approved' AND paid_from = 'hand') AS spent_expenses,
+         (SELECT COALESCE(SUM(amount),0) FROM supplier_payments
+            WHERE user_id = $1 AND source = 'hand') AS spent_suppliers`,
+      [userId],
+    )
+  )[0];
+  const withdrawn = Number(r.withdrawn);
+  const spent_expenses = Number(r.spent_expenses);
+  const spent_suppliers = Number(r.spent_suppliers);
+  return {
+    withdrawn,
+    spent_expenses,
+    spent_suppliers,
+    on_hand: Number((withdrawn - spent_expenses - spent_suppliers).toFixed(2)),
+  };
 }
 
 // Пересчёт итогов уже закрытой смены — если в неё «доехал» отложенный чек.
@@ -121,8 +167,8 @@ shiftsRouter.get('/current', async (req, res) => {
          (SELECT COALESCE(SUM(total),0) FROM returns WHERE shift_id = $1) AS refunds,
          (SELECT COALESCE(SUM(amount),0) FROM cash_withdrawals WHERE shift_id = $1 AND kind='cash') AS withdrawn,
          (SELECT COALESCE(SUM(amount),0) FROM cash_withdrawals WHERE shift_id = $1 AND kind='wallet') AS wallet_withdrawn,
-         (SELECT COALESCE(SUM(amount),0) FROM expenses WHERE shift_id = $1 AND status='approved' AND kind='cash') AS spent_cash,
-         (SELECT COALESCE(SUM(amount),0) FROM expenses WHERE shift_id = $1 AND status='approved' AND kind='wallet') AS spent_wallet,
+         (SELECT COALESCE(SUM(amount),0) FROM expenses WHERE shift_id = $1 AND status='approved' AND paid_from='register' AND kind='cash') AS spent_cash,
+         (SELECT COALESCE(SUM(amount),0) FROM expenses WHERE shift_id = $1 AND status='approved' AND paid_from='register' AND kind='wallet') AS spent_wallet,
          (SELECT COALESCE(SUM(amount),0) FROM supplier_payments WHERE shift_id = $1 AND source='cash') AS supplier_cash,
          (SELECT COALESCE(SUM(amount),0) FROM supplier_payments WHERE shift_id = $1 AND source='wallet') AS supplier_wallet`,
       [shift.id],

@@ -10,8 +10,12 @@ export const EXPENSE_CATEGORIES = ['Аренда', 'Электричество',
 // владелец → сразу. Используется и на экране «Смена», и в разделе «Расходы».
 export default function ExpenseModal({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
   const user = useCurrentUser();
+  const isOwner = user?.role === 'owner';
   const [amount, setAmount] = useState('');
   const [kind, setKind] = useState<'cash' | 'wallet'>('cash');
+  // Откуда платим: из кассы (ящик) или из подотчёта (изъятые на руки деньги).
+  // Подотчёт — только у владельца/директора (изъятия — его право).
+  const [paidFrom, setPaidFrom] = useState<'register' | 'hand'>('register');
   const [category, setCategory] = useState('');
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
@@ -24,7 +28,10 @@ export default function ExpenseModal({ onClose, onDone }: { onClose: () => void;
     if (!category.trim()) { setErr('Выберите категорию'); return; }
     setBusy(true); setErr(null);
     try {
-      const res = await api.createExpense({ amount: a, kind, category: category.trim(), note: note.trim() || undefined });
+      const res = await api.createExpense({
+        amount: a, kind, category: category.trim(), note: note.trim() || undefined,
+        paid_from: isOwner ? paidFrom : undefined,
+      });
       if (res.pending) setPending({ request: res.request, message: res.message });
       else onDone();
     } catch (e: any) {
@@ -56,10 +63,21 @@ export default function ExpenseModal({ onClose, onDone }: { onClose: () => void;
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <h2>Расход</h2>
         <p className="muted">
-          {user?.role === 'owner'
-            ? 'Деньги уйдут из кассы и уменьшат ожидаемый остаток.'
-            : 'Запрос уйдёт владельцу. Деньги спишутся из кассы только после его подтверждения.'}
+          {!isOwner
+            ? 'Запрос уйдёт владельцу. Деньги спишутся из кассы только после его подтверждения.'
+            : paidFrom === 'hand'
+              ? 'Платим из подотчёта — из денег, ранее изъятых из кассы на руки. Кассу не трогает, уменьшает ваш подотчёт.'
+              : 'Деньги уйдут из кассы и уменьшат ожидаемый остаток.'}
         </p>
+        {isOwner && (
+          <div className="field">
+            <span>Откуда платим</span>
+            <div className="seg">
+              <button className={`seg__btn ${paidFrom === 'register' ? 'seg__btn--on' : ''}`} onClick={() => setPaidFrom('register')}>Из кассы</button>
+              <button className={`seg__btn ${paidFrom === 'hand' ? 'seg__btn--on' : ''}`} onClick={() => setPaidFrom('hand')}>Из подотчёта (на руки)</button>
+            </div>
+          </div>
+        )}
         <div className="seg">
           <button className={`seg__btn ${kind === 'cash' ? 'seg__btn--on' : ''}`} onClick={() => setKind('cash')}>Наличные</button>
           <button className={`seg__btn ${kind === 'wallet' ? 'seg__btn--on' : ''}`} onClick={() => setKind('wallet')}>Безнал</button>
