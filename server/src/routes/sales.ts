@@ -5,7 +5,7 @@ import { broadcast } from '../lib/realtime.js';
 import { requireOwner } from '../lib/auth.js';
 import { saleFor } from '../lib/sanitize.js';
 import { getOpenShift, recomputeClosedShift } from './shifts.js';
-import { crossedLowStock, notifyLowStock, type LowStockItem } from '../lib/telegram.js';
+import { crossedLowStock, notifyLowStock, notifyBigSale, type LowStockItem } from '../lib/telegram.js';
 
 export const salesRouter = Router();
 
@@ -297,6 +297,8 @@ salesRouter.post('/', async (req, res) => {
     broadcast('sale', result.sale);
     // Уведомление о низком остатке — вне транзакции, не блокирует ответ кассе.
     if (result.lowStock.length > 0) void notifyLowStock(result.lowStock);
+    // Крупный чек (если задан порог) — сигнал владельцу.
+    void notifyBigSale({ userId: user_id, total: Number(result.sale.total), items: result.changedProducts.length });
     res.status(201).json({ sale: saleFor(req, result.sale) });
   } catch (err: any) {
     if (err?.status === 400) return res.status(400).json({ error: err.message });

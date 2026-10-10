@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { query } from '../db.js';
 import { hashPin, requireAuth, requireOwner } from '../lib/auth.js';
 import { writeLog } from '../lib/log.js';
+import { notifyStaff } from '../lib/telegram.js';
 
 export const usersRouter = Router();
 
@@ -32,6 +33,7 @@ usersRouter.post('/', async (req, res) => {
       [username, full_name ?? null, r, hash],
     );
     await writeLog({ type: 'user_create', entity: 'user', entityId: rows[0].id, userId: req.user!.id, details: { username, role: r } });
+    void notifyStaff({ userId: req.user!.id, action: 'create', targetName: full_name || username, role: r });
     res.status(201).json(rows[0]);
   } catch (err: any) {
     if (err.code === '23505') return res.status(409).json({ error: 'Такой логин уже есть' });
@@ -58,8 +60,11 @@ usersRouter.patch('/:id', async (req, res) => {
     [id, full_name ?? null, is_blocked ?? null],
   );
   if (rows.length === 0) return res.status(404).json({ error: 'not_found' });
+  const targetName = rows[0].full_name || rows[0].username;
   if (is_blocked != null) {
     await writeLog({ type: is_blocked ? 'user_block' : 'user_unblock', entity: 'user', entityId: id, userId: req.user!.id });
+    void notifyStaff({ userId: req.user!.id, action: is_blocked ? 'block' : 'unblock', targetName });
   }
+  if (pin != null) void notifyStaff({ userId: req.user!.id, action: 'pin', targetName });
   res.json(rows[0]);
 });

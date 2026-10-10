@@ -3,7 +3,7 @@ import { query, withTx } from '../db.js';
 import { requireOwner } from '../lib/auth.js';
 import { writeLog } from '../lib/log.js';
 import { broadcast } from '../lib/realtime.js';
-import { crossedLowStock, notifyLowStock } from '../lib/telegram.js';
+import { crossedLowStock, notifyLowStock, notifyWriteOff, notifyInventoryLoss, notifyPriceBulk } from '../lib/telegram.js';
 
 export const analyticsRouter = Router();
 
@@ -120,6 +120,7 @@ analyticsRouter.post('/bulk-price', async (req, res) => {
   });
 
   updated.forEach((p: any) => broadcast('product_upsert', p, 'all'));
+  void notifyPriceBulk({ userId: req.user!.id, count: updated.length, field, mode, value: num });
   res.json({ updated: updated.length, products: updated });
 });
 
@@ -202,6 +203,12 @@ analyticsRouter.post('/inventory', async (req, res) => {
     });
 
     result.changed.forEach((p: any) => broadcast('product_upsert', p, 'all'));
+    // Недостача по инвентаризации — сигнал владельцу (кто-то недосчитался товара).
+    const shortage = result.items.filter((l: any) => Number(l.difference) < 0);
+    if (shortage.length > 0) {
+      const loss = Math.abs(Number(shortage.reduce((s: number, l: any) => s + Number(l.loss_value), 0).toFixed(2)));
+      void notifyInventoryLoss({ userId: req.user!.id, shortageCount: shortage.length, loss });
+    }
     res.status(201).json(result);
   } catch (err: any) {
     if (err?.status === 400) return res.status(400).json({ error: err.message });
@@ -263,6 +270,14 @@ analyticsRouter.post('/write-off', async (req, res) => {
     if (crossedLowStock(result.oldStock, Number(result.product.stock))) {
       void notifyLowStock([{ name: result.product.name, unit: result.product.unit, stock: Number(result.product.stock) }]);
     }
+    void notifyWriteOff({
+      userId: req.user!.id,
+      name: result.write_off.name,
+      qty: Number(result.write_off.qty),
+      unit: result.product.unit,
+      loss: Math.abs(Number(result.write_off.loss_value)),
+      reason: result.write_off.reason,
+    });
     res.status(201).json({ write_off: result.write_off, product: result.product });
   } catch (err: any) {
     if (err?.status === 400) return res.status(400).json({ error: err.message });

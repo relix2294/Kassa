@@ -180,6 +180,45 @@ export async function notifyRequest(o: { userId: string; what: string }): Promis
   await sendTelegram(`🔔 <b>Нужно подтверждение</b>\n${esc(who)} просит: ${esc(o.what)}`);
 }
 
+// Крупный чек: порог суммы, выше которого слать уведомление. 0 = выключено.
+const BIG_SALE = Number(process.env.TELEGRAM_BIG_SALE || 0);
+
+export async function notifyWriteOff(o: { userId: string; name: string; qty: number; unit: string; loss: number; reason: string }): Promise<void> {
+  if (!telegramEnabled()) return;
+  const who = await nameOf(o.userId);
+  await sendTelegram(`📉 <b>Списание</b>\n${esc(who)}: ${esc(o.name)} × ${money(o.qty)} ${unitOf(o.unit)} · потери ${money(o.loss)}\nПричина: ${esc(o.reason)}`);
+}
+
+export async function notifyInventoryLoss(o: { userId: string; shortageCount: number; loss: number }): Promise<void> {
+  if (!telegramEnabled() || o.shortageCount <= 0) return;
+  const who = await nameOf(o.userId);
+  await sendTelegram(`🧮 <b>Инвентаризация: недостача</b>\n${esc(who)} · не хватает позиций: ${o.shortageCount} · на ${money(o.loss)}`);
+}
+
+export async function notifyBigSale(o: { userId: string; total: number; items: number }): Promise<void> {
+  if (!telegramEnabled() || !(BIG_SALE > 0) || o.total < BIG_SALE) return;
+  const who = await nameOf(o.userId);
+  await sendTelegram(`🧾 <b>Крупный чек</b> на ${money(o.total)}\n${esc(who)} · позиций: ${o.items}`);
+}
+
+export async function notifyPriceBulk(o: { userId: string; count: number; field: string; mode: string; value: number }): Promise<void> {
+  if (!telegramEnabled() || o.count <= 0) return;
+  const who = await nameOf(o.userId);
+  const what = o.field === 'cost_price' ? 'закупочные цены' : 'цены продажи';
+  const how = o.mode === 'percent' ? `на ${o.value > 0 ? '+' : ''}${o.value}%` : `= ${money(o.value)}`;
+  await sendTelegram(`🏷 <b>Массовая смена цен</b>\n${esc(who)}: ${what} ${how} · товаров: ${o.count}`);
+}
+
+export async function notifyStaff(o: { userId: string; action: 'create' | 'block' | 'unblock' | 'pin'; targetName: string; role?: string }): Promise<void> {
+  if (!telegramEnabled()) return;
+  const who = await nameOf(o.userId);
+  const label = o.action === 'create' ? 'Добавлен сотрудник'
+    : o.action === 'block' ? 'Заблокирован сотрудник'
+    : o.action === 'unblock' ? 'Разблокирован сотрудник' : 'Сменён PIN';
+  const role = o.role ? ` (${o.role === 'owner' ? 'владелец' : 'кассир'})` : '';
+  await sendTelegram(`👤 <b>${label}</b>\n${esc(o.targetName)}${role}\n<i>${esc(who)}</i>`);
+}
+
 // --- Итоги дня ---
 
 function todayLabel(): string {
