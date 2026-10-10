@@ -16,7 +16,9 @@ import { getCurrentTill } from '../routes/shifts.js';
 const TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
 const CHAT_ID = process.env.TELEGRAM_CHAT_ID || '';
 const TZ = process.env.STORE_TIMEZONE || 'Asia/Dushanbe';
-const DAILY_TIME = process.env.TELEGRAM_DAILY_TIME || '12:00';
+// Основной «итог» приходит при закрытии смены (моментально). Фиксированное
+// время — опционально: задайте TELEGRAM_DAILY_TIME (ЧЧ:ММ) для доп. отчёта.
+const DAILY_TIME = process.env.TELEGRAM_DAILY_TIME || '';
 export const LOW_STOCK_THRESHOLD = Number(process.env.TELEGRAM_LOW_STOCK_THRESHOLD || 4);
 
 export function telegramEnabled(): boolean {
@@ -137,22 +139,6 @@ export async function notifyShiftOpen(o: {
   await sendTelegram(lines.join('\n'));
 }
 
-export async function notifyShiftClose(o: {
-  userId: string; expCash: number; countedCash: number; cashDiff: number;
-  expWallet: number; countedWallet: number; walletDiff: number; approved?: boolean;
-}): Promise<void> {
-  if (!telegramEnabled()) return;
-  const who = await nameOf(o.userId);
-  const lines = [
-    `🔴 <b>Смена закрыта</b>`, esc(who),
-    `Наличные: должно ${money(o.expCash)}, посчитали ${money(o.countedCash)} (${signed(o.cashDiff)})`,
-    `Безнал: должно ${money(o.expWallet)}, посчитали ${money(o.countedWallet)} (${signed(o.walletDiff)})`,
-  ];
-  if (o.cashDiff !== 0 || o.walletDiff !== 0) lines.push(`⚠️ <b>Расхождение по кассе!</b>`);
-  if (o.approved) lines.push('<i>закрытие подтвердил владелец</i>');
-  await sendTelegram(lines.join('\n'));
-}
-
 export async function notifyWithdraw(o: { userId: string; amount: number; kind: 'cash' | 'wallet'; note?: string | null }): Promise<void> {
   if (!telegramEnabled()) return;
   const who = await nameOf(o.userId);
@@ -228,9 +214,7 @@ function todayLabel(): string {
 }
 
 // Собрать и отправить итоги за сегодня (в зоне магазина) + живой баланс.
-export async function sendDailyReport(): Promise<boolean> {
-  if (!telegramEnabled()) return false;
-
+async function buildDayReport(): Promise<string> {
   const LO = `date_trunc('day', now() AT TIME ZONE '${TZ}') AT TIME ZONE '${TZ}'`;
   const HI = `(${LO} + interval '1 day')`;
 
@@ -311,10 +295,34 @@ export async function sendDailyReport(): Promise<boolean> {
     for (const p of low) lines.push(`• ${esc(p.name)} — ${money(p.stock)} ${unitOf(p.unit)}`);
   }
 
-  return sendTelegram(lines.join('\n'));
+  return lines.join('\n');
 }
 
-// --- Планировщик итогов дня ---
+// Отправить «итоги дня» (ручной вызов `tg:report` или опциональное расписание).
+export async function sendDailyReport(): Promise<boolean> {
+  if (!telegramEnabled()) return false;
+  return sendTelegram(await buildDayReport());
+}
+
+// Полный отчёт при закрытии смены: сверка кассы + итоги дня + живой баланс.
+// Шлётся моментально при закрытии — это основной «итог» для владельца.
+export async function sendShiftCloseReport(o: {
+  userId: string; expCash: number; countedCash: number; cashDiff: number;
+  expWallet: number; countedWallet: number; walletDiff: number; approved?: boolean;
+}): Promise<void> {
+  if (!telegramEnabled()) return;
+  const who = await nameOf(o.userId);
+  const head = [
+    `🔴 <b>Смена закрыта</b> · ${esc(who)}`,
+    `Наличные: должно ${money(o.expCash)}, посчитали ${money(o.countedCash)} (${signed(o.cashDiff)})`,
+    `Безнал: должно ${money(o.expWallet)}, посчитали ${money(o.countedWallet)} (${signed(o.walletDiff)})`,
+  ];
+  if (o.cashDiff !== 0 || o.walletDiff !== 0) head.push('⚠️ <b>Расхождение по кассе!</b>');
+  if (o.approved) head.push('<i>закрытие подтвердил владелец</i>');
+  await sendTelegram(head.join('\n') + '\n\n' + (await buildDayReport()));
+}
+
+// --- Планировщик итогов дня (опционально, если задан TELEGRAM_DAILY_TIME) ---
 // Срабатывает каждый день в DAILY_TIME по зоне магазина. Без внешних зависимостей:
 // считаем, сколько миллисекунд до ближайшего срабатывания, и ставим таймер.
 
@@ -337,6 +345,10 @@ function msUntilNext(timeStr: string): number {
 export function startTelegramScheduler(): void {
   if (!telegramEnabled()) {
     console.log('Telegram: токен/чат не заданы — уведомления выключены.');
+    return;
+  }
+  if (!DAILY_TIME) {
+    console.log('Telegram: итоги приходят при закрытии смены (фикс-время не задано).');
     return;
   }
   const arm = () => {

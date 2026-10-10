@@ -3,7 +3,7 @@ import { query } from '../db.js';
 import { writeLog } from '../lib/log.js';
 import { broadcast } from '../lib/realtime.js';
 import { requireOwner } from '../lib/auth.js';
-import { notifyShiftOpen, notifyShiftClose, notifyWithdraw, notifyRequest } from '../lib/telegram.js';
+import { notifyShiftOpen, sendShiftCloseReport, notifyWithdraw, notifyRequest } from '../lib/telegram.js';
 
 export const shiftsRouter = Router();
 
@@ -407,7 +407,8 @@ async function closeShiftRow(
     });
   }
   broadcast('shift', closed);
-  void notifyShiftClose({
+  // Моментальный полный «итог» в Telegram: сверка смены + итоги дня + баланс.
+  void sendShiftCloseReport({
     userId: shift.user_id,
     expCash: exp.cash, countedCash, cashDiff,
     expWallet: exp.wallet, countedWallet, walletDiff,

@@ -380,4 +380,15 @@ if (!haveDb) {
     assert.equal(b.hands[0].adjustments, -150);
     assert.equal(b.total_cash, 350, 'всего = касса 300 + на руках 50');
   });
+
+  test('защита входа: после серии неверных PIN — 429 (не даём перебирать)', async () => {
+    const body = JSON.stringify({ username: 'ratelimit_probe', pin: '0000' });
+    const hit = () => fetch(`${BASE}/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body });
+    for (let i = 0; i < 7; i++) {
+      const r = await hit();
+      assert.equal(r.status, 401, `попытка ${i + 1} — неверный PIN`);
+    }
+    const blocked = await hit();
+    assert.equal(blocked.status, 429, 'после лимита вход временно заблокирован');
+  });
 }
