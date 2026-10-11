@@ -75,8 +75,8 @@ function HandRow({ h, onReload }: { h: Balance['hands'][number]; onReload: () =>
           {h.adjustments !== 0 ? ` · сверка ${h.adjustments > 0 ? '+' : ''}${money(h.adjustments)}` : ''}
         </span>
         {!editing && (
-          <button className="btn btn--link" onClick={() => { setVal(String(h.on_hand)); setEditing(true); }}>
-            Поправить остаток
+          <button className="btn btn--fix" onClick={() => { setVal(String(h.on_hand)); setEditing(true); }}>
+            ✏️ Поправить остаток
           </button>
         )}
         {editing && (

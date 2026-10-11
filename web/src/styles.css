@@ -1241,3 +1241,15 @@ kbd {
   background: var(--surface); color: var(--text); font-size: 15px;
 }
 .hand-edit .btn { flex: 0 0 auto; padding: 8px 14px; }
+
+/* Баланс: читаемость на кассовом мониторе + ЗАМЕТНАЯ кнопка правки остатка */
+.balance-list { background: var(--surface); border: 1px solid var(--border); }
+.balance-total-big { border: 1px solid var(--border); }
+.balance-row { padding: 13px 14px; font-size: 15px; }
+.balance-row__val { font-size: 16px; }
+.btn--fix {
+  align-self: flex-start; margin-top: 8px; min-height: 0; flex: 0 0 auto;
+  padding: 10px 16px; font-size: 14px; font-weight: 700; border-radius: 10px;
+  border: 1px solid var(--primary); background: rgba(79, 157, 255, 0.16); color: var(--primary);
+}
+.btn--fix:hover { background: rgba(79, 157, 255, 0.26); }
