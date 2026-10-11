@@ -1,0 +1,89 @@
+name: Deploy Kassa to VPS
+
+# Деплой запускается ВРУЧНУЮ (по команде) — не на каждый push, чтобы магазин
+# не трясло без спроса. Запуск: вкладка Actions → этот workflow → Run workflow,
+# либо через GitHub API (Claude запускает по вашему слову).
+#
+# Что делает: заливает код ветки на сервер в /opt/kassa (НЕ трогая deploy/.env и
+# бэкапы) и пересобирает ТОЛЬКО стек Kassa (docker compose project "kassa").
+# Marzban и другие контейнеры не затрагиваются.
+#
+# Нужны секреты репозитория (Settings → Secrets and variables → Actions):
+#   VPS_HOST     — IP сервера (напр. 185.18.53.234)
+#   VPS_USER     — пользователь SSH (напр. root или deploy)
+#   VPS_PASSWORD — пароль SSH (лучше временный/ротируемый)
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: 'Ветка с кодом для деплоя'
+        required: true
+        default: claude/shop-balance-notifications-7jbi4q
+
+concurrency:
+  group: deploy-kassa
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout кода нужной ветки
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.branch }}
+
+      - name: Установить sshpass и rsync
+        run: sudo apt-get update && sudo apt-get install -y sshpass rsync
+
+      - name: Прогреть known_hosts
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+        run: |
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          ssh-keyscan -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
+
+      - name: Залить код в /opt/kassa (секреты и бэкапы на сервере не трогаем)
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          SSHPASS: ${{ secrets.VPS_PASSWORD }}
+        run: |
+          sshpass -e rsync -az \
+            --exclude '.git' --exclude 'node_modules' --exclude 'web/dist' \
+            --exclude 'deploy/.env' --exclude 'deploy/backups' \
+            -e "ssh -o StrictHostKeyChecking=accept-new" \
+            ./ "${VPS_USER}@${VPS_HOST}:/opt/kassa/"
+
+      - name: Пересобрать и поднять ТОЛЬКО стек Kassa
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          SSHPASS: ${{ secrets.VPS_PASSWORD }}
+        run: |
+          sshpass -e ssh -o StrictHostKeyChecking=accept-new "${VPS_USER}@${VPS_HOST}" '
+            set -e
+            cd /opt/kassa/deploy
+            docker compose up -d --build
+            sleep 6
+            echo "--- стек Kassa ---"
+            docker compose ps
+          '
+
+      - name: Проверка здоровья и сохранности чужих контейнеров
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          SSHPASS: ${{ secrets.VPS_PASSWORD }}
+        run: |
+          sshpass -e ssh -o StrictHostKeyChecking=accept-new "${VPS_USER}@${VPS_HOST}" '
+            PORT=$(grep -E "^HOST_PORT=" /opt/kassa/deploy/.env 2>/dev/null | cut -d= -f2)
+            PORT=${PORT:-8080}
+            echo "HOST_PORT=$PORT"
+            code=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:${PORT}/api/health" || echo 000)
+            echo "health: $code"
+            echo "--- все контейнеры на сервере (убедись, что Marzban и вторая панель на месте) ---"
+            docker ps --format "{{.Names}}\t{{.Status}}"
+            test "$code" = "200"
+          '
