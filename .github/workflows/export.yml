@@ -27,9 +27,12 @@ jobs:
           export SSHPASS="$(printf '%s' "$SSHPASS" | tr -d '\r\n')"
           VPS_HOST="$(printf '%s' "$VPS_HOST" | tr -d '[:space:]')"
           VPS_USER="$(printf '%s' "$VPS_USER" | tr -d '[:space:]')"
+          # JSON сжимаем в ОДНУ строку (tr -d '\n'), чтобы он целиком попал в лог
+          # и не обрезался по строкам при чтении.
           echo "=====KASSA_EXPORT_BEGIN====="
           sshpass -e ssh -o StrictHostKeyChecking=accept-new "${VPS_USER}@${VPS_HOST}" "
             cd /opt/kassa/deploy
             docker compose exec -T app npm --prefix /app/server run --silent export:30d
-          "
+          " | tr -d '\n'
+          echo ""
           echo "=====KASSA_EXPORT_END====="
