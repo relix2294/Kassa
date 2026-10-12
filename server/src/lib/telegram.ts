@@ -121,8 +121,56 @@ export async function notifyReturn(o: { userId: string; total: number; reason?: 
   await sendTelegram(lines.join('\n'));
 }
 
+// Отмены позиций бывают частыми (кассир редактирует чек) и при спаме заливают
+// группу. Поэтому: ПЕРВАЯ отмена сотрудника приходит сразу (сигнал «отказ» не
+// теряется), а все последующие в пределах окна (TELEGRAM_VOID_WINDOW_SEC, по
+// умолч. 60с) копятся и уходят ОДНОЙ сводкой в конце окна. Так максимум —
+// одно мгновенное + одна сводка в минуту на сотрудника, без потока.
+const VOID_WINDOW_MS = Math.max(5, Number(process.env.TELEGRAM_VOID_WINDOW_SEC || 60)) * 1000;
+
+interface VoidWindow {
+  timer: NodeJS.Timeout;
+  lineCancels: number;              // сколько отмен позиций накопилось (сверх первой)
+  byName: Map<string, number>;      // отмены по товарам: имя → счёт
+  cartClears: number;               // сколько очисток чека накопилось
+}
+const voidWindows = new Map<string, VoidWindow>();
+
+async function flushVoidWindow(userId: string): Promise<void> {
+  const w = voidWindows.get(userId);
+  voidWindows.delete(userId);
+  if (!w) return;
+  if (w.lineCancels === 0 && w.cartClears === 0) return;
+  const who = await nameOf(userId);
+  const secs = Math.round(VOID_WINDOW_MS / 1000);
+  const total = w.lineCancels + w.cartClears;
+  const lines = [`✖️ <b>Ещё отмен за ~${secs}с: ${total}</b>`, esc(who)];
+  if (w.byName.size > 0) {
+    const top = [...w.byName.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10);
+    for (const [name, n] of top) lines.push(`• ${esc(name)} — ${n}`);
+  }
+  if (w.cartClears > 0) lines.push(`Очисток чека: ${w.cartClears}`);
+  await sendTelegram(lines.join('\n'));
+}
+
 export async function notifyVoid(o: { userId: string; kind: 'line_cancel' | 'cart_clear'; details?: any }): Promise<void> {
   if (!telegramEnabled() || !VOIDS_ON) return;
+  const existing = voidWindows.get(o.userId);
+  // Окно уже открыто — копим, НЕ шлём сразу (иначе спам).
+  if (existing) {
+    if (o.kind === 'line_cancel') {
+      existing.lineCancels += 1;
+      const name = o.details?.name ? String(o.details.name) : '—';
+      existing.byName.set(name, (existing.byName.get(name) || 0) + 1);
+    } else {
+      existing.cartClears += 1;
+    }
+    return;
+  }
+  // Окна нет — первая отмена: шлём мгновенно и открываем окно на сворачивание.
+  const timer = setTimeout(() => { void flushVoidWindow(o.userId); }, VOID_WINDOW_MS);
+  timer.unref?.();
+  voidWindows.set(o.userId, { timer, lineCancels: 0, byName: new Map(), cartClears: 0 });
   const who = await nameOf(o.userId);
   if (o.kind === 'line_cancel') {
     const d = o.details || {};
@@ -130,6 +178,12 @@ export async function notifyVoid(o: { userId: string; kind: 'line_cancel' | 'car
   } else {
     await sendTelegram(`✖️ <b>Очистка чека</b>\n${esc(who)}`);
   }
+}
+
+// Для тестов/остановки: гасим все окна сворачивания отмен.
+export function clearVoidWindows(): void {
+  for (const w of voidWindows.values()) clearTimeout(w.timer);
+  voidWindows.clear();
 }
 
 export async function notifyShiftOpen(o: {
