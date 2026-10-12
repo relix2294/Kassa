@@ -110,3 +110,18 @@ jobs:
             docker ps --format "{{.Names}}\t{{.Status}}"
             test "$code" = "200"
           '
+
+      - name: Логи Telegram-слушателя (диагностика)
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          SSHPASS: ${{ secrets.VPS_PASSWORD }}
+        run: |
+          export SSHPASS="$(printf '%s' "$SSHPASS" | tr -d '\r\n')"
+          VPS_HOST="$(printf '%s' "$VPS_HOST" | tr -d '[:space:]')"
+          VPS_USER="$(printf '%s' "$VPS_USER" | tr -d '[:space:]')"
+          sshpass -e ssh -o StrictHostKeyChecking=accept-new "${VPS_USER}@${VPS_HOST}" '
+            cd /opt/kassa/deploy
+            echo "--- строки Telegram из логов app (последние 200) ---"
+            docker compose logs app --tail=200 2>&1 | grep -iE "telegram|getupdates|слуша|сводк|чат|webhook|бот @" || echo "(нет telegram-строк в логах)"
+          ' || true
