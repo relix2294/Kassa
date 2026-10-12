@@ -524,11 +524,14 @@ async function pollOnce(): Promise<void> {
     return;
   }
   if (!Array.isArray(data.result)) return;
+  if (data.result.length > 0) console.log(`Telegram: получено обновлений: ${data.result.length}`);
   for (const upd of data.result) {
     updateOffset = Math.max(updateOffset, Number(upd.update_id) + 1);
     const msg = upd.message;
     const text: string | undefined = msg?.text;
     const chatId = msg?.chat?.id != null ? String(msg.chat.id) : '';
+    const chatType = msg?.chat?.type ?? '?';
+    if (text) console.log(`Telegram вход: chat=${chatId}(${chatType}) текст="${text.slice(0, 48)}"`);
     if (!text || !chatId) continue;
     if (!wantsSummary(text)) continue;
     // Отвечаем: в настроенном чате магазина — на любую команду/слово; в любом

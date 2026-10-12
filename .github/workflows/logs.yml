@@ -1,0 +1,41 @@
+name: Kassa logs (чтение без перезапуска)
+
+# Только читает логи приложения на сервере. НИЧЕГО не пересобирает и не
+# перезапускает — поэтому команды, отправленные боту, не теряются.
+# Запуск: Actions → этот workflow → Run workflow.
+
+on:
+  workflow_dispatch:
+    inputs:
+      tail:
+        description: 'Сколько последних строк логов показать'
+        required: false
+        default: '300'
+
+concurrency:
+  group: kassa-logs
+  cancel-in-progress: false
+
+jobs:
+  logs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Установить sshpass
+        run: sudo apt-get update && sudo apt-get install -y sshpass
+
+      - name: Логи приложения Kassa
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          SSHPASS: ${{ secrets.VPS_PASSWORD }}
+          TAIL: ${{ inputs.tail }}
+        run: |
+          export SSHPASS="$(printf '%s' "$SSHPASS" | tr -d '\r\n')"
+          VPS_HOST="$(printf '%s' "$VPS_HOST" | tr -d '[:space:]')"
+          VPS_USER="$(printf '%s' "$VPS_USER" | tr -d '[:space:]')"
+          TAIL="$(printf '%s' "${TAIL:-300}" | tr -d '[:space:]')"
+          sshpass -e ssh -o StrictHostKeyChecking=accept-new "${VPS_USER}@${VPS_HOST}" "
+            cd /opt/kassa/deploy
+            echo '--- Telegram-строки из логов app (последние ${TAIL}) ---'
+            docker compose logs app --tail=${TAIL} 2>&1 | grep -iE 'telegram|вход|получено|сводк|getupdates|webhook|бот @|слуша' || echo '(нет telegram-строк)'
+          "
