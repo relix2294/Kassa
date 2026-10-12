@@ -1,0 +1,32 @@
+name: Kassa till check
+
+# Показывает разбивку «кассы» по последней сверке: наличные и безнал отдельно.
+# Только читает. Ничего не меняет.
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: kassa-tillcheck
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Установить sshpass
+        run: sudo apt-get update && sudo apt-get install -y sshpass
+
+      - name: Разбивка кассы (последняя сверка)
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          SSHPASS: ${{ secrets.VPS_PASSWORD }}
+        run: |
+          export SSHPASS="$(printf '%s' "$SSHPASS" | tr -d '\r\n')"
+          VPS_HOST="$(printf '%s' "$VPS_HOST" | tr -d '[:space:]')"
+          VPS_USER="$(printf '%s' "$VPS_USER" | tr -d '[:space:]')"
+          echo "=====TILL_BEGIN====="
+          sshpass -e ssh -o StrictHostKeyChecking=accept-new "${VPS_USER}@${VPS_HOST}" \
+            "cd /opt/kassa/deploy && docker compose exec -T db psql -U kassa -d kassa -c \"COPY (SELECT counted_cash AS nal, counted_wallet AS beznal, closed_at FROM shifts WHERE status='closed' AND counted_cash IS NOT NULL ORDER BY closed_at DESC LIMIT 1) TO STDOUT WITH CSV HEADER\""
+          echo "=====TILL_END====="
