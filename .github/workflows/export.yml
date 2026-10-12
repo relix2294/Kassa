@@ -1,0 +1,35 @@
+name: Kassa export 30d
+
+# Запускает на сервере команду экспорта и печатает JSON со всеми цифрами за
+# 30 дней в лог. Ничего не пересобирает и не перезапускает.
+# Запуск: Actions → этот workflow → Run workflow.
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: kassa-export
+  cancel-in-progress: false
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Установить sshpass
+        run: sudo apt-get update && sudo apt-get install -y sshpass
+
+      - name: Экспорт данных за 30 дней
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          SSHPASS: ${{ secrets.VPS_PASSWORD }}
+        run: |
+          export SSHPASS="$(printf '%s' "$SSHPASS" | tr -d '\r\n')"
+          VPS_HOST="$(printf '%s' "$VPS_HOST" | tr -d '[:space:]')"
+          VPS_USER="$(printf '%s' "$VPS_USER" | tr -d '[:space:]')"
+          echo "=====KASSA_EXPORT_BEGIN====="
+          sshpass -e ssh -o StrictHostKeyChecking=accept-new "${VPS_USER}@${VPS_HOST}" "
+            cd /opt/kassa/deploy
+            docker compose exec -T app npm --prefix /app/server run --silent export:30d
+          "
+          echo "=====KASSA_EXPORT_END====="
