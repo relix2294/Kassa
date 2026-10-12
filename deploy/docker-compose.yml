@@ -35,9 +35,11 @@ services:
       MIRROR_SECRET: ${MIRROR_SECRET:-}
       # Зона магазина (для «сегодня», итогов дня и расписания Telegram).
       STORE_TIMEZONE: ${STORE_TIMEZONE:-Asia/Dushanbe}
-      # Telegram-уведомления (работают на роли store). Пусто — выключены.
-      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
-      TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
+      # Telegram-уведомления (работают на роли store).
+      # Ключи зашиты как значения по умолчанию, чтобы бот работал сразу после
+      # деплоя. Свои значения в deploy/.env (если появятся) перекроют эти.
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-8752204018:AAHCnfKZliCFttfnOnQ8ag_QIEYga5OegcM}
+      TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:--5199614069}
       TELEGRAM_DAILY_TIME: ${TELEGRAM_DAILY_TIME:-}
       TELEGRAM_LOW_STOCK_THRESHOLD: ${TELEGRAM_LOW_STOCK_THRESHOLD:-4}
       TELEGRAM_NOTIFY_VOIDS: ${TELEGRAM_NOTIFY_VOIDS:-true}
