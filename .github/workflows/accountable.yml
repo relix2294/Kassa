@@ -1,0 +1,45 @@
+name: Kassa accountable set
+
+# Приводит остаток «на руках» (подотчёт) сотрудника к фактической сумме —
+# стартовая точка сверки. Запускается вручную. Ничего не пересобирает.
+# Под капотом: npm run accountable:set -- <логин> <сумма>.
+
+on:
+  workflow_dispatch:
+    inputs:
+      user:
+        description: 'Логин сотрудника (например owner)'
+        required: true
+        default: 'owner'
+      amount:
+        description: 'Сумма «на руках» в сомони (например 2149)'
+        required: true
+
+concurrency:
+  group: kassa-accountable
+  cancel-in-progress: false
+
+jobs:
+  set:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Установить sshpass
+        run: sudo apt-get update && sudo apt-get install -y sshpass
+
+      - name: Сверка подотчёта
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          SSHPASS: ${{ secrets.VPS_PASSWORD }}
+          ACC_USER: ${{ inputs.user }}
+          ACC_AMOUNT: ${{ inputs.amount }}
+        run: |
+          export SSHPASS="$(printf '%s' "$SSHPASS" | tr -d '\r\n')"
+          VPS_HOST="$(printf '%s' "$VPS_HOST" | tr -d '[:space:]')"
+          VPS_USER="$(printf '%s' "$VPS_USER" | tr -d '[:space:]')"
+          # Санитизация ввода: логин — буквы/цифры/._-, сумма — цифры и точка.
+          U="$(printf '%s' "$ACC_USER" | tr -cd 'A-Za-z0-9._-')"
+          A="$(printf '%s' "$ACC_AMOUNT" | tr -cd '0-9.')"
+          echo "Ставлю «на руках» для «$U» = $A"
+          sshpass -e ssh -o StrictHostKeyChecking=accept-new "${VPS_USER}@${VPS_HOST}" \
+            "cd /opt/kassa/deploy && docker compose exec -T app npm --prefix /app/server run --silent accountable:set -- '$U' '$A'"
