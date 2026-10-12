@@ -1,0 +1,41 @@
+name: Kassa low stock
+
+# Выгружает текущий список товаров с остатком ниже порога (пора закупить)
+# напрямую из БД в CSV+base64. Ничего не пересобирает и не перезапускает.
+
+on:
+  workflow_dispatch:
+    inputs:
+      threshold:
+        description: 'Порог остатка (меньше этого)'
+        required: false
+        default: '4'
+
+concurrency:
+  group: kassa-lowstock
+  cancel-in-progress: false
+
+jobs:
+  lowstock:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Установить sshpass
+        run: sudo apt-get update && sudo apt-get install -y sshpass
+
+      - name: Выгрузка низких остатков
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          SSHPASS: ${{ secrets.VPS_PASSWORD }}
+          THRESHOLD: ${{ inputs.threshold }}
+        run: |
+          export SSHPASS="$(printf '%s' "$SSHPASS" | tr -d '\r\n')"
+          VPS_HOST="$(printf '%s' "$VPS_HOST" | tr -d '[:space:]')"
+          VPS_USER="$(printf '%s' "$VPS_USER" | tr -d '[:space:]')"
+          TH="$(printf '%s' "${THRESHOLD:-4}" | tr -cd '0-9.')"
+          echo "=====KASSA_LOWSTOCK_BEGIN====="
+          sshpass -e ssh -o StrictHostKeyChecking=accept-new "${VPS_USER}@${VPS_HOST}" \
+            "cd /opt/kassa/deploy && docker compose exec -T db psql -U kassa -d kassa -c \"COPY (SELECT name, unit, stock, cost_price FROM products WHERE is_archived=false AND stock < ${TH} ORDER BY stock ASC, name) TO STDOUT WITH CSV\"" \
+            | base64 -w0
+          echo ""
+          echo "=====KASSA_LOWSTOCK_END====="
