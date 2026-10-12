@@ -46,6 +46,22 @@ usersRouter.patch('/:id', async (req, res) => {
   const { id } = req.params;
   const { full_name, is_blocked, pin } = req.body ?? {};
 
+  // Нельзя заблокировать последнего активного владельца — иначе в кабинет
+  // никто не войдёт (requireAuth отклоняет заблокированных).
+  if (is_blocked === true) {
+    const tgt = (await query<{ role: string; is_blocked: boolean }>(
+      `SELECT role, is_blocked FROM users WHERE id = $1`, [id],
+    ))[0];
+    if (tgt && tgt.role === 'owner' && !tgt.is_blocked) {
+      const active = Number(
+        (await query<{ n: number }>(`SELECT COUNT(*) AS n FROM users WHERE role = 'owner' AND is_blocked = false`))[0].n,
+      );
+      if (active <= 1) {
+        return res.status(400).json({ error: 'Нельзя заблокировать последнего владельца — иначе никто не войдёт в кабинет.' });
+      }
+    }
+  }
+
   if (pin != null) {
     const hash = await hashPin(String(pin));
     await query(`UPDATE users SET pin_hash = $2 WHERE id = $1`, [id, hash]);

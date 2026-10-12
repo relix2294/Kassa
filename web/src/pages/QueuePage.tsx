@@ -16,7 +16,7 @@ function describe(item: OutboxItem): string {
   switch (item.kind) {
     case 'sale': {
       const n = p.items?.length ?? 0;
-      const pay = p.payment_method === 'cash' ? 'наличные' : 'карта';
+      const pay = p.payment_method === 'cash' ? 'наличные' : p.payment_method === 'mixed' ? 'смешанная' : 'карта';
       return `${n} поз. · ${pay}${p.cash_received != null ? ` · получено ${p.cash_received}` : ''}`;
     }
     case 'return':

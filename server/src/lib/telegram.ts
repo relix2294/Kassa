@@ -339,10 +339,13 @@ async function buildDayReport(): Promise<string> {
     await query<any>(
       `SELECT
          (SELECT COALESCE(SUM(amount),0) FROM expenses WHERE status='approved' AND paid_from='hand') AS ex,
-         (SELECT COALESCE(SUM(amount),0) FROM supplier_payments WHERE source='hand') AS sp`,
+         (SELECT COALESCE(SUM(amount),0) FROM supplier_payments WHERE source='hand') AS sp,
+         (SELECT COALESCE(SUM(amount),0) FROM accountable_adjustments) AS adj`,
     )
   )[0];
-  const handsTotal = Number((Number(handsRow.withdrawn) - Number(handsSpent.ex) - Number(handsSpent.sp)).toFixed(2));
+  // «На руках» = изъято − траты из подотчёта + сверки (корректировки). Без
+  // корректировок цифра расходилась бы с кабинетом и выгрузкой после сверки.
+  const handsTotal = Number((Number(handsRow.withdrawn) - Number(handsSpent.ex) - Number(handsSpent.sp) + Number(handsSpent.adj)).toFixed(2));
   const tillTotal = Number((Number(till.cash) + Number(till.wallet)).toFixed(2));
   const totalCash = Number((tillTotal + handsTotal).toFixed(2));
   const debt = Number((await query<any>(`SELECT COALESCE(SUM(total - paid),0) AS d FROM supplier_invoices`))[0].d);

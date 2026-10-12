@@ -7,6 +7,7 @@ import { api } from '../api';
 import { createProduct, updateProductRemote, pullProducts } from '../sync';
 import Confirm from '../components/Confirm';
 import type { Product } from '../types';
+import { isLowStock } from '../stock';
 
 // Сколько позиций рисуем сразу. ТЗ (п.10) предупреждает про первый завод
 // ~2000 товаров: рисовать их все — значит подвесить экран на слабом ноуте.
@@ -80,7 +81,7 @@ export default function ProductsPage() {
 
       <div className="list">
         {shown.map((p) => {
-          const low = p.stock <= p.min_stock && p.min_stock > 0;
+          const low = isLowStock(p);
           return (
             <button key={p.id} className="list-item" onClick={() => setEditing(p)}>
               <div className="list-item__main">

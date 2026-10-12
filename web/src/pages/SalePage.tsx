@@ -478,7 +478,7 @@ function StartShift({ onDone }: { onDone: (msg: string) => void }) {
         <ShiftWaiting
           request={pending.request}
           message={pending.message}
-          onApproved={() => { setPending(null); onDone('Владелец подтвердил — касса принята'); }}
+          onApproved={async () => { setPending(null); await refreshShift(); onDone('Владелец подтвердил — касса принята'); }}
           onRejected={() => { setPending(null); setErr('Владелец отклонил запрос. Пересчитайте кассу и попробуйте снова.'); }}
           onCancelled={() => setPending(null)}
         />

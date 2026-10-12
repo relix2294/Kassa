@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { query, withTx } from '../db.js';
 import { writeLog } from '../lib/log.js';
 import { broadcast } from '../lib/realtime.js';
-import { getOpenShift, recomputeClosedShift } from './shifts.js';
+import { getOpenShift, recomputeClosedShift, computeExpected } from './shifts.js';
 import { requireOwner } from '../lib/auth.js';
 import { notifyReturn, notifyRequest } from '../lib/telegram.js';
 
@@ -94,17 +94,12 @@ async function executeReturn(body: any, userId: string) {
       total = Number(total.toFixed(2));
 
       // Нельзя выдать наличными больше, чем есть в кассе смены: иначе касса
-      // уходит в минус и вечерняя сверка показывает бессмыслицу. В кассе =
-      // размен + продажи наличными − уже сделанные возвраты.
-      const cashInRow = (
-        await client.query(
-          `SELECT (SELECT opening_cash FROM shifts WHERE id = $1)
-                + COALESCE((SELECT SUM(COALESCE(cash_amount, total)) FROM sales WHERE shift_id = $1), 0)
-                - COALESCE((SELECT SUM(total) FROM returns WHERE shift_id = $1), 0) AS cash`,
-          [shift.id],
-        )
-      ).rows[0];
-      const available = Number(cashInRow.cash);
+      // уходит в минус и вечерняя сверка показывает бессмыслицу. Берём ту же
+      // «ожидаемую кассу», что и вечерняя сверка (computeExpected): размен +
+      // продажи нал − возвраты − изъятия − расходы из кассы − оплаты
+      // поставщикам из кассы. Иначе после инкассации/расхода проверка завышала
+      // доступную сумму и возврат мог увести кассу в минус.
+      const available = (await computeExpected(shift)).cash;
       if (total > available + 1e-9) {
         throw {
           status: 400,

@@ -132,7 +132,7 @@ function BalanceDetail({ b, onClose, onReload }: { b: Balance; onClose: () => vo
               key={h.user_id}
               label={`На руках — ${h.name}`}
               value={money(h.on_hand)}
-              sub={`изъял ${money(h.withdrawn)} − расходы ${money(h.spent_expenses + h.spent_suppliers)}`}
+              sub={`изъял ${money(h.withdrawn)} − расходы ${money(h.spent_expenses + h.spent_suppliers)}${h.adjustments ? ` ${h.adjustments >= 0 ? '+' : '−'} сверка ${money(Math.abs(h.adjustments))}` : ''}`}
             />
           ))}
           <Row label="Итого наших денег" value={money(b.total_cash)} strong />

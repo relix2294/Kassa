@@ -50,10 +50,6 @@ export default function App() {
     api.health().then((h) => setMirror(h.role === 'mirror')).catch(() => {});
   }, []);
 
-  // Экран покупателя — отдельное окно на втором мониторе. Без шапки, меню и
-  // без входа: он только читает локальный чек и показывает его клиенту.
-  if (location.pathname === '/customer') return <CustomerDisplay />;
-
   // После входа подтягиваем каталог, смену и переподключаем realtime
   // под новой ролью (сервер шлёт кассиру не то же, что владельцу).
   useEffect(() => {
@@ -73,6 +69,11 @@ export default function App() {
     prevUserId.current = user?.id ?? null;
     if (user && !wasLoggedIn) navigate(mirror ? '/dashboard' : '/sale', { replace: true });
   }, [user?.id]);
+
+  // Экран покупателя — отдельное окно на втором мониторе. Без шапки, меню и
+  // без входа. Все хуки выше уже вызваны (правила хуков), поэтому ранний
+  // возврат — только здесь, после них.
+  if (location.pathname === '/customer') return <CustomerDisplay />;
 
   if (!user) return <LoginPage />;
 

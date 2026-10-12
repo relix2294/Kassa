@@ -11,18 +11,9 @@ import BalanceCard from '../components/BalanceCard';
 import { ColumnChart, RankBars, Donut } from '../components/charts';
 import RangeControl, { money } from '../components/RangeControl';
 import type { LogRow, Product } from '../types';
+import { isLowStock, LOW_STOCK_THRESHOLD } from '../stock';
 
 type Tab = 'overview' | 'sales' | 'returns' | 'stock' | 'log';
-
-// Единое правило «низкого остатка» для всего приложения (синхронно с сервером,
-// TELEGRAM_LOW_STOCK_THRESHOLD): если у товара задан свой минимум — сравниваем
-// с ним; если не задан — с общим порогом. Так дашборд, Telegram и выгрузка
-// считают одинаково.
-export const LOW_STOCK_THRESHOLD = 4;
-export function isLowStock(p: Product): boolean {
-  if (p.is_archived) return false;
-  return p.min_stock > 0 ? p.stock <= p.min_stock : p.stock < LOW_STOCK_THRESHOLD;
-}
 
 export default function DashboardPage() {
   const [range, setRange] = useState<Range>({ period: '30d' });
@@ -185,8 +176,8 @@ export default function DashboardPage() {
             <Card title="Чем платят">
               <Donut data={payData} centerLabel="продажи" />
             </Card>
-            <Card title="Из чего выручка">
-              <Donut data={revData} centerLabel="выручка" />
+            <Card title="Маржа и себестоимость">
+              <Donut data={revData} centerLabel="продажи" />
             </Card>
             <Card title="Прибыль и расходы">
               <Donut data={profitData} centerLabel="маржа" />
