@@ -330,31 +330,41 @@ async function buildDayReport(): Promise<string> {
 
   // Живой баланс: касса + подотчёт, и долг поставщикам.
   const till = await getCurrentTill();
-  const handsRow = (
+  // «На руках» считаем ПОСТРОЧНО ПО СОТРУДНИКАМ и суммируем — ровно как Кабинет
+  // (routes/dashboard.ts /balance) и выгрузка (export30.ts). Раньше здесь был
+  // ГЛОБАЛЬНЫЙ SUM(amount) по cash_withdrawals без привязки к user_id, из-за чего
+  // «ничьи» изъятия (user_id IS NULL или от удалённого сотрудника) попадали в
+  // подотчёт только в Telegram — и цифра расходилась с кабинетом (напр. 14 331
+  // против 2 149). Привязка к users убирает такие «сиротские» строки.
+  // on_hand(user) = изъял − расходы из подотчёта − поставщикам из подотчёта + сверки.
+  const handsAgg = (
     await query<any>(
-      `SELECT COALESCE(SUM(amount),0) AS withdrawn FROM cash_withdrawals`,
+      `SELECT COALESCE(SUM(on_hand),0) AS total FROM (
+         SELECT
+           COALESCE((SELECT SUM(amount) FROM cash_withdrawals WHERE user_id = u.id),0)
+         - COALESCE((SELECT SUM(amount) FROM expenses WHERE user_id = u.id AND status='approved' AND paid_from='hand'),0)
+         - COALESCE((SELECT SUM(amount) FROM supplier_payments WHERE user_id = u.id AND source='hand'),0)
+         + COALESCE((SELECT SUM(amount) FROM accountable_adjustments WHERE user_id = u.id),0) AS on_hand
+         FROM users u
+       ) t`,
     )
   )[0];
-  const handsSpent = (
-    await query<any>(
-      `SELECT
-         (SELECT COALESCE(SUM(amount),0) FROM expenses WHERE status='approved' AND paid_from='hand') AS ex,
-         (SELECT COALESCE(SUM(amount),0) FROM supplier_payments WHERE source='hand') AS sp,
-         (SELECT COALESCE(SUM(amount),0) FROM accountable_adjustments) AS adj`,
-    )
-  )[0];
-  // «На руках» = изъято − траты из подотчёта + сверки (корректировки). Без
-  // корректировок цифра расходилась бы с кабинетом и выгрузкой после сверки.
-  const handsTotal = Number((Number(handsRow.withdrawn) - Number(handsSpent.ex) - Number(handsSpent.sp) + Number(handsSpent.adj)).toFixed(2));
+  const handsTotal = Number(Number(handsAgg.total).toFixed(2));
   const tillTotal = Number((Number(till.cash) + Number(till.wallet)).toFixed(2));
   const totalCash = Number((tillTotal + handsTotal).toFixed(2));
   const debt = Number((await query<any>(`SELECT COALESCE(SUM(total - paid),0) AS d FROM supplier_invoices`))[0].d);
 
-  // Низкий остаток.
+  // Низкий остаток. ГРУППИРУЕМ ПО НАЗВАНИЮ: в каталоге бывают дубли карточек
+  // одного товара (напр. «Колбаса …» ×156), и без группировки список в Telegram
+  // забивался одинаковыми строками. Суммируем остаток по названию — как в
+  // workflow выгрузки (lowstock.yml).
   const low = await query<{ name: string; unit: string; stock: number }>(
-    `SELECT name, unit, stock FROM products
-      WHERE is_archived = false AND stock < $1
-      ORDER BY stock ASC LIMIT 20`,
+    `SELECT name, MIN(unit) AS unit, SUM(stock) AS stock FROM products
+      WHERE is_archived = false
+      GROUP BY name
+      HAVING SUM(stock) < $1
+      ORDER BY SUM(stock) ASC, name
+      LIMIT 20`,
     [LOW_STOCK_THRESHOLD],
   );
 

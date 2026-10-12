@@ -1,0 +1,55 @@
+name: Kassa balance check
+
+# Диагностика «на руках» (подотчёт): сравнивает ПОСТРОЧНЫЙ (по сотрудникам, как
+# в Кабинете) итог с ГЛОБАЛЬНЫМ SUM по cash_withdrawals и показывает «сиротские»
+# изъятия (user_id IS NULL или от удалённого сотрудника). Расхождение между
+# этими цифрами — причина, почему Telegram показывал другую сумму, чем Кабинет.
+# Только читает. Ничего не меняет.
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: kassa-balancecheck
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Установить sshpass
+        run: sudo apt-get update && sudo apt-get install -y sshpass
+
+      - name: Диагностика подотчёта
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          SSHPASS: ${{ secrets.VPS_PASSWORD }}
+        run: |
+          export SSHPASS="$(printf '%s' "$SSHPASS" | tr -d '\r\n')"
+          VPS_HOST="$(printf '%s' "$VPS_HOST" | tr -d '[:space:]')"
+          VPS_USER="$(printf '%s' "$VPS_USER" | tr -d '[:space:]')"
+          SQL="SELECT json_build_object(
+            'per_user_on_hand', (SELECT COALESCE(SUM(oh),0) FROM (
+                SELECT COALESCE((SELECT SUM(amount) FROM cash_withdrawals WHERE user_id=u.id),0)
+                     - COALESCE((SELECT SUM(amount) FROM expenses WHERE user_id=u.id AND status='approved' AND paid_from='hand'),0)
+                     - COALESCE((SELECT SUM(amount) FROM supplier_payments WHERE user_id=u.id AND source='hand'),0)
+                     + COALESCE((SELECT SUM(amount) FROM accountable_adjustments WHERE user_id=u.id),0) AS oh
+                FROM users u) q),
+            'global_withdrawn', (SELECT COALESCE(SUM(amount),0) FROM cash_withdrawals),
+            'per_user_withdrawn', (SELECT COALESCE(SUM(amount),0) FROM cash_withdrawals WHERE user_id IN (SELECT id FROM users)),
+            'orphan_withdrawn', (SELECT COALESCE(SUM(amount),0) FROM cash_withdrawals WHERE user_id IS NULL OR user_id NOT IN (SELECT id FROM users)),
+            'orphan_rows', (SELECT COUNT(*) FROM cash_withdrawals WHERE user_id IS NULL OR user_id NOT IN (SELECT id FROM users)),
+            'hand_expenses', (SELECT COALESCE(SUM(amount),0) FROM expenses WHERE status='approved' AND paid_from='hand'),
+            'hand_supplier', (SELECT COALESCE(SUM(amount),0) FROM supplier_payments WHERE source='hand'),
+            'adjustments', (SELECT COALESCE(SUM(amount),0) FROM accountable_adjustments),
+            'till_last', (SELECT json_build_object('nal',counted_cash,'beznal',counted_wallet,'closed_at',closed_at) FROM shifts WHERE status='closed' AND counted_cash IS NOT NULL ORDER BY closed_at DESC LIMIT 1),
+            'open_shift', (SELECT COUNT(*) FROM shifts WHERE status='open'),
+            'supplier_debt', (SELECT COALESCE(SUM(total-paid),0) FROM supplier_invoices),
+            'dup_lowstock_names', (SELECT COUNT(*) FROM (SELECT name FROM products WHERE is_archived=false GROUP BY name HAVING COUNT(*) > 1) d)
+          )"
+          echo "=====BAL_BEGIN====="
+          sshpass -e ssh -o StrictHostKeyChecking=accept-new "${VPS_USER}@${VPS_HOST}" \
+            "cd /opt/kassa/deploy && docker compose exec -T db psql -U kassa -d kassa -tAc \"$SQL\"" | base64 -w0
+          echo ""
+          echo "=====BAL_END====="
