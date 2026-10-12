@@ -70,7 +70,10 @@ jobs:
           # У пароля срезаем только перенос строки/возврат каретки (частый артефакт
           # вставки), пробелы внутри пароля не трогаем.
           export SSHPASS="$(printf '%s' "$SSHPASS" | tr -d '\r\n')"
-          sshpass -e rsync -az \
+          # --delete убирает с сервера файлы, которых нет в ветке (хвосты от
+          # прошлых заливок ломали сборку). deploy/.env и бэкапы защищены
+          # excludes — rsync --delete их НЕ трогает.
+          sshpass -e rsync -az --delete \
             --exclude '.git' --exclude 'node_modules' --exclude 'web/dist' \
             --exclude 'deploy/.env' --exclude 'deploy/backups' \
             -e "ssh -o StrictHostKeyChecking=accept-new" \
