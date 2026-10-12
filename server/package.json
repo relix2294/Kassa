@@ -12,6 +12,7 @@
     "tg:test": "tsx src/telegram-cli.ts test",
     "tg:report": "tsx src/telegram-cli.ts report",
     "accountable:set": "tsx src/accountable-set.ts",
+    "export:30d": "tsx src/export30.ts",
     "test": "tsx --test test/*.test.ts"
   },
   "dependencies": {
