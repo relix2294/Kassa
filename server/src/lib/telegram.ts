@@ -35,29 +35,50 @@ const unitOf = (u: string) => (u === 'kg' ? 'кг' : 'шт');
 
 // Отправка сообщения в конкретный чат. Никогда не бросает — сеть/Telegram могут
 // лежать, касса из-за этого падать не должна. Возвращает true при успехе.
-async function sendMessageTo(chatId: string, text: string): Promise<boolean> {
-  if (!TOKEN) return false;
+// Превратить HTML-сообщение в обычный текст (на случай, если Telegram не смог
+// разобрать разметку): убрать теги и вернуть экранированные символы.
+function toPlain(text: string): string {
+  return text
+    .replace(/<[^>]*>/g, '')
+    .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
+}
+
+async function postMessage(chatId: string, text: string, html: boolean): Promise<Response> {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 8000);
   try {
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 8000);
-    const res = await fetch(`https://api.telegram.org/bot${TOKEN}/sendMessage`, {
+    return await fetch(`https://api.telegram.org/bot${TOKEN}/sendMessage`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         chat_id: chatId,
         text,
-        parse_mode: 'HTML',
+        ...(html ? { parse_mode: 'HTML' } : {}),
         disable_web_page_preview: true,
       }),
       signal: ctrl.signal,
     });
+  } finally {
     clearTimeout(timer);
-    if (!res.ok) {
-      const body = await res.text().catch(() => '');
-      console.error(`Telegram sendMessage ${res.status}: ${body.slice(0, 200)}`);
-      return false;
+  }
+}
+
+async function sendMessageTo(chatId: string, text: string): Promise<boolean> {
+  if (!TOKEN) return false;
+  try {
+    const res = await postMessage(chatId, text, true);
+    if (res.ok) return true;
+    const body = await res.text().catch(() => '');
+    console.error(`Telegram sendMessage ${res.status}: ${body.slice(0, 200)}`);
+    // Телеграм не смог разобрать HTML-разметку — повторяем обычным текстом,
+    // чтобы ошибка форматирования не приводила к полному молчанию.
+    if (res.status === 400 && /parse entities/i.test(body)) {
+      const res2 = await postMessage(chatId, toPlain(text), false);
+      if (res2.ok) { console.log('Telegram: сообщение отправлено обычным текстом (разметка отклонена).'); return true; }
+      const body2 = await res2.text().catch(() => '');
+      console.error(`Telegram sendMessage (plain) ${res2.status}: ${body2.slice(0, 200)}`);
     }
-    return true;
+    return false;
   } catch (err: any) {
     console.error('Telegram: не удалось отправить сообщение:', err?.message || err);
     return false;
@@ -351,7 +372,7 @@ async function buildDayReport(): Promise<string> {
 
   if (low.length > 0) {
     lines.push('');
-    lines.push(`🛒 <b>Пора закупить</b> (остаток < ${money(LOW_STOCK_THRESHOLD)}):`);
+    lines.push(`🛒 <b>Пора закупить</b> (остаток &lt; ${money(LOW_STOCK_THRESHOLD)}):`);
     for (const p of low) lines.push(`• ${esc(p.name)} — ${money(p.stock)} ${unitOf(p.unit)}`);
   }
 
