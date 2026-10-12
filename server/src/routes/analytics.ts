@@ -3,14 +3,17 @@ import { query, withTx } from '../db.js';
 import { requireOwner } from '../lib/auth.js';
 import { writeLog } from '../lib/log.js';
 import { broadcast } from '../lib/realtime.js';
-import { crossedLowStock, notifyLowStock, notifyWriteOff, notifyInventoryLoss, notifyPriceBulk } from '../lib/telegram.js';
+import { crossedLowStock, notifyLowStock, notifyWriteOff, notifyInventoryLoss, notifyPriceBulk, LOW_STOCK_THRESHOLD } from '../lib/telegram.js';
 
 export const analyticsRouter = Router();
 
 // Аналитика — только владелец (закупочные цены, маржа, потери).
 analyticsRouter.use(requireOwner);
 
-// «Пора закупить»: остаток ниже или равен минимуму.
+// «Пора закупить»: единое правило с остальным приложением — если у товара
+// задан свой минимум, остаток ниже/равен ему; если минимум не задан — остаток
+// ниже общего порога (LOW_STOCK_THRESHOLD). Так дашборд, Telegram, выгрузка и
+// этот отчёт считают одинаково.
 // Считаем средний расход в день за 30 дней, чтобы прикинуть, на сколько хватит.
 analyticsRouter.get('/restock', async (_req, res) => {
   const rows = await query(
@@ -31,9 +34,12 @@ analyticsRouter.get('/restock', async (_req, res) => {
        FROM products p
        LEFT JOIN sold ON sold.product_id = p.id
       WHERE p.is_archived = false
-        AND p.min_stock > 0
-        AND p.stock <= p.min_stock
-      ORDER BY (p.stock - p.min_stock), p.name`,
+        AND (
+          (p.min_stock > 0 AND p.stock <= p.min_stock)
+          OR (p.min_stock = 0 AND p.stock < $1)
+        )
+      ORDER BY p.stock ASC, p.name`,
+    [LOW_STOCK_THRESHOLD],
   );
   res.json(rows);
 });

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db';
@@ -14,9 +14,26 @@ import type { LogRow, Product } from '../types';
 
 type Tab = 'overview' | 'sales' | 'returns' | 'stock' | 'log';
 
+// Единое правило «низкого остатка» для всего приложения (синхронно с сервером,
+// TELEGRAM_LOW_STOCK_THRESHOLD): если у товара задан свой минимум — сравниваем
+// с ним; если не задан — с общим порогом. Так дашборд, Telegram и выгрузка
+// считают одинаково.
+export const LOW_STOCK_THRESHOLD = 4;
+export function isLowStock(p: Product): boolean {
+  if (p.is_archived) return false;
+  return p.min_stock > 0 ? p.stock <= p.min_stock : p.stock < LOW_STOCK_THRESHOLD;
+}
+
 export default function DashboardPage() {
   const [range, setRange] = useState<Range>({ period: '30d' });
   const [tab, setTab] = useState<Tab>('overview');
+  const tabsRef = useRef<HTMLDivElement>(null);
+  // Переключить вкладку и прокрутить к ней (чтобы на телефоне было видно,
+  // что по нажатию «Пора закупить» реально открылся список остатков).
+  const goTab = (t: Tab) => {
+    setTab(t);
+    setTimeout(() => tabsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60);
+  };
 
   const [summary, setSummary] = useState<any | null>(null);
   const [series, setSeries] = useState<any | null>(null);
@@ -141,7 +158,7 @@ export default function DashboardPage() {
       <ReturnRequests />
       <ExpenseRequests />
 
-      <AlertsStrip onStock={() => setTab('stock')} />
+      <AlertsStrip onStock={() => goTab('stock')} />
 
       <RangeControl range={range} onChange={setRange} />
 
@@ -151,7 +168,7 @@ export default function DashboardPage() {
         <button className="btn btn--ghost" onClick={exportCsv} disabled={!summary}>⬇ Скачать отчёт (CSV)</button>
       </div>
 
-      <div className="seg seg--tabs">
+      <div className="seg seg--tabs" ref={tabsRef}>
         {([['overview', 'Обзор'], ['sales', 'Чеки'], ['returns', 'Возвраты'], ['stock', 'Остатки'], ['log', 'Журнал']] as [Tab, string][])
           .map(([k, lbl]) => (
             <button key={k} className={`seg__btn ${tab === k ? 'seg__btn--on' : ''}`} onClick={() => setTab(k)}>{lbl}</button>
@@ -252,7 +269,7 @@ function AlertsStrip({ onStock }: { onStock: () => void }) {
     return off;
   }, []);
 
-  const low = products.filter((p) => !p.is_archived && p.min_stock > 0 && p.stock <= p.min_stock);
+  const low = products.filter(isLowStock);
   if (low.length === 0 && debt <= 0) return null;
 
   return (
@@ -392,18 +409,19 @@ function ReturnsTab() {
 
 function StockTab() {
   const products = useLiveQuery(() => db.products.orderBy('name').toArray(), [], [] as Product[]);
-  const low = products.filter((p) => p.min_stock > 0 && p.stock <= p.min_stock);
+  // Низкий остаток — по единому правилу, сортируем от самых пустых.
+  const low = products.filter(isLowStock).sort((a, b) => a.stock - b.stock);
   return (
     <>
       {low.length > 0 && (
         <>
-          <h2 className="sect">Пора закупить</h2>
+          <h2 className="sect">Пора закупить <span className="muted">({low.length})</span></h2>
           <div className="list">
             {low.map((p) => (
               <div key={p.id} className="list-item list-item--static">
                 <div className="list-item__main">
                   <div className="list-item__name">{p.name}</div>
-                  <div className="muted">минимум {p.min_stock}</div>
+                  <div className="muted">{p.min_stock > 0 ? `минимум ${p.min_stock}` : `порог ${LOW_STOCK_THRESHOLD}`}</div>
                 </div>
                 <div className="stock stock--low">{p.stock} {p.unit === 'kg' ? 'кг' : 'шт'}</div>
               </div>
@@ -419,7 +437,7 @@ function StockTab() {
               <div className="list-item__name">{p.name}</div>
               <div className="muted">прод. {p.sale_price} · закуп. {p.cost_price}</div>
             </div>
-            <div className={`stock ${p.min_stock > 0 && p.stock <= p.min_stock ? 'stock--low' : ''}`}>{p.stock} {p.unit === 'kg' ? 'кг' : 'шт'}</div>
+            <div className={`stock ${isLowStock(p) ? 'stock--low' : ''}`}>{p.stock} {p.unit === 'kg' ? 'кг' : 'шт'}</div>
           </div>
         ))}
       </div>
