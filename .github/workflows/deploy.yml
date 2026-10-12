@@ -48,12 +48,15 @@ jobs:
         env:
           VPS_HOST: ${{ secrets.VPS_HOST }}
           VPS_USER: ${{ secrets.VPS_USER }}
+          SSHPASS: ${{ secrets.VPS_PASSWORD }}
         run: |
           echo "VPS_HOST длина символов: ${#VPS_HOST} (у чистого IP 185.18.53.234 = 13)"
           echo "VPS_USER длина символов: ${#VPS_USER} (у root = 4)"
+          echo "VPS_PASSWORD длина символов: ${#SSHPASS} (ожидается 16)"
           printf 'VPS_HOST — только буквы/цифры/точки/дефис: '; printf '%s' "$VPS_HOST" | grep -Eq '^[A-Za-z0-9.-]+$' && echo да || echo НЕТ
           printf 'VPS_HOST содержит пробел/перенос строки: '; printf '%s' "$VPS_HOST" | grep -Eq '[[:space:]]' && echo ДА || echo нет
           printf 'VPS_USER содержит пробел/перенос строки: '; printf '%s' "$VPS_USER" | grep -Eq '[[:space:]]' && echo ДА || echo нет
+          printf 'VPS_PASSWORD содержит пробел/перенос строки: '; printf '%s' "$SSHPASS" | grep -Eq '[[:space:]]' && echo ДА || echo нет
 
       - name: Залить код в /opt/kassa (секреты и бэкапы на сервере не трогаем)
         env:
@@ -64,6 +67,9 @@ jobs:
           # Подчистим случайные пробелы/переносы по краям (частая беда при вводе).
           VPS_HOST="$(printf '%s' "$VPS_HOST" | tr -d '[:space:]')"
           VPS_USER="$(printf '%s' "$VPS_USER" | tr -d '[:space:]')"
+          # У пароля срезаем только перенос строки/возврат каретки (частый артефакт
+          # вставки), пробелы внутри пароля не трогаем.
+          export SSHPASS="$(printf '%s' "$SSHPASS" | tr -d '\r\n')"
           sshpass -e rsync -az \
             --exclude '.git' --exclude 'node_modules' --exclude 'web/dist' \
             --exclude 'deploy/.env' --exclude 'deploy/backups' \
