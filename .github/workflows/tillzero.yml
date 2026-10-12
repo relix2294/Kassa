@@ -1,0 +1,52 @@
+name: Kassa till zero
+
+# Сводит «кассу» к нулю: добавляет закрытую смену-сверку с посчитанными 0/0,
+# чтобы последняя сверка показывала пустой ящик. Разовая операция.
+# Нужна, когда наличные физически вытащены, но в последней смене были
+# насчитаны в ящике. Безнал/нал задаются входами (по умолчанию 0/0).
+
+on:
+  workflow_dispatch:
+    inputs:
+      cash:
+        description: 'Наличные в кассе по факту'
+        required: true
+        default: '0'
+      wallet:
+        description: 'Безнал/кошельки в кассе по факту'
+        required: true
+        default: '0'
+      user:
+        description: 'Логин (под кем закрыть сверку)'
+        required: true
+        default: 'owner'
+
+concurrency:
+  group: kassa-tillzero
+  cancel-in-progress: false
+
+jobs:
+  zero:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Установить sshpass
+        run: sudo apt-get update && sudo apt-get install -y sshpass
+
+      - name: Сверка кассы
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          SSHPASS: ${{ secrets.VPS_PASSWORD }}
+          IN_CASH: ${{ inputs.cash }}
+          IN_WALLET: ${{ inputs.wallet }}
+          IN_USER: ${{ inputs.user }}
+        run: |
+          export SSHPASS="$(printf '%s' "$SSHPASS" | tr -d '\r\n')"
+          VPS_HOST="$(printf '%s' "$VPS_HOST" | tr -d '[:space:]')"
+          VPS_USER="$(printf '%s' "$VPS_USER" | tr -d '[:space:]')"
+          C="$(printf '%s' "$IN_CASH" | tr -cd '0-9.')"; C="${C:-0}"
+          W="$(printf '%s' "$IN_WALLET" | tr -cd '0-9.')"; W="${W:-0}"
+          U="$(printf '%s' "$IN_USER" | tr -cd 'A-Za-z0-9._-')"
+          echo "Свожу кассу к: нал $C, безнал $W (под $U)"
+          sshpass -e ssh -o StrictHostKeyChecking=accept-new "${VPS_USER}@${VPS_HOST}" \
+            "cd /opt/kassa/deploy && docker compose exec -T db psql -U kassa -d kassa -v ON_ERROR_STOP=1 -c \"INSERT INTO shifts (user_id, opened_at, opening_cash, opening_wallet, opening_expected, opening_wallet_expected, closed_at, expected_cash, counted_cash, difference, expected_wallet, counted_wallet, wallet_difference, status) SELECT id, now(), $C, $W, $C, $W, now(), $C, $C, 0, $W, $W, 0, 'closed' FROM users WHERE username='$U'\" -c \"SELECT counted_cash AS nal, counted_wallet AS beznal FROM shifts WHERE status='closed' AND counted_cash IS NOT NULL ORDER BY closed_at DESC LIMIT 1\""
