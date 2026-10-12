@@ -11,7 +11,7 @@
 // Если токен или chat_id не заданы — модуль ничего не шлёт и не мешает работе.
 
 import { query } from '../db.js';
-import { getCurrentTill } from '../routes/shifts.js';
+import { getCurrentTill, getAnyOpenShift } from '../routes/shifts.js';
 
 const TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
 const CHAT_ID = process.env.TELEGRAM_CHAT_ID || '';
@@ -33,10 +33,10 @@ const fmt = new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 2 });
 const money = (n: unknown) => fmt.format(Number(n) || 0);
 const unitOf = (u: string) => (u === 'kg' ? 'кг' : 'шт');
 
-// Отправка сообщения в чат. Никогда не бросает — сеть/Telegram могут лежать,
-// касса из-за этого падать не должна. Возвращает true при успехе.
-export async function sendTelegram(text: string): Promise<boolean> {
-  if (!telegramEnabled()) return false;
+// Отправка сообщения в конкретный чат. Никогда не бросает — сеть/Telegram могут
+// лежать, касса из-за этого падать не должна. Возвращает true при успехе.
+async function sendMessageTo(chatId: string, text: string): Promise<boolean> {
+  if (!TOKEN) return false;
   try {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), 8000);
@@ -44,7 +44,7 @@ export async function sendTelegram(text: string): Promise<boolean> {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        chat_id: CHAT_ID,
+        chat_id: chatId,
         text,
         parse_mode: 'HTML',
         disable_web_page_preview: true,
@@ -62,6 +62,12 @@ export async function sendTelegram(text: string): Promise<boolean> {
     console.error('Telegram: не удалось отправить сообщение:', err?.message || err);
     return false;
   }
+}
+
+// Отправка в основной чат магазина (группа владельца).
+export async function sendTelegram(text: string): Promise<boolean> {
+  if (!telegramEnabled()) return false;
+  return sendMessageTo(CHAT_ID, text);
 }
 
 // --- Низкий остаток: предупреждение при падении ниже порога ---
@@ -368,4 +374,132 @@ export function startTelegramScheduler(): void {
 
 export function stopTelegramScheduler(): void {
   if (scheduled) { clearTimeout(scheduled); scheduled = null; }
+}
+
+// --- Короткая сводка по запросу («спросил бота — он ответил») ---
+// Статус смены + итоги дня + живой баланс. Это ответ бота на команду.
+export async function buildSummary(): Promise<string> {
+  const lines: string[] = [];
+  try {
+    const open = await getAnyOpenShift();
+    if (open) {
+      const who = open.full_name || open.username || '—';
+      const since = open.opened_at
+        ? new Date(open.opened_at).toLocaleTimeString('ru-RU', { timeZone: TZ, hour: '2-digit', minute: '2-digit' })
+        : '';
+      lines.push(`🟢 <b>Смена открыта</b> · ${esc(who)}${since ? ` · с ${since}` : ''}`);
+    } else {
+      lines.push('⚪️ <b>Смена закрыта</b> (касса сейчас не работает)');
+    }
+    lines.push('');
+  } catch { /* статус смены не критичен для сводки */ }
+  lines.push(await buildDayReport());
+  return lines.join('\n');
+}
+
+// --- Приём команд от бота (long-polling getUpdates) ---
+// Владелец пишет боту в группу — бот отвечает короткой сводкой. Работает без
+// вебхука и без внешних зависимостей: длинный опрос getUpdates в цикле.
+// Отвечаем ТОЛЬКО в настроенном чате (группа магазина) — чтобы цифры магазина
+// не утекли случайному человеку, нашедшему бота.
+//
+// Важно: у бота в группе по умолчанию включён «режим приватности» — ему видны
+// только команды вида /... (и ответы/упоминания). Поэтому надёжнее всего
+// вызывать сводку командой из меню (/report, /balance, /summary). Обычный текст
+// со словами «сводка/баланс/итог» тоже сработает, если приватность выключена в
+// @BotFather или если писать боту в личку (но в личке отвечаем только владельцу
+// из группы — см. ALLOW ниже).
+
+let listening = false;
+let updateOffset = 0;
+
+// Распознаём запрос сводки: любая команда /... ИЛИ ключевое слово.
+function wantsSummary(text: string): boolean {
+  const t = text.trim().toLowerCase();
+  if (t.startsWith('/')) return true;
+  return /\b(сводка|сводку|итог|итоги|баланс|отчёт|отчет|сколько\s+денег|report|summary|status)\b/.test(t);
+}
+
+async function tgApi(method: string, params: Record<string, unknown>, timeoutMs: number): Promise<any> {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const res = await fetch(`https://api.telegram.org/bot${TOKEN}/${method}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(params),
+      signal: ctrl.signal,
+    });
+    return await res.json().catch(() => null);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// Зарегистрировать команды в меню бота (кнопка «/» в Telegram).
+async function registerCommands(): Promise<void> {
+  await tgApi('setMyCommands', {
+    commands: [
+      { command: 'report', description: 'Сводка: деньги, выручка, остатки' },
+      { command: 'balance', description: 'Сколько у нас денег сейчас' },
+      { command: 'summary', description: 'Короткая сводка по магазину' },
+    ],
+  }, 8000).catch(() => {});
+}
+
+async function pollOnce(): Promise<void> {
+  const data = await tgApi('getUpdates', {
+    offset: updateOffset || undefined,
+    timeout: 50,
+    allowed_updates: ['message'],
+  }, 60000);
+  if (!data?.ok || !Array.isArray(data.result)) return;
+  for (const upd of data.result) {
+    updateOffset = Math.max(updateOffset, Number(upd.update_id) + 1);
+    const msg = upd.message;
+    const text: string | undefined = msg?.text;
+    const chatId = msg?.chat?.id != null ? String(msg.chat.id) : '';
+    if (!text || !chatId) continue;
+    // Отвечаем только в настроенной группе магазина.
+    if (chatId !== String(CHAT_ID)) continue;
+    if (!wantsSummary(text)) continue;
+    try {
+      await sendMessageTo(chatId, await buildSummary());
+    } catch (err: any) {
+      console.error('Telegram: не удалось собрать сводку:', err?.message || err);
+      await sendMessageTo(chatId, '⚠️ Не удалось собрать сводку. Попробуйте ещё раз.').catch(() => {});
+    }
+  }
+}
+
+export async function startTelegramListener(): Promise<void> {
+  if (!telegramEnabled() || listening) return;
+  listening = true;
+  // Пропускаем накопившиеся старые сообщения: берём только последний update и
+  // начинаем после него, чтобы не отвечать на всё, что писали до запуска.
+  try {
+    const seed = await tgApi('getUpdates', { offset: -1, timeout: 0, allowed_updates: ['message'] }, 10000);
+    if (seed?.ok && Array.isArray(seed.result) && seed.result.length > 0) {
+      updateOffset = Number(seed.result[seed.result.length - 1].update_id) + 1;
+    }
+  } catch { /* не критично */ }
+  await registerCommands();
+  console.log('Telegram: слушаю команды (напишите боту «/report» в группе).');
+  // Фоновый цикл опроса. Ошибки не роняют кассу — пауза и продолжаем.
+  (async () => {
+    while (listening) {
+      try {
+        await pollOnce();
+      } catch (err: any) {
+        if (listening) {
+          console.error('Telegram getUpdates:', err?.message || err);
+          await new Promise((r) => setTimeout(r, 3000));
+        }
+      }
+    }
+  })();
+}
+
+export function stopTelegramListener(): void {
+  listening = false;
 }
