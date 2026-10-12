@@ -35,7 +35,7 @@ jobs:
           TH="$(printf '%s' "${THRESHOLD:-4}" | tr -cd '0-9.')"
           echo "=====KASSA_LOWSTOCK_BEGIN====="
           sshpass -e ssh -o StrictHostKeyChecking=accept-new "${VPS_USER}@${VPS_HOST}" \
-            "cd /opt/kassa/deploy && docker compose exec -T db psql -U kassa -d kassa -c \"COPY (SELECT name, unit, stock, cost_price FROM products WHERE is_archived=false AND stock < ${TH} ORDER BY stock ASC, name) TO STDOUT WITH CSV\"" \
+            "cd /opt/kassa/deploy && docker compose exec -T db psql -U kassa -d kassa -c \"COPY (SELECT name, COUNT(*) AS positions, SUM(stock) AS total_stock, ROUND(AVG(cost_price),2) AS avg_cost FROM products WHERE is_archived=false AND stock < ${TH} GROUP BY name ORDER BY SUM(stock) ASC, name) TO STDOUT WITH CSV\"" \
             | base64 -w0
           echo ""
           echo "=====KASSA_LOWSTOCK_END====="
