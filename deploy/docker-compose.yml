@@ -36,9 +36,13 @@ services:
       # Зона магазина (для «сегодня», итогов дня и расписания Telegram).
       STORE_TIMEZONE: ${STORE_TIMEZONE:-Asia/Dushanbe}
       # Telegram-уведомления (работают на роли store).
-      # Ключи зашиты как значения по умолчанию, чтобы бот работал сразу после
-      # деплоя. Свои значения в deploy/.env (если появятся) перекроют эти.
-      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-8752204018:AAHCnfKZliCFttfnOnQ8ag_QIEYga5OegcM}
+      # ВАЖНО: токен бота — это СЕКРЕТ. Он НЕ хранится в git (однажды утёк —
+      # и бота угнали). Токен берётся только из окружения деплоя: его кладёт
+      # сюда шаг деплоя из GitHub-секрета TELEGRAM_BOT_TOKEN, либо он прописан
+      # вручную в deploy/.env на сервере. Пусто = бот молчит (это нормально,
+      # пока не задан новый токен).
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      # chat_id — это идентификатор группы, не секрет (сам по себе доступа не даёт).
       TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:--5199614069}
       TELEGRAM_DAILY_TIME: ${TELEGRAM_DAILY_TIME:-}
       TELEGRAM_LOW_STOCK_THRESHOLD: ${TELEGRAM_LOW_STOCK_THRESHOLD:-4}

@@ -79,6 +79,35 @@ jobs:
             -e "ssh -o StrictHostKeyChecking=accept-new" \
             ./ "${VPS_USER}@${VPS_HOST}:/opt/kassa/"
 
+      - name: Прописать токен Telegram в .env (из секрета — не в git, не в логах)
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          SSHPASS: ${{ secrets.VPS_PASSWORD }}
+          TG_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+        run: |
+          VPS_HOST="$(printf '%s' "$VPS_HOST" | tr -d '[:space:]')"
+          VPS_USER="$(printf '%s' "$VPS_USER" | tr -d '[:space:]')"
+          export SSHPASS="$(printf '%s' "$SSHPASS" | tr -d '\r\n')"
+          TG_TOKEN="$(printf '%s' "$TG_TOKEN" | tr -d '[:space:]')"
+          if [ -z "$TG_TOKEN" ]; then
+            echo "Секрет TELEGRAM_BOT_TOKEN не задан — .env не трогаю (бот будет молчать)."
+            exit 0
+          fi
+          # Токен уходит на сервер ТОЛЬКО по stdin: в аргументах команды и в
+          # логах его нет (печатаем лишь длину). На сервере переписываем строку
+          # TELEGRAM_BOT_TOKEN= в deploy/.env, остальное в .env не трогаем.
+          printf '%s' "$TG_TOKEN" | sshpass -e ssh -o StrictHostKeyChecking=accept-new "${VPS_USER}@${VPS_HOST}" '
+            set -e
+            cd /opt/kassa/deploy
+            touch .env && chmod 600 .env
+            TOK="$(cat)"
+            grep -v "^TELEGRAM_BOT_TOKEN=" .env > .env.tmp 2>/dev/null || true
+            printf "TELEGRAM_BOT_TOKEN=%s\n" "$TOK" >> .env.tmp
+            mv .env.tmp .env
+            echo "TELEGRAM_BOT_TOKEN записан в deploy/.env (длина: ${#TOK})."
+          '
+
       - name: Пересобрать и поднять ТОЛЬКО стек Kassa
         env:
           VPS_HOST: ${{ secrets.VPS_HOST }}
