@@ -221,7 +221,7 @@ function FactCheck({ holder, expected, onSaved }: {
   return (
     <div className="ledger__fact">
       <label className="field">
-        <span>Сколько у {holder.name} реально на руках сейчас?</span>
+        <span>Пересчитайте: сколько наличных реально на руках сейчас? <span className="muted">({holder.name})</span></span>
         <input id="ledger-fact" inputMode="decimal" placeholder="пересчитайте наличные" value={val}
           onChange={(e) => { setVal(e.target.value); setMsg(null); }} />
       </label>
