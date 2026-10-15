@@ -36,3 +36,21 @@ jobs:
           " | base64 -w0
           echo ""
           echo "=====KASSA_EXPORT_END====="
+
+      - name: Лента подотчёта (все изъятия, расходы, оплаты, сверки)
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          SSHPASS: ${{ secrets.VPS_PASSWORD }}
+        run: |
+          export SSHPASS="$(printf '%s' "$SSHPASS" | tr -d '\r\n')"
+          VPS_HOST="$(printf '%s' "$VPS_HOST" | tr -d '[:space:]')"
+          VPS_USER="$(printf '%s' "$VPS_USER" | tr -d '[:space:]')"
+          # Отдельным блоком base64 со сжатием: строка лога не длиннее лимита.
+          echo "=====KASSA_LEDGER_BEGIN====="
+          sshpass -e ssh -o StrictHostKeyChecking=accept-new "${VPS_USER}@${VPS_HOST}" "
+            cd /opt/kassa/deploy
+            docker compose exec -T app npm --prefix /app/server run --silent ledger
+          " | gzip -9 | base64 -w0
+          echo ""
+          echo "=====KASSA_LEDGER_END====="

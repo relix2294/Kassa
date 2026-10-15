@@ -268,6 +268,8 @@ export const api = {
     req<{ ok: boolean; on_hand: number; delta: number }>('/dashboard/accountable/adjust', {
       method: 'POST', body: JSON.stringify(payload),
     }),
+  // Лента подотчёта: все изъятия/расходы/оплаты/сверки с бегущим остатком.
+  ledger: () => req<Ledger>('/dashboard/ledger'),
   writeOff: (payload: { product_id?: string; barcode?: string; qty: number; reason: string }) =>
     req<{ write_off: any; product: Product }>('/analytics/write-off', {
       method: 'POST',
@@ -280,3 +282,31 @@ export const api = {
       username: string | null; full_name: string | null;
     }[]>(`/analytics/write-offs?limit=${limit}`),
 };
+
+// --- Лента подотчёта (см. server/src/lib/ledger.ts) ---
+export interface LedgerRow {
+  id: string;
+  at: string;
+  type: 'withdrawal' | 'expense' | 'supplier' | 'adjustment';
+  title: string;
+  note: string | null;
+  who: string;
+  amount: number;
+  source: string;
+  hand_effect: number;
+  balance: number;
+  assigned: boolean;
+}
+export interface LedgerTotals {
+  withdrawn_cash: number; withdrawn_wallet: number; withdrawn: number;
+  expenses_hand: number; expenses_register: number;
+  supplier_hand: number; supplier_cash: number; supplier_wallet: number; supplier_external: number;
+  adjustments: number; hand_change: number; unassigned: number;
+}
+export interface Ledger {
+  rows: LedgerRow[];
+  on_hand: number;
+  totals_all: LedgerTotals;
+  last_adjustment: { at: string; amount: number; balance_after: number } | null;
+  since: { from: string | null; start_balance: number; totals: LedgerTotals; rows: number };
+}

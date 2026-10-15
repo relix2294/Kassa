@@ -4,6 +4,7 @@ import { requireOwner } from '../lib/auth.js';
 import { writeLog } from '../lib/log.js';
 import { broadcast } from '../lib/realtime.js';
 import { getCurrentTill, computeAccountable } from './shifts.js';
+import { buildLedger } from '../lib/ledger.js';
 
 export const dashboardRouter = Router();
 
@@ -170,6 +171,12 @@ dashboardRouter.post('/accountable/adjust', async (req, res) => {
   });
   broadcast('data_updated', { kind: 'accountable_adjust' });
   res.json({ ok: true, on_hand: target, delta });
+});
+
+// Лента подотчёта: все изъятия, расходы, оплаты поставщикам и сверки по
+// времени с бегущим остатком «на руках» — для сверки с реальными деньгами.
+dashboardRouter.get('/ledger', async (_req, res) => {
+  res.json(await buildLedger());
 });
 
 // Границы пресетов в виде SQL-выражений (строки заданы сервером — не ввод).

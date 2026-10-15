@@ -381,6 +381,53 @@ if (!haveDb) {
     assert.equal(b.total_cash, 350, 'всего = касса 300 + на руках 50');
   });
 
+  test('лента подотчёта: каждое движение видно, остаток совпадает с Кабинетом', async () => {
+    const o = await login('owner', '1234');
+    await addProduct('Сок', 100, 60, 20, 'B7');
+    const shift = await openShift(o);
+    await api(o, '/sales', 'POST', {
+      client_id: 'b7-sale', items: [{ barcode: 'B7', qty: 10 }],
+      payment_method: 'cash', cash_received: 1000, shift_id: shift,
+    });
+    // Изъял 600 себе на руки, сверил остаток до 500.
+    await api(o, '/shifts/withdraw', 'POST', { amount: 600, kind: 'cash' });
+    const uid = (await api(o, '/dashboard/balance')).body.hands[0].user_id;
+    await api(o, '/dashboard/accountable/adjust', 'POST', { user_id: uid, on_hand: 500 });
+
+    // После сверки: ещё изъятие 300, расход с рук 50, расход из кассы 20,
+    // оплата поставщику с рук 120, из кассы 30 и «со стороны» 70.
+    await api(o, '/shifts/withdraw', 'POST', { amount: 300, kind: 'cash' });
+    await api(o, '/expenses', 'POST', { amount: 50, kind: 'cash', category: 'Вода', paid_from: 'hand' });
+    await api(o, '/expenses', 'POST', { amount: 20, kind: 'cash', category: 'Пакеты', paid_from: 'register' });
+    const sup = await api(o, '/suppliers', 'POST', { name: 'Лента-тест' });
+    const inv = await api(o, `/suppliers/${sup.body.id}/invoices`, 'POST', { total: 500, paid: 0 });
+    for (const [amount, source] of [[120, 'hand'], [30, 'cash'], [70, 'external']] as const) {
+      const p = await api(o, `/suppliers/invoices/${inv.body.id}/payments`, 'POST', { amount, source });
+      assert.equal(p.status, 201, `оплата ${amount} (${source}) принята`);
+    }
+
+    const l = (await api(o, '/dashboard/ledger')).body;
+    const b = (await api(o, '/dashboard/balance')).body;
+    assert.equal(l.on_hand, b.hands_total, 'остаток ленты = «на руках» в Кабинете');
+    assert.equal(l.on_hand, 500 + 300 - 50 - 120, 'на руках = 500 + 300 − 50 − 120');
+
+    // Итоги «с последней сверки» — то, что владелец сверяет с фактом.
+    assert.equal(l.since.start_balance, 500, 'стартуем с цифры сверки');
+    assert.equal(l.since.totals.withdrawn, 300);
+    assert.equal(l.since.totals.expenses_hand, 50);
+    assert.equal(l.since.totals.expenses_register, 20);
+    assert.equal(l.since.totals.supplier_hand, 120);
+    assert.equal(l.since.totals.supplier_cash, 30);
+    assert.equal(l.since.totals.supplier_external, 70);
+    assert.equal(l.since.totals.hand_change, 300 - 50 - 120);
+
+    // Каждая строка показывает, двигала ли она «на руках», и бегущий остаток.
+    const ext = l.rows.find((r: any) => r.type === 'supplier' && r.source === 'external');
+    assert.equal(ext.hand_effect, 0, '«со стороны» на руки не влияет');
+    assert.equal(ext.title, 'Оплата поставщику: Лента-тест');
+    assert.equal(l.rows[l.rows.length - 1].balance, l.on_hand, 'последний бегущий остаток = итог');
+  });
+
   test('защита входа: после серии неверных PIN — 429 (не даём перебирать)', async () => {
     const body = JSON.stringify({ username: 'ratelimit_probe', pin: '0000' });
     const hit = () => fetch(`${BASE}/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body });

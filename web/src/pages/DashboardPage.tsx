@@ -8,6 +8,7 @@ import ShiftRequests from '../components/ShiftRequests';
 import ReturnRequests from '../components/ReturnRequests';
 import ExpenseRequests from '../components/ExpenseRequests';
 import BalanceCard from '../components/BalanceCard';
+import HandsLedger from '../components/HandsLedger';
 import { ColumnChart, RankBars, Donut } from '../components/charts';
 import RangeControl, { money } from '../components/RangeControl';
 import type { LogRow, Product } from '../types';
@@ -144,6 +145,8 @@ export default function DashboardPage() {
       <h1>Кабинет</h1>
 
       <BalanceCard />
+
+      <HandsLedger />
 
       <ShiftRequests />
       <ReturnRequests />
