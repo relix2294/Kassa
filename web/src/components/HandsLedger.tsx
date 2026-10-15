@@ -1,9 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { api, type Ledger, type LedgerRow, type LedgerTotals } from '../api';
-import { onRealtimeEvent } from '../sync';
 import { money } from './RangeControl';
-
-type Balance = Awaited<ReturnType<typeof api.balance>>;
 
 const dt = (s: string) =>
   new Date(s).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
@@ -28,40 +25,31 @@ function sourceLabel(r: LedgerRow): string {
 
 const PAGE = 40;
 
-// Сверка подотчёта: все движения, которые меняют «на руках», с бегущим
-// остатком. Владелец видит, из чего сложилась цифра, и сверяет её с реальными
-// деньгами у сотрудника.
-export default function HandsLedger() {
+// Подотчёт в окне «Подробнее» баланса: откуда сложилось «на руках» и лента
+// всех движений (изъятия, расходы, оплаты поставщикам, сверки) с остатком
+// после каждого. refreshKey — данные баланса: меняются (живьём, по событиям
+// кассы) → лента перечитывается вместе с ними. children — строки сотрудников
+// с «Поправить остаток», встают между итогом и лентой.
+export default function HandsLedger({ refreshKey, children }: { refreshKey: unknown; children?: ReactNode }) {
   const [l, setL] = useState<Ledger | null>(null);
-  const [bal, setBal] = useState<Balance | null>(null);
   const [mode, setMode] = useState<'since' | 'all'>('since');
   const [limit, setLimit] = useState(PAGE);
   const [err, setErr] = useState<string | null>(null);
 
-  const load = useCallback(() => {
+  useEffect(() => {
     api.ledger().then((x) => { setL(x); setErr(null); }).catch((e) => setErr(e?.message || 'Не удалось загрузить'));
-    api.balance().then(setBal).catch(() => {});
-  }, []);
-  useEffect(() => { load(); }, [load]);
-  useEffect(
-    () => onRealtimeEvent((t) => {
-      if (t === 'shift' || t === 'data_updated' || t === 'log') load();
-    }),
-    [load],
-  );
+  }, [refreshKey]);
 
   // Строки периода — новые сверху.
   const rows = useMemo(() => {
     if (!l) return [];
-    const src = mode === 'since' && l.last_adjustment
-      ? l.rows.slice(l.rows.length - l.since.rows)
-      : l.rows;
+    const src = mode === 'since' && l.last_adjustment ? l.rows.slice(l.rows.length - l.since.rows) : l.rows;
     return [...src].reverse();
   }, [l, mode]);
 
-  if (err) return <p className="hint">Сверка подотчёта: {err}</p>;
-  if (!l) return null;
-  if (l.rows.length === 0) return null;
+  if (err) return <p className="hint">Подотчёт: {err}</p>;
+  if (!l) return <p className="hint">Загружаю подотчёт…</p>;
+  if (l.rows.length === 0) return <>{children}</>;
 
   const sinceMode = mode === 'since' && !!l.last_adjustment;
   const t: LedgerTotals = sinceMode ? l.since.totals : l.totals_all;
@@ -77,15 +65,12 @@ export default function HandsLedger() {
     g.items.push(r);
     g.net += r.hand_effect;
   }
-
   const notHand = t.supplier_cash + t.supplier_wallet + t.supplier_external + t.expenses_register;
-  // Сверять с фактом удобно, когда деньги на руках у одного человека.
-  const holders = (bal?.hands ?? []).filter((h) => h.on_hand !== 0);
 
   return (
-    <section className="ledger">
+    <>
       <div className="ledger__head">
-        <h2 className="sect">Сверка подотчёта — откуда «на руках»</h2>
+        <h3 className="sect">Подотчёт: откуда «на руках»</h3>
         {l.last_adjustment && (
           <div className="seg">
             <button className={`seg__btn ${mode === 'since' ? 'seg__btn--on' : ''}`} onClick={() => { setMode('since'); setLimit(PAGE); }}>
@@ -99,11 +84,9 @@ export default function HandsLedger() {
       </div>
 
       <div className="balance-list">
-        {sinceMode ? (
-          <Line label={`Было на руках после сверки ${dt(l.last_adjustment!.at)}`} value={money(start)} />
-        ) : (
-          <Line label="Начали с" value={money(0)} />
-        )}
+        {sinceMode
+          ? <Line label={`Было на руках после сверки ${dt(l.last_adjustment!.at)}`} value={money(start)} />
+          : <Line label="Начали с" value={money(0)} />}
         <Line
           label="+ Изъято из кассы на руки"
           sub={`наличные ${money(t.withdrawn_cash)} · безнал ${money(t.withdrawn_wallet)}`}
@@ -111,9 +94,7 @@ export default function HandsLedger() {
         />
         <Line label="− Расходы из подотчёта" value={signed(-t.expenses_hand)} />
         <Line label="− Оплаты поставщикам из подотчёта" value={signed(-t.supplier_hand)} />
-        {!sinceMode && t.adjustments !== 0 && (
-          <Line label="± Сверки с фактом" value={signed(t.adjustments)} />
-        )}
+        {!sinceMode && t.adjustments !== 0 && <Line label="± Сверки с фактом" value={signed(t.adjustments)} />}
         <Line label="= Сейчас должно быть на руках" value={money(start + t.hand_change)} strong />
       </div>
 
@@ -131,19 +112,18 @@ export default function HandsLedger() {
           )}
         </div>
       )}
-
       {t.unassigned > 0 && (
         <div className="balance-note">
           Записи без сотрудника на <b>{money(t.unassigned)}</b> — в «на руках» не входят (не к кому отнести).
         </div>
       )}
 
-      {holders.length === 1 && <FactCheck holder={holders[0]} expected={l.on_hand} onSaved={load} />}
+      {children}
 
       <h3 className="sect">Все движения <span className="muted">({rows.length})</span></h3>
       <div className="ledger__list">
         {groups.map((g) => (
-          <div key={g.key} className="balance-list ledger__day">
+          <div key={g.key} className="balance-list">
             <div className="ledger__dayhead">
               <span>{g.label}</span>
               <span className={g.net < 0 ? 'diff-neg' : ''}>на руках за день: {signed(Number(g.net.toFixed(2)))}</span>
@@ -158,11 +138,9 @@ export default function HandsLedger() {
                   </span>
                 </div>
                 <div className="ledger__amt">
-                  {r.hand_effect !== 0 ? (
-                    <span className={`balance-row__val ${r.hand_effect < 0 ? 'diff-neg' : 'ledger__plus'}`}>{signed(r.hand_effect)}</span>
-                  ) : (
-                    <span className="balance-row__val muted">{money(r.amount)}</span>
-                  )}
+                  {r.hand_effect !== 0
+                    ? <span className={`balance-row__val ${r.hand_effect < 0 ? 'diff-neg' : 'ledger__plus'}`}>{signed(r.hand_effect)}</span>
+                    : <span className="balance-row__val muted">{money(r.amount)}</span>}
                   <span className="muted ledger__bal">на руках {money(r.balance)}</span>
                 </div>
               </div>
@@ -171,13 +149,11 @@ export default function HandsLedger() {
         ))}
       </div>
       {rows.length > limit && (
-        <div className="row">
-          <button className="btn btn--ghost" onClick={() => setLimit(limit + PAGE)}>
-            Показать ещё ({rows.length - limit})
-          </button>
-        </div>
+        <button className="btn btn--ghost" onClick={() => setLimit(limit + PAGE)}>
+          Показать ещё ({rows.length - limit})
+        </button>
       )}
-    </section>
+    </>
   );
 }
 
@@ -189,55 +165,6 @@ function Line({ label, value, sub, strong }: { label: string; value: string; sub
         {sub && <span className="muted">{sub}</span>}
       </div>
       <span className="balance-row__val">{value}</span>
-    </div>
-  );
-}
-
-// Сверка с фактом: ввёл, сколько реально на руках — видна разница сразу,
-// без записи. Записать сверку — отдельной кнопкой, осознанно.
-function FactCheck({ holder, expected, onSaved }: {
-  holder: Balance['hands'][number]; expected: number; onSaved: () => void;
-}) {
-  const [val, setVal] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
-  const fact = Number(val.replace(',', '.'));
-  const valid = val.trim() !== '' && Number.isFinite(fact) && fact >= 0;
-  const diff = valid ? Number((fact - expected).toFixed(2)) : 0;
-
-  async function save() {
-    if (!valid) return;
-    setBusy(true); setMsg(null);
-    try {
-      await api.adjustAccountable({ user_id: holder.user_id, on_hand: fact, note: 'сверка с фактом (лента подотчёта)' });
-      setVal('');
-      setMsg('Сверка записана — дальше считаем от этой цифры.');
-      onSaved();
-    } catch (e: any) {
-      setMsg(e?.body?.error || e?.message || 'Не удалось записать');
-    } finally { setBusy(false); }
-  }
-
-  return (
-    <div className="ledger__fact">
-      <label className="field">
-        <span>Пересчитайте: сколько наличных реально на руках сейчас? <span className="muted">({holder.name})</span></span>
-        <input id="ledger-fact" inputMode="decimal" placeholder="пересчитайте наличные" value={val}
-          onChange={(e) => { setVal(e.target.value); setMsg(null); }} />
-      </label>
-      {valid && (
-        <div className={`ledger__diff ${diff === 0 ? 'ledger__diff--ok' : diff < 0 ? 'ledger__diff--short' : 'ledger__diff--over'}`}>
-          {diff === 0 && 'Сходится копейка в копейку ✓'}
-          {diff < 0 && <>Не хватает <b>{money(-diff)}</b> — столько потрачено/отдано без записи (или с неверным «откуда деньги»).</>}
-          {diff > 0 && <>На руках больше на <b>{money(diff)}</b>, чем по записям.</>}
-          {diff !== 0 && (
-            <button className="btn btn--fix" onClick={save} disabled={busy}>
-              Записать сверку: на руках {money(fact)}
-            </button>
-          )}
-        </div>
-      )}
-      {msg && <div className="muted">{msg}</div>}
     </div>
   );
 }

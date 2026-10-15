@@ -1254,11 +1254,21 @@ kbd {
 }
 .btn--fix:hover { background: rgba(79, 157, 255, 0.26); }
 
-/* Сверка подотчёта: лента всех движений «на руках» */
-.ledger { margin: 4px 0 20px; }
+/* Окно «Подробнее» баланса: длинная лента подотчёта прокручивается внутри
+   окна, верх не уезжает за экран. */
+.modal--wide { max-height: calc(100dvh - 24px); overflow-y: auto; }
+/* Окно — колонка flex: без этого при ограниченной высоте блоки сжимались бы и
+   обрезали содержимое (кнопки внутри становились некликабельны). */
+.modal--wide > * { flex-shrink: 0; }
+@media (min-width: 480px) {
+  /* По центру экрана целиком: без нижнего отступа, который выталкивал верх окна. */
+  .modal--wide { margin-bottom: 0; max-height: calc(100dvh - 48px); }
+}
+
+/* Подотчёт в «Подробнее»: итог «откуда на руках» и лента всех движений */
 .ledger__head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
-.ledger__head .sect { margin-bottom: 6px; }
-.ledger__head .seg { margin: 0 0 10px; }
+.ledger__head .sect { margin: 0; }
+.ledger__head .seg { margin: 0; }
 .ledger__warn { margin-top: 6px; font-size: 13px; }
 .ledger__list { display: flex; flex-direction: column; gap: 12px; }
 .ledger__dayhead {
@@ -1272,12 +1282,7 @@ kbd {
 .ledger__amt { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; flex: 0 0 auto; }
 .ledger__bal { font-size: 12px; white-space: nowrap; }
 .ledger__plus { color: var(--ok); }
-.ledger__fact {
-  display: flex; flex-direction: column; gap: 8px; margin: 12px 0 4px;
-  padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface);
-}
-.ledger__fact .field { margin: 0; }
-.ledger__diff { display: flex; flex-direction: column; gap: 6px; font-size: 14px; padding: 10px 12px; border-radius: 10px; }
+.ledger__diff { display: block; margin-top: 8px; font-size: 14px; padding: 8px 12px; border-radius: 10px; }
 .ledger__diff--ok { background: rgba(52, 211, 153, 0.14); color: var(--ok); font-weight: 700; }
 .ledger__diff--short { background: rgba(248, 113, 113, 0.12); }
 .ledger__diff--over { background: rgba(251, 191, 36, 0.14); }

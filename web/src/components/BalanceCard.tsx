@@ -2,11 +2,9 @@ import { useCallback, useEffect, useState } from 'react';
 import { api } from '../api';
 import { onRealtimeEvent } from '../sync';
 import { money } from './RangeControl';
+import HandsLedger from './HandsLedger';
 
 type Balance = Awaited<ReturnType<typeof api.balance>>;
-
-const dt = (s: string) =>
-  new Date(s).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
 
 // Живой баланс точки для владельца: «сколько денег у нас прямо сейчас».
 // Карточка вверху Кабинета; по клику — подробная детализация (подотчёт по
@@ -82,6 +80,7 @@ function HandRow({ h, onReload }: { h: Balance['hands'][number]; onReload: () =>
         {editing && (
           <div className="hand-edit">
             <input
+              id={`hand-fact-${h.user_id}`}
               inputMode="decimal"
               value={val}
               onChange={(e) => setVal(e.target.value)}
@@ -92,11 +91,23 @@ function HandRow({ h, onReload }: { h: Balance['hands'][number]; onReload: () =>
             <button className="btn" onClick={() => { setEditing(false); setErr(null); }} disabled={busy}>Отмена</button>
           </div>
         )}
+        {editing && <FactDiff val={val} expected={h.on_hand} />}
         {err && <span className="diff-neg">{err}</span>}
       </div>
       <span className="balance-row__val">{money(h.on_hand)}</span>
     </div>
   );
+}
+
+// Пока вводят фактический остаток — сразу видно, сходится ли с записями.
+function FactDiff({ val, expected }: { val: string; expected: number }) {
+  const n = Number(val.replace(',', '.'));
+  if (val.trim() === '' || !Number.isFinite(n) || n < 0) return null;
+  const diff = Number((n - expected).toFixed(2));
+  if (diff === 0) return <span className="ledger__diff ledger__diff--ok">Сходится копейка в копейку ✓</span>;
+  return diff < 0
+    ? <span className="ledger__diff ledger__diff--short">Не хватает <b>{money(-diff)}</b> против записей — потрачено или отдано без записи.</span>
+    : <span className="ledger__diff ledger__diff--over">На руках больше записей на <b>{money(diff)}</b>.</span>;
 }
 
 function Row({ label, value, neg, sub, strong }: { label: string; value: string; neg?: boolean; sub?: string; strong?: boolean }) {
@@ -161,52 +172,18 @@ function BalanceDetail({ b, onClose, onReload }: { b: Balance; onClose: () => vo
           )}
         </div>
 
-        {b.hands.length > 0 && (
-          <>
-            <h3 className="sect">Подотчёт по сотрудникам</h3>
-            <p className="hint">«Поправить остаток» — если прошлые траты не отмечались «из подотчёта»: укажите, сколько у человека реально на руках сейчас.</p>
-            <div className="balance-list">
-              {b.hands.map((h) => (
-                <HandRow key={h.user_id} h={h} onReload={onReload} />
-              ))}
-            </div>
-          </>
-        )}
-
-        <h3 className="sect">Изъятия из кассы</h3>
-        {b.withdrawals.length === 0 && <p className="hint">Изъятий пока не было.</p>}
-        <div className="list">
-          {b.withdrawals.map((w) => (
-            <div key={w.id} className="list-item list-item--static">
-              <div className="list-item__main">
-                <div className="list-item__name">
-                  {money(w.amount)} {w.kind === 'wallet' ? '· безнал' : '· наличные'}
-                </div>
-                <div className="muted">
-                  {dt(w.created_at)} · {w.full_name || w.username || '—'}{w.note ? ` · ${w.note}` : ''}
-                </div>
+        <HandsLedger refreshKey={b}>
+          {b.hands.length > 0 && (
+            <>
+              <p className="hint">Пересчитайте деньги у сотрудника и сверьте: «Поправить остаток» сразу покажет разницу с записями.</p>
+              <div className="balance-list">
+                {b.hands.map((h) => (
+                  <HandRow key={h.user_id} h={h} onReload={onReload} />
+                ))}
               </div>
-            </div>
-          ))}
-        </div>
-
-        <h3 className="sect">Расходы</h3>
-        {b.expenses.length === 0 && <p className="hint">Расходов пока не было.</p>}
-        <div className="list">
-          {b.expenses.map((e) => (
-            <div key={e.id} className="list-item list-item--static">
-              <div className="list-item__main">
-                <div className="list-item__name">
-                  {e.category} <span className="muted">· {e.paid_from === 'hand' ? 'из подотчёта' : 'из кассы'}</span>
-                </div>
-                <div className="muted">
-                  {dt(e.created_at)} · {e.full_name || e.username || '—'}{e.note ? ` · ${e.note}` : ''}
-                </div>
-              </div>
-              <div className="stock stock--low">−{money(e.amount)}</div>
-            </div>
-          ))}
-        </div>
+            </>
+          )}
+        </HandsLedger>
 
         <div className="row">
           <button className="btn btn--primary" onClick={onClose}>Закрыть</button>
