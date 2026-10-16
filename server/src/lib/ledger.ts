@@ -6,6 +6,7 @@
 // Правила (те же, что в computeAccountable и /dashboard/balance — цифры обязаны
 // совпадать):
 //   изъятие из кассы            → на руках +сумма
+//   внесение в кассу (размен)   → на руках −сумма (хранится как изъятие с минусом)
 //   расход «из подотчёта»       → на руках −сумма
 //   оплата поставщику «из рук»  → на руках −сумма
 //   сверка (корректировка)      → на руках ±сумма
@@ -16,7 +17,7 @@
 
 import { query } from '../db.js';
 
-export type LedgerType = 'withdrawal' | 'expense' | 'supplier' | 'adjustment';
+export type LedgerType = 'withdrawal' | 'deposit' | 'expense' | 'supplier' | 'adjustment';
 
 export interface LedgerRow {
   id: string;
@@ -39,6 +40,10 @@ export interface LedgerTotals {
   withdrawn_cash: number;
   withdrawn_wallet: number;
   withdrawn: number;
+  // Внесено в кассу с рук (размен на сдачу) — обратное изъятию.
+  deposited_cash: number;
+  deposited_wallet: number;
+  deposited: number;
   expenses_hand: number;
   expenses_register: number;
   supplier_hand: number;
@@ -66,6 +71,7 @@ const r2 = (n: number) => Number(n.toFixed(2));
 function emptyTotals(): LedgerTotals {
   return {
     withdrawn_cash: 0, withdrawn_wallet: 0, withdrawn: 0,
+    deposited_cash: 0, deposited_wallet: 0, deposited: 0,
     expenses_hand: 0, expenses_register: 0,
     supplier_hand: 0, supplier_cash: 0, supplier_wallet: 0, supplier_external: 0,
     adjustments: 0, hand_change: 0, unassigned: 0,
@@ -78,6 +84,10 @@ function addToTotals(t: LedgerTotals, row: LedgerRow): void {
     case 'withdrawal':
       if (row.source === 'wallet') t.withdrawn_wallet += row.amount; else t.withdrawn_cash += row.amount;
       t.withdrawn += row.amount;
+      break;
+    case 'deposit':
+      if (row.source === 'wallet') t.deposited_wallet += row.amount; else t.deposited_cash += row.amount;
+      t.deposited += row.amount;
       break;
     case 'expense':
       if (row.source === 'hand') t.expenses_hand += row.amount; else t.expenses_register += row.amount;
@@ -109,10 +119,12 @@ interface RawRow {
 export async function buildLedger(): Promise<Ledger> {
   const raw = await query<RawRow>(
     `SELECT * FROM (
-       SELECT w.id, w.created_at AS at, 'withdrawal' AS type,
-              'Изъятие из кассы' AS title, w.note,
+       -- Внесение в кассу (размен с рук) хранится как изъятие с минусом.
+       SELECT w.id, w.created_at AS at,
+              CASE WHEN w.amount < 0 THEN 'deposit' ELSE 'withdrawal' END AS type,
+              CASE WHEN w.amount < 0 THEN 'Внесено в кассу (размен)' ELSE 'Изъятие из кассы' END AS title, w.note,
               COALESCE(u.full_name, u.username) AS who, (u.id IS NOT NULL) AS assigned,
-              w.amount, COALESCE(w.kind, 'cash') AS source
+              ABS(w.amount) AS amount, COALESCE(w.kind, 'cash') AS source
          FROM cash_withdrawals w LEFT JOIN users u ON u.id = w.user_id
        UNION ALL
        SELECT e.id, e.created_at, 'expense',
@@ -150,6 +162,7 @@ export async function buildLedger(): Promise<Ledger> {
     let effect = 0;
     if (r.assigned) {
       if (r.type === 'withdrawal') effect = amount;
+      else if (r.type === 'deposit') effect = -amount;
       else if (r.type === 'expense' && r.source === 'hand') effect = -amount;
       else if (r.type === 'supplier' && r.source === 'hand') effect = -amount;
       else if (r.type === 'adjustment') effect = amount;

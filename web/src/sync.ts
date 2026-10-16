@@ -266,8 +266,11 @@ export async function completeSale(
   cashReceived: number | undefined,
   shiftId?: string,
   cardAmount?: number,
+  clientId?: string,
 ): Promise<{ queued: boolean }> {
-  const client_id = genId();
+  // Номер чека задаёт экран продажи — один на корзину: повторное нажатие или
+  // повтор при обрыве шлёт ТОТ ЖЕ номер, и сервер не проводит чек дважды.
+  const client_id = clientId ?? genId();
   // shift_id фиксируем на момент продажи: если чек уйдёт в очередь и доедет
   // после закрытия смены, он всё равно попадёт в свою смену.
   const payload = {

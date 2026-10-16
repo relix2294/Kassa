@@ -110,7 +110,7 @@ export default function PaymentForm({
           </button>
           <button
             className="btn btn--primary"
-            disabled={!hasInput || change < 0}
+            disabled={disabled || !hasInput || change < 0}
             onClick={() =>
               method === 'mixed' ? onPay('mixed', receivedNum, cardNum) : onPay('cash', receivedNum)
             }
@@ -188,7 +188,7 @@ export default function PaymentForm({
             </button>
             <button
               className="btn btn--primary"
-              disabled={!(cardNum > 0) || cardNum >= total}
+              disabled={disabled || !(cardNum > 0) || cardNum >= total}
               onClick={() => setMixedStep('cash')}
             >
               Дальше

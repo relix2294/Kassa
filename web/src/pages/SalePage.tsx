@@ -7,6 +7,7 @@ import { api } from '../api';
 import type { Product } from '../types';
 import { addToCart, cartTotal, clearCart, removeLine, setQty, formatQty, lineTotal, lineHasDiscount } from '../cart';
 import { completeSale } from '../sync';
+import { genId } from '../id';
 import { useCurrentUser } from '../session';
 import { useShift, refreshShift, openShift } from '../shift';
 import { useIsDesktop } from '../useMedia';
@@ -32,6 +33,12 @@ export default function SalePage() {
   const [qtyEdit, setQtyEdit] = useState<CartLine | null>(null);
   const [returnOpen, setReturnOpen] = useState(false);
   const [changeDue, setChangeDue] = useState<number | null>(null);
+  // Чек проводится прямо сейчас — кнопки оплаты заблокированы (защита от
+  // двойного нажатия). Ref — мгновенная блокировка, state — для отрисовки.
+  const payingRef = useRef(false);
+  const [paying, setPaying] = useState(false);
+  // Номер текущего чека (client_id): один на корзину, сбрасывается после оплаты.
+  const saleIdRef = useRef<string | null>(null);
   // Счётчик обновления списка последних чеков — растёт после каждой продажи.
   const [saleTick, setSaleTick] = useState(0);
   const [askClear, setAskClear] = useState(false);
@@ -161,12 +168,22 @@ export default function SalePage() {
   }
 
   async function pay(method: 'cash' | 'card' | 'mixed', received?: number, cardAmount?: number) {
+    // Один чек — одно проведение. Пока чек проводится (бывает, интернет
+    // думает пару секунд), повторные нажатия игнорируем: раньше каждое нажатие
+    // создавало НОВЫЙ чек, и покупка пробивалась дважды.
+    if (payingRef.current) return;
+    payingRef.current = true;
+    setPaying(true);
+    // Номер чека — один на корзину: даже если отправка повторится, сервер
+    // увидит тот же номер и второй раз не проведёт.
+    if (!saleIdRef.current) saleIdRef.current = genId();
     // Сдача считается от наличной части: для смешанной это total минус карта.
     const cashDue = method === 'mixed' ? total - (cardAmount ?? 0) : method === 'cash' ? total : 0;
     const due = received != null && cashDue > 0 ? Number((received - cashDue).toFixed(2)) : 0;
     try {
       const items = lines.map((l) => ({ product_id: l.product_id, qty: l.qty, expected_price: l.unit_price }));
-      const r = await completeSale(items, method, received, shift?.id, cardAmount);
+      const r = await completeSale(items, method, received, shift?.id, cardAmount, saleIdRef.current);
+      saleIdRef.current = null;
       await clearCart();
       setPayOpen(false);
       setSaleTick((n) => n + 1); // обновить список последних чеков
@@ -177,6 +194,9 @@ export default function SalePage() {
       else flash(r.queued ? 'Нет сети — чек в очереди' : 'Оплачено ✓');
     } catch (e: any) {
       flash(`Ошибка: ${e.message}`);
+    } finally {
+      payingRef.current = false;
+      setPaying(false);
     }
   }
 
@@ -309,7 +329,7 @@ export default function SalePage() {
           </div>
 
           <aside className="sale-side">
-            <PaymentForm total={total} disabled={lines.length === 0} onPay={pay} />
+            <PaymentForm total={total} disabled={lines.length === 0 || paying} onPay={pay} />
             <div className="hotkeys">
               <span>
                 <kbd>F2</kbd> оплата
@@ -364,7 +384,7 @@ export default function SalePage() {
       {payOpen && !isDesktop && (
         <div className="modal-backdrop" onClick={() => setPayOpen(false)}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <PaymentForm total={total} onPay={pay} onCancel={() => setPayOpen(false)} />
+            <PaymentForm total={total} disabled={paying} onPay={pay} onCancel={() => setPayOpen(false)} />
           </div>
         </div>
       )}

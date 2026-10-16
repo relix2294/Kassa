@@ -76,7 +76,7 @@ dashboardRouter.get('/balance', async (_req, res) => {
          (SELECT COALESCE(SUM(total),0) FROM returns
             WHERE created_at >= ${TODAY} AND created_at < ${TOMORROW}) AS refunds,
          (SELECT COALESCE(SUM(amount),0) FROM cash_withdrawals
-            WHERE created_at >= ${TODAY} AND created_at < ${TOMORROW}) AS withdrawn,
+            WHERE amount > 0 AND created_at >= ${TODAY} AND created_at < ${TOMORROW}) AS withdrawn,
          (SELECT COALESCE(SUM(amount),0) FROM expenses
             WHERE status='approved' AND paid_from='register'
               AND created_at >= ${TODAY} AND created_at < ${TOMORROW}) AS expenses_register,

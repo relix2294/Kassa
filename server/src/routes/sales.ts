@@ -303,6 +303,13 @@ salesRouter.post('/', async (req, res) => {
   } catch (err: any) {
     if (err?.status === 400) return res.status(400).json({ error: err.message });
     if (err?.status === 409) return res.status(409).json({ error: err.message });
+    // Тот же чек пришёл дважды одновременно (двойной тап/повтор при обрыве):
+    // второй упирается в уникальный client_id — отдаём уже проведённый чек,
+    // транзакция второго откатилась целиком (склад не списан дважды).
+    if (err?.code === '23505' && client_id) {
+      const existing = await query(`SELECT * FROM sales WHERE client_id = $1`, [client_id]);
+      if (existing.length > 0) return res.status(200).json({ sale: saleFor(req, existing[0]), duplicate: true });
+    }
     console.error('Ошибка продажи:', err);
     res.status(500).json({ error: 'internal' });
   }

@@ -226,6 +226,12 @@ export async function notifyWithdraw(o: { userId: string; amount: number; kind: 
   await sendTelegram(`🏧 <b>Изъятие из кассы</b>\n${esc(who)}: ${money(o.amount)} ${o.kind === 'wallet' ? 'безнал' : 'наличные'}${o.note ? ` · ${esc(o.note)}` : ''}`);
 }
 
+export async function notifyDeposit(o: { userId: string; amount: number; kind: 'cash' | 'wallet'; note?: string | null }): Promise<void> {
+  if (!telegramEnabled()) return;
+  const who = await nameOf(o.userId);
+  await sendTelegram(`🪙 <b>Внесено в кассу</b> (с рук)\n${esc(who)}: ${money(o.amount)} ${o.kind === 'wallet' ? 'безнал' : 'наличные'}${o.note ? ` · ${esc(o.note)}` : ''}`);
+}
+
 export async function notifyExpense(o: { userId: string; amount: number; category: string; paidFrom: string; approved?: boolean }): Promise<void> {
   if (!telegramEnabled()) return;
   const who = await nameOf(o.userId);

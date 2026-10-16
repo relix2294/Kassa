@@ -137,8 +137,14 @@ export const api = {
   myShiftRequest: () => req<{ request: any | null }>('/shifts/my-request'),
   cancelShiftRequest: (id: string) => req<{ ok: boolean }>(`/shifts/requests/${id}/cancel`, { method: 'POST' }),
   shiftRequests: () => req<any[]>('/shifts/requests'),
-  approveShiftRequest: (id: string) =>
-    req<{ ok: boolean; kind: 'open' | 'close'; shift: any }>(`/shifts/requests/${id}/approve`, { method: 'POST' }),
+  // as_deposit: лишнее при приёме кассы — это размен с рук владельца (не излишек).
+  approveShiftRequest: (id: string, opts?: { as_deposit?: boolean }) =>
+    req<{ ok: boolean; kind: 'open' | 'close'; shift: any }>(`/shifts/requests/${id}/approve`, {
+      method: 'POST', body: JSON.stringify(opts ?? {}),
+    }),
+  // Внести в кассу размен (сдачу) из денег на руках — обратное изъятию.
+  depositCash: (amount: number, kind: 'cash' | 'wallet', note?: string) =>
+    req<{ ok: boolean }>('/shifts/deposit', { method: 'POST', body: JSON.stringify({ amount, kind, note }) }),
   rejectShiftRequest: (id: string) => req<{ ok: boolean }>(`/shifts/requests/${id}/reject`, { method: 'POST' }),
   openShifts: () => req<any[]>('/shifts/open'),
   listShifts: (limit = 100) => req<any[]>(`/shifts?limit=${limit}`),
@@ -287,7 +293,7 @@ export const api = {
 export interface LedgerRow {
   id: string;
   at: string;
-  type: 'withdrawal' | 'expense' | 'supplier' | 'adjustment';
+  type: 'withdrawal' | 'deposit' | 'expense' | 'supplier' | 'adjustment';
   title: string;
   note: string | null;
   who: string;
@@ -299,6 +305,7 @@ export interface LedgerRow {
 }
 export interface LedgerTotals {
   withdrawn_cash: number; withdrawn_wallet: number; withdrawn: number;
+  deposited_cash: number; deposited_wallet: number; deposited: number;
   expenses_hand: number; expenses_register: number;
   supplier_hand: number; supplier_cash: number; supplier_wallet: number; supplier_external: number;
   adjustments: number; hand_change: number; unassigned: number;

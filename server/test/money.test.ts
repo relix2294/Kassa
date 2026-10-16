@@ -551,6 +551,74 @@ if (!haveDb) {
     assert.equal(b.hands_total, 140, 'на руках 180 − 40 «оплатили сразу» с рук');
   });
 
+  test('утро: размен с рук в закрытую кассу — Эрач принимает без «излишка», на руках меньше', async () => {
+    const o = await login('owner', '1234');
+    const c = await login('kassir', '5678');
+    await addProduct('Соль', 100, 70, 10, 'D1');
+    const shift = await openShift(c);
+    await api(c, '/sales', 'POST', {
+      client_id: 'd1-sale', items: [{ barcode: 'D1', qty: 3 }],
+      payment_method: 'cash', cash_received: 300, shift_id: shift,
+    });
+    await api(c, '/shifts/close', 'POST', { counted_cash: 300, counted_wallet: 0 });
+    await api(o, '/shifts/withdraw', 'POST', { amount: 300, kind: 'cash' });
+
+    const tooMuch = await api(o, '/shifts/deposit', 'POST', { amount: 500, kind: 'cash' });
+    assert.equal(tooMuch.status, 400, 'больше, чем на руках, внести нельзя');
+
+    const d = await api(o, '/shifts/deposit', 'POST', { amount: 60, kind: 'cash' });
+    assert.equal(d.status, 201);
+    let b = (await api(o, '/dashboard/balance')).body;
+    assert.equal(b.till.cash, 60, 'в ящике размен 60');
+    assert.equal(b.hands_total, 240, 'на руках 300 − 60');
+    assert.equal(b.total_cash, 300, 'всего денег не изменилось');
+
+    const open = await api(c, '/shifts/open', 'POST', { opening_cash: 60, opening_wallet: 0 });
+    assert.equal(open.status, 201, 'кассир принимает 60 — сходится, без запроса владельцу');
+
+    const l = (await api(o, '/dashboard/ledger')).body;
+    const dep = l.rows.find((r: any) => r.type === 'deposit');
+    assert.equal(dep.amount, 60);
+    assert.equal(dep.hand_effect, -60, 'размен уменьшает «на руках»');
+    assert.equal(l.on_hand, 240);
+  });
+
+  test('кассир принял кассу с лишними 60 — владелец одобряет «это размен с моих рук»', async () => {
+    const o = await login('owner', '1234');
+    const c = await login('kassir', '5678');
+    await addProduct('Перец', 100, 70, 10, 'D2');
+    const shift = await openShift(c);
+    await api(c, '/sales', 'POST', {
+      client_id: 'd2-sale', items: [{ barcode: 'D2', qty: 2 }],
+      payment_method: 'cash', cash_received: 200, shift_id: shift,
+    });
+    await api(c, '/shifts/close', 'POST', { counted_cash: 200, counted_wallet: 0 });
+    await api(o, '/shifts/withdraw', 'POST', { amount: 200, kind: 'cash' });
+
+    const open = await api(c, '/shifts/open', 'POST', { opening_cash: 60, opening_wallet: 0 });
+    assert.equal(open.status, 202, '+60 к пустой кассе — нужен владелец');
+    const appr = await api(o, `/shifts/requests/${open.body.request.id}/approve`, 'POST', { as_deposit: true });
+    assert.equal(appr.status, 200);
+    assert.equal(Number(appr.body.shift.opening_expected), 60, 'смена открыта без расхождения');
+    const b = (await api(o, '/dashboard/balance')).body;
+    assert.equal(b.till.cash, 60);
+    assert.equal(b.hands_total, 140, 'размен 60 ушёл с рук владельца');
+  });
+
+  test('двойная отправка одного чека одновременно — проводится один раз', async () => {
+    const o = await login('owner', '1234');
+    await addProduct('Попкорн', 1, 0.5, 10, 'D3');
+    const shift = await openShift(o);
+    const body = { client_id: 'same-cart-1', items: [{ barcode: 'D3', qty: 1 }], payment_method: 'cash', cash_received: 1, shift_id: shift };
+    const [a, b2] = await Promise.all([api(o, '/sales', 'POST', body), api(o, '/sales', 'POST', body)]);
+    assert.ok([200, 201].includes(a.status) && [200, 201].includes(b2.status), `оба ответа успешны: ${a.status}/${b2.status}`);
+    assert.equal(a.body.sale.id, b2.body.sale.id, 'это один и тот же чек');
+    const cnt = await db().query(`SELECT COUNT(*)::int AS n FROM sales WHERE client_id = 'same-cart-1'`);
+    assert.equal(cnt.rows[0].n, 1, 'в базе один чек');
+    const st = await db().query(`SELECT stock FROM products WHERE barcode = 'D3'`);
+    assert.equal(Number(st.rows[0].stock), 9, 'товар списан один раз');
+  });
+
   test('защита входа: после серии неверных PIN — 429 (не даём перебирать)', async () => {
     const body = JSON.stringify({ username: 'ratelimit_probe', pin: '0000' });
     const hit = () => fetch(`${BASE}/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body });

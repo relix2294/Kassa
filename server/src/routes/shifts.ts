@@ -3,7 +3,7 @@ import { query } from '../db.js';
 import { writeLog } from '../lib/log.js';
 import { broadcast } from '../lib/realtime.js';
 import { requireOwner } from '../lib/auth.js';
-import { notifyShiftOpen, sendShiftCloseReport, notifyWithdraw, notifyRequest } from '../lib/telegram.js';
+import { notifyDeposit, notifyShiftOpen, sendShiftCloseReport, notifyWithdraw, notifyRequest } from '../lib/telegram.js';
 
 export const shiftsRouter = Router();
 
@@ -226,8 +226,9 @@ shiftsRouter.get('/current', async (req, res) => {
          (SELECT COALESCE(SUM(COALESCE(cash_amount, total)),0) FROM sales WHERE shift_id = $1) AS cash_sales,
          (SELECT COALESCE(SUM(COALESCE(card_amount, 0)),0) FROM sales WHERE shift_id = $1) AS card_sales,
          (SELECT COALESCE(SUM(total),0) FROM returns WHERE shift_id = $1) AS refunds,
-         (SELECT COALESCE(SUM(amount),0) FROM cash_withdrawals WHERE shift_id = $1 AND kind='cash') AS withdrawn,
-         (SELECT COALESCE(SUM(amount),0) FROM cash_withdrawals WHERE shift_id = $1 AND kind='wallet') AS wallet_withdrawn,
+         (SELECT COALESCE(SUM(amount),0) FROM cash_withdrawals WHERE shift_id = $1 AND kind='cash' AND amount > 0) AS withdrawn,
+         (SELECT COALESCE(SUM(amount),0) FROM cash_withdrawals WHERE shift_id = $1 AND kind='wallet' AND amount > 0) AS wallet_withdrawn,
+         (SELECT COALESCE(-SUM(amount),0) FROM cash_withdrawals WHERE shift_id = $1 AND amount < 0) AS deposited,
          (SELECT COALESCE(SUM(amount),0) FROM expenses WHERE shift_id = $1 AND status='approved' AND paid_from='register' AND kind='cash') AS spent_cash,
          (SELECT COALESCE(SUM(amount),0) FROM expenses WHERE shift_id = $1 AND status='approved' AND paid_from='register' AND kind='wallet') AS spent_wallet,
          (SELECT COALESCE(SUM(amount),0) FROM supplier_payments WHERE shift_id = $1 AND source='cash') AS supplier_cash,
@@ -369,6 +370,42 @@ shiftsRouter.post('/withdraw', requireOwner, async (req, res) => {
   else broadcast('data_updated', { kind: 'withdraw' });
   void notifyWithdraw({ userId: req.user!.id, amount, kind, note });
   res.status(201).json({ ok: true });
+});
+
+// Внести в кассу размен (сдачу) из денег на руках владельца — обратное изъятию:
+// «на руках» −сумма, касса +сумма. Пишем в таблицу изъятий с ОТРИЦАТЕЛЬНОЙ
+// суммой: касса смены, закрытый ящик и подотчёт учитывают это автоматически
+// и одинаково. Смена открыта — к ней; закрыта — в закрытый ящик (к утру).
+async function depositToTill(userId: string, amount: number, kind: 'cash' | 'wallet', note: string | null) {
+  const acc = await computeAccountable(userId);
+  if (amount > acc.on_hand + 1e-9) {
+    throw { status: 400, message: `На руках только ${acc.on_hand.toFixed(2)} — внести ${amount.toFixed(2)} нельзя` };
+  }
+  const shift = await getAnyOpenShift();
+  await query(`INSERT INTO cash_withdrawals (shift_id, amount, note, kind, user_id) VALUES ($1,$2,$3,$4,$5)`,
+    [shift?.id ?? null, -amount, note, kind, userId]);
+  await writeLog({
+    type: 'cash_deposit', entity: 'shift', entityId: shift?.id ?? null, userId,
+    details: { amount, kind, note, closed_till: !shift || undefined },
+  });
+  if (shift) broadcast('shift', shift);
+  else broadcast('data_updated', { kind: 'deposit' });
+  void notifyDeposit({ userId, amount, kind, note });
+  return shift;
+}
+
+shiftsRouter.post('/deposit', requireOwner, async (req, res) => {
+  const amount = Number(req.body?.amount);
+  const kind = req.body?.kind === 'wallet' ? 'wallet' : 'cash';
+  const note = String(req.body?.note ?? '').trim() || 'размен на сдачу';
+  if (!(amount > 0)) return res.status(400).json({ error: 'Сумма должна быть больше нуля' });
+  try {
+    await depositToTill(req.user!.id, amount, kind, note);
+    res.status(201).json({ ok: true });
+  } catch (err: any) {
+    if (err?.status) return res.status(err.status).json({ error: err.message });
+    throw err;
+  }
 });
 
 // Закрыть смену: сверяем ОБЕ кассы — наличные и безнал.
@@ -530,6 +567,21 @@ shiftsRouter.post('/requests/:id/approve', requireOwner, async (req, res) => {
         error: 'shift_already_open',
         message: `Смена уже открыта (${anyOpen.full_name || anyOpen.username}).`,
       });
+    }
+    // «Это размен с моих рук»: лишнее при приёме — не излишек из ниоткуда, а
+    // деньги, которые положили на сдачу. Вносим их в кассу с рук владельца —
+    // тогда касса принимается без расхождения, а «на руках» уменьшается.
+    if (req.body?.as_deposit) {
+      const before = await getClosedTill();
+      const dCash = Number((Number(r.counted_cash) - before.cash).toFixed(2));
+      const dWallet = Number((Number(r.counted_wallet) - before.wallet).toFixed(2));
+      try {
+        if (dCash > 0) await depositToTill(req.user!.id, dCash, 'cash', 'размен на сдачу (при приёме кассы)');
+        if (dWallet > 0) await depositToTill(req.user!.id, dWallet, 'wallet', 'размен на сдачу (при приёме кассы)');
+      } catch (err: any) {
+        if (err?.status) return res.status(err.status).json({ error: err.message });
+        throw err;
+      }
     }
     const prev = await getClosedTill();
     const shift = await createOpenShift(

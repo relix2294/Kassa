@@ -26,14 +26,14 @@ export default function ShiftRequests() {
 
   if (rows.length === 0) return null;
 
-  async function approve(id: string) {
+  async function approve(id: string, asDeposit = false) {
     setBusyId(id); setErr(null);
     try {
-      await api.approveShiftRequest(id);
+      await api.approveShiftRequest(id, asDeposit ? { as_deposit: true } : undefined);
       await refreshShift();
       load();
     } catch (e: any) {
-      setErr(e?.body?.message || e?.message || 'Не удалось подтвердить');
+      setErr(e?.body?.error || e?.body?.message || e?.message || 'Не удалось подтвердить');
       load();
     } finally { setBusyId(null); }
   }
@@ -79,8 +79,15 @@ export default function ShiftRequests() {
               </div>
               <div className="row" style={{ gap: 8 }}>
                 <button className="btn" disabled={busyId === r.id} onClick={() => reject(r.id)}>Отклонить</button>
+                {/* Утром в ящик кладут размен на сдачу — это не «излишек из ниоткуда»,
+                    а деньги с рук владельца: записываем их как внесение в кассу. */}
+                {isOpen && (cd > 0 || wd > 0) && (
+                  <button className="btn btn--ghost" disabled={busyId === r.id} onClick={() => approve(r.id, true)}>
+                    Это размен с моих рук (+{Number((Math.max(cd, 0) + Math.max(wd, 0)).toFixed(2))})
+                  </button>
+                )}
                 <button className="btn btn--primary" disabled={busyId === r.id} onClick={() => approve(r.id)}>
-                  Дать добро
+                  {isOpen && (cd > 0 || wd > 0) ? 'Дать добро (излишек)' : 'Дать добро'}
                 </button>
               </div>
             </div>

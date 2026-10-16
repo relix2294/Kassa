@@ -13,6 +13,7 @@ const signed = (n: number) => `${n > 0 ? '+' : n < 0 ? '−' : ''}${money(Math.a
 function sourceLabel(r: LedgerRow): string {
   switch (r.type) {
     case 'withdrawal': return r.source === 'wallet' ? 'из кассы · безнал → на руки' : 'из кассы · наличные → на руки';
+    case 'deposit': return r.source === 'wallet' ? 'с рук → в кассу · безнал' : 'с рук → в кассу · наличные';
     case 'expense': return r.source === 'hand' ? 'из подотчёта (с рук)' : 'из кассы';
     case 'supplier':
       if (r.source === 'hand') return 'из подотчёта (с рук)';
@@ -92,6 +93,7 @@ export default function HandsLedger({ refreshKey, children }: { refreshKey: unkn
           sub={`наличные ${money(t.withdrawn_cash)} · безнал ${money(t.withdrawn_wallet)}`}
           value={signed(t.withdrawn)}
         />
+        {t.deposited > 0 && <Line label="− Внесено в кассу (размен)" value={signed(-t.deposited)} />}
         <Line label="− Расходы из подотчёта" value={signed(-t.expenses_hand)} />
         <Line label="− Оплаты поставщикам из подотчёта" value={signed(-t.supplier_hand)} />
         {!sinceMode && t.adjustments !== 0 && <Line label="± Сверки с фактом" value={signed(t.adjustments)} />}

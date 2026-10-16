@@ -9,6 +9,7 @@ import ReturnRequests from '../components/ReturnRequests';
 import ExpenseRequests from '../components/ExpenseRequests';
 import ExpenseModal from '../components/ExpenseModal';
 import { money } from '../components/RangeControl';
+import { useMoneyPlaces } from '../components/MoneySource';
 
 type Stats = { expectedCash: number; expectedWallet: number; stats: any } | null;
 
@@ -23,7 +24,10 @@ export default function ShiftPage() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [withdrawOpen, setWithdrawOpen] = useState(false);
+  const [depositOpen, setDepositOpen] = useState(false);
   const [expenseOpen, setExpenseOpen] = useState(false);
+  // Что должно быть в ящике при приёме кассы (остаток закрытой кассы).
+  const [openExp, setOpenExp] = useState<{ cash: number; wallet: number } | null>(null);
   // Касса при ЗАКРЫТОЙ смене: что осталось в ящике после закрытия и изъятий.
   const [closedTill, setClosedTill] = useState<{ cash: number; wallet: number } | null>(null);
   // Закрытие с расхождением — только после явного подтверждения.
@@ -49,15 +53,21 @@ export default function ShiftPage() {
   useEffect(() => {
     if (mode === 'open') {
       api.expectedOpening().then((r) => {
+        setOpenExp(r);
         setCashIn(r.cash > 0 ? String(r.cash) : '');
         setWalletIn(r.wallet > 0 ? String(r.wallet) : '');
       }).catch(() => {});
     }
   }, [mode]);
 
-  async function doOpen() {
+  // Владелец положил в ящик размен сверх остатка — вносим разницу с его рук,
+  // и касса принимается без «излишка из ниоткуда».
+  const openSurplus = openExp && cashIn.trim() !== '' ? Number(((Number(cashIn) || 0) - openExp.cash).toFixed(2)) : 0;
+
+  async function doOpen(withDeposit = false) {
     setBusy(true); setErr(null);
     try {
+      if (withDeposit && openSurplus > 0) await api.depositCash(openSurplus, 'cash', 'размен на сдачу (при приёме кассы)');
       const res = await openShift(Number(cashIn) || 0, Number(walletIn) || 0);
       if (res.pending) { setPending({ action: 'open', request: res.request, message: res.message }); }
       else { setMode('view'); setCashIn(''); setWalletIn(''); }
@@ -146,6 +156,9 @@ export default function ShiftPage() {
           {user?.role === 'owner' && closedTill && (closedTill.cash > 0 || closedTill.wallet > 0) && (
             <button className="btn btn--ghost" onClick={() => setWithdrawOpen(true)}>Изъять на руки</button>
           )}
+          {user?.role === 'owner' && (
+            <button className="btn btn--ghost" onClick={() => setDepositOpen(true)}>Внести размен (с рук)</button>
+          )}
           <button className="btn btn--primary btn--big" onClick={() => setMode('open')}>Принять кассу</button>
         </div>
       )}
@@ -160,6 +173,14 @@ export default function ShiftPage() {
             <button className="btn" onClick={() => { setMode('view'); setCashIn(''); setWalletIn(''); }} disabled={busy}>Отмена</button>
             <button className="btn btn--primary" onClick={() => doOpen()} disabled={busy}>Принять</button>
           </div>
+          {user?.role === 'owner' && openSurplus > 0 && (
+            <div className="shift-diff">
+              В ящике на <b>{money(openSurplus)}</b> больше, чем осталось с вечера. Положили размен на сдачу?
+              <button className="btn btn--fix" onClick={() => doOpen(true)} disabled={busy}>
+                Принять: +{money(openSurplus)} — это размен с моих рук
+              </button>
+            </div>
+          )}
         </div>
       )}
 
@@ -177,6 +198,7 @@ export default function ShiftPage() {
               <Row label="Возвраты" value={stats.stats.refunds} />
               {Number(stats.stats.withdrawn) > 0 && <Row label="Изъято наличных" value={stats.stats.withdrawn} />}
               {Number(stats.stats.wallet_withdrawn) > 0 && <Row label="Изъято безнал" value={stats.stats.wallet_withdrawn} />}
+              {Number(stats.stats.deposited) > 0 && <Row label="Внесено в кассу (размен)" value={stats.stats.deposited} />}
               {Number(stats.stats.spent_cash) > 0 && <Row label="Расходы наличными" value={stats.stats.spent_cash} />}
               {Number(stats.stats.spent_wallet) > 0 && <Row label="Расходы безнал" value={stats.stats.spent_wallet} />}
               {Number(stats.stats.supplier_cash) > 0 && <Row label="Поставщикам наличными" value={stats.stats.supplier_cash} />}
@@ -188,6 +210,9 @@ export default function ShiftPage() {
           <button className="btn btn--ghost" onClick={() => setExpenseOpen(true)}>➖ Записать расход</button>
           {user?.role === 'owner' && (
             <button className="btn btn--ghost" onClick={() => setWithdrawOpen(true)}>Изъять из кассы</button>
+          )}
+          {user?.role === 'owner' && (
+            <button className="btn btn--ghost" onClick={() => setDepositOpen(true)}>Внести в кассу (с рук)</button>
           )}
           <button className="btn btn--primary btn--big" onClick={() => setMode('close')}>Закрыть смену</button>
         </div>
@@ -204,6 +229,13 @@ export default function ShiftPage() {
           closedTill={!shift}
           onClose={() => setWithdrawOpen(false)}
           onDone={() => { setWithdrawOpen(false); if (shift) loadStats(); else loadClosedTill(); }}
+        />
+      )}
+
+      {depositOpen && (
+        <DepositModal
+          onClose={() => setDepositOpen(false)}
+          onDone={() => { setDepositOpen(false); if (shift) loadStats(); else loadClosedTill(); }}
         />
       )}
 
@@ -307,6 +339,55 @@ function WithdrawModal({ maxCash, maxWallet, closedTill, onClose, onDone }: {
         <div className="row">
           <button className="btn" onClick={onClose} disabled={busy}>Отмена</button>
           <button className="btn btn--primary" onClick={save} disabled={busy}>Изъять</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Внести в кассу с рук — обычно утренний размен на сдачу. Обратное изъятию:
+// «на руках» уменьшается, касса увеличивается, утром сходится без излишка.
+function DepositModal({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
+  const places = useMoneyPlaces(true);
+  const [kind, setKind] = useState<'cash' | 'wallet'>('cash');
+  const [amount, setAmount] = useState('');
+  const [note, setNote] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function save() {
+    const a = Number(amount) || 0;
+    if (!(a > 0)) { setErr('Укажите сумму'); return; }
+    if (places && a > places.onHand) { setErr(`На руках только ${places.onHand.toFixed(2)}`); return; }
+    setBusy(true); setErr(null);
+    try {
+      await api.depositCash(a, kind, note.trim() || undefined);
+      onDone();
+    } catch (e: any) {
+      setErr(e?.body?.error || e?.body?.message || e?.message || 'Не удалось внести');
+    } finally { setBusy(false); }
+  }
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal modal--scroll" onClick={(e) => e.stopPropagation()}>
+        <h2>Внести в кассу (с рук)</h2>
+        <p className="muted">
+          Например, утренний размен на сдачу. Деньги перейдут с рук в кассу: «на руках» станет меньше, в кассе — больше.
+          {places && <> У вас на руках: <b>{money(places.onHand)}</b>.</>}
+        </p>
+        <div className="seg">
+          <button className={`seg__btn ${kind === 'cash' ? 'seg__btn--on' : ''}`} onClick={() => setKind('cash')}>Наличные</button>
+          <button className={`seg__btn ${kind === 'wallet' ? 'seg__btn--on' : ''}`} onClick={() => setKind('wallet')}>Безнал</button>
+        </div>
+        <label className="field"><span>Сколько вносим</span><NumberInput value={amount} onValue={setAmount} autoFocus /></label>
+        <label className="field"><span>Заметка</span>
+          <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="размен на сдачу" />
+        </label>
+        {err && <div className="change change--neg">{err}</div>}
+        <div className="row">
+          <button className="btn" onClick={onClose} disabled={busy}>Отмена</button>
+          <button className="btn btn--primary" onClick={save} disabled={busy}>Внести</button>
         </div>
       </div>
     </div>
