@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import NumberInput from '../components/NumberInput';
 import { api } from '../api';
+import { money } from '../components/RangeControl';
+import { SourcePicker, useMoneyPlaces, tillSub, type MoneyPlaces, type SourceOption } from '../components/MoneySource';
 
 // Поставщики и долги (постоплата): кому и сколько должны, история платежей.
 export default function SuppliersPage() {
@@ -175,35 +177,64 @@ function SupplierDetail({ id, onClose, onChange, onFlash }: {
   );
 }
 
+type PaySource = 'cash' | 'wallet' | 'hand' | 'external';
+
+// Варианты «откуда деньги» для оплаты поставщику — с суммами, что там есть.
+function payOptions(m: MoneyPlaces | null): SourceOption<PaySource>[] {
+  return [
+    { value: 'cash', title: 'Из кассы · нал', sub: tillSub(m, 'cash'), disabled: !!m && m.tillCash <= 0 },
+    { value: 'wallet', title: 'Из кассы · безнал', sub: tillSub(m, 'wallet'), disabled: !!m && m.tillWallet <= 0 },
+    { value: 'hand', title: 'С рук (подотчёт)', sub: m ? `у вас на руках ${money(m.onHand)}` : undefined, disabled: !!m && m.onHand <= 0 },
+    { value: 'external', title: 'Со стороны', sub: 'личные деньги, банк — не из магазина' },
+  ];
+}
+
+function payHint(source: PaySource | null): string | null {
+  if (source === 'external') return 'Деньги не из магазина (банк/личные). Ни кассу, ни «на руках» не трогает — только гасит долг.';
+  if (source === 'hand') return 'Платим из денег, ранее изъятых из кассы на руки. Кассу не трогает, уменьшает «на руках».';
+  if (source === 'cash' || source === 'wallet') return 'Деньги уходят из кассового ящика — касса уменьшится. В прибыль как расход не идёт (товар уже в себестоимости).';
+  return null;
+}
+
 function AddInvoice({ supplierId, onClose, onDone }: { supplierId: string; onClose: () => void; onDone: () => void }) {
   const [total, setTotal] = useState('');
   const [paid, setPaid] = useState('');
   const [note, setNote] = useState('');
+  const [source, setSource] = useState<PaySource | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const places = useMoneyPlaces(true);
 
   const debt = (Number(total) || 0) - (Number(paid) || 0);
+  const paidNow = (Number(paid) || 0) > 0;
 
   async function save() {
     const t = Number(total) || 0;
     const p = Number(paid) || 0;
     if (!(t > 0)) { setErr('Укажите сумму накладной'); return; }
     if (p > t) { setErr('Оплачено больше суммы накладной'); return; }
+    if (p > 0 && !source) { setErr('Выберите, откуда деньги на оплату'); return; }
     setBusy(true); setErr(null);
     try {
-      await api.addInvoice(supplierId, { total: t, paid: p, note: note.trim() || undefined });
+      await api.addInvoice(supplierId, { total: t, paid: p, note: note.trim() || undefined, source: p > 0 ? source! : undefined });
       onDone();
-    } catch (e: any) { setErr(e.message); } finally { setBusy(false); }
+    } catch (e: any) { setErr(e?.body?.error || e?.body?.message || e.message); } finally { setBusy(false); }
   }
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
+      <div className="modal modal--scroll" onClick={(e) => e.stopPropagation()}>
         <h2>Новая накладная</h2>
         <div className="row">
           <label className="field"><span>Сумма накладной</span><NumberInput value={total} onValue={setTotal} autoFocus /></label>
           <label className="field"><span>Оплатили сейчас</span><NumberInput value={paid} onValue={setPaid} placeholder="0" /></label>
         </div>
+        {paidNow && (
+          <>
+            <SourcePicker label="Откуда деньги на оплату" value={source} onChange={setSource} options={payOptions(places)} />
+            {payHint(source) && <p className="hint">{payHint(source)}</p>}
+          </>
+        )}
         <label className="field"><span>Заметка</span>
           <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="напр. Кола, вода — партия" />
         </label>
@@ -215,27 +246,28 @@ function AddInvoice({ supplierId, onClose, onDone }: { supplierId: string; onClo
         {err && <div className="change change--neg">{err}</div>}
         <div className="row">
           <button className="btn" onClick={onClose} disabled={busy}>Отмена</button>
-          <button className="btn btn--primary" onClick={save} disabled={busy}>Сохранить</button>
+          <button className="btn btn--primary" onClick={save} disabled={busy || (paidNow && !source)}>Сохранить</button>
         </div>
       </div>
     </div>
   );
 }
 
-type PaySource = 'cash' | 'wallet' | 'hand' | 'external';
-
 function PayInvoice({ invoice, onClose, onDone }: { invoice: any; onClose: () => void; onDone: () => void }) {
   const [amount, setAmount] = useState('');
   const [note, setNote] = useState('');
-  const [source, setSource] = useState<PaySource>('cash');
+  // Заранее ничего не выбрано — откуда деньги, нажимают сами.
+  const [source, setSource] = useState<PaySource | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const places = useMoneyPlaces(true);
   const remaining = Number(invoice.remaining);
 
   async function save() {
     const a = Number(amount) || 0;
     if (!(a > 0)) { setErr('Укажите сумму'); return; }
     if (a > remaining) { setErr(`Осталось всего ${remaining.toFixed(2)}`); return; }
+    if (!source) { setErr('Выберите, откуда деньги'); return; }
     setBusy(true); setErr(null);
     try {
       await api.payInvoice(invoice.id, { amount: a, note: note.trim() || undefined, source });
@@ -245,26 +277,12 @@ function PayInvoice({ invoice, onClose, onDone }: { invoice: any; onClose: () =>
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
+      <div className="modal modal--scroll" onClick={(e) => e.stopPropagation()}>
         <h2>Оплата поставщику</h2>
         <p className="muted">По накладной осталось: <b>{remaining.toFixed(2)}</b></p>
 
-        <div className="field">
-          <span>Откуда деньги</span>
-          <div className="seg seg--wrap">
-            <button className={`seg__btn ${source === 'cash' ? 'seg__btn--on' : ''}`} onClick={() => setSource('cash')}>Из кассы · нал</button>
-            <button className={`seg__btn ${source === 'wallet' ? 'seg__btn--on' : ''}`} onClick={() => setSource('wallet')}>Из кассы · безнал</button>
-            <button className={`seg__btn ${source === 'hand' ? 'seg__btn--on' : ''}`} onClick={() => setSource('hand')}>Из подотчёта</button>
-            <button className={`seg__btn ${source === 'external' ? 'seg__btn--on' : ''}`} onClick={() => setSource('external')}>Со стороны</button>
-          </div>
-          <p className="hint">
-            {source === 'external'
-              ? 'Оплата не из кассового ящика (банк/перевод/свои). Кассу не трогает — только гасит долг.'
-              : source === 'hand'
-                ? 'Платим из подотчёта — из денег, ранее изъятых из кассы на руки. Кассу не трогает, уменьшает подотчёт.'
-                : 'Деньги уйдут из кассы смены и уменьшат ожидаемый остаток при сверке. В прибыль как расход не идёт (товар уже учтён в себестоимости).'}
-          </p>
-        </div>
+        <SourcePicker value={source} onChange={setSource} options={payOptions(places)} />
+        {payHint(source) && <p className="hint">{payHint(source)}</p>}
 
         <div className="row">
           <button className="btn btn--ghost" onClick={() => setAmount(String(remaining))}>Погасить всё</button>
@@ -276,7 +294,7 @@ function PayInvoice({ invoice, onClose, onDone }: { invoice: any; onClose: () =>
         {err && <div className="change change--neg">{err}</div>}
         <div className="row">
           <button className="btn" onClick={onClose} disabled={busy}>Отмена</button>
-          <button className="btn btn--primary" onClick={save} disabled={busy}>Внести платёж</button>
+          <button className="btn btn--primary" onClick={save} disabled={busy || !source}>Внести платёж</button>
         </div>
       </div>
     </div>

@@ -1256,13 +1256,13 @@ kbd {
 
 /* Окно «Подробнее» баланса: длинная лента подотчёта прокручивается внутри
    окна, верх не уезжает за экран. */
-.modal--wide { max-height: calc(100dvh - 24px); overflow-y: auto; }
+.modal--wide, .modal--scroll { max-height: calc(100dvh - 24px); overflow-y: auto; }
 /* Окно — колонка flex: без этого при ограниченной высоте блоки сжимались бы и
    обрезали содержимое (кнопки внутри становились некликабельны). */
-.modal--wide > * { flex-shrink: 0; }
+.modal--wide > *, .modal--scroll > * { flex-shrink: 0; }
 @media (min-width: 480px) {
   /* По центру экрана целиком: без нижнего отступа, который выталкивал верх окна. */
-  .modal--wide { margin-bottom: 0; max-height: calc(100dvh - 48px); }
+  .modal--wide, .modal--scroll { margin-bottom: 0; max-height: calc(100dvh - 48px); }
 }
 
 /* Подотчёт в «Подробнее»: итог «откуда на руках» и лента всех движений */
@@ -1286,3 +1286,20 @@ kbd {
 .ledger__diff--ok { background: rgba(52, 211, 153, 0.14); color: var(--ok); font-weight: 700; }
 .ledger__diff--short { background: rgba(248, 113, 113, 0.12); }
 .ledger__diff--over { background: rgba(251, 191, 36, 0.14); }
+
+/* Выбор «откуда деньги»: крупные кнопки, без выбора по умолчанию */
+.src-pick { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+.src-pick__opt {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 3px; text-align: left;
+  padding: 11px 12px; border-radius: 12px; border: 1.5px solid var(--border);
+  background: var(--surface); color: var(--text); font: inherit; cursor: pointer; min-width: 0;
+}
+.src-pick__opt b { font-size: 15px; }
+.src-pick__opt span { font-size: 12.5px; color: var(--muted); overflow-wrap: anywhere; }
+.src-pick__opt--on { border-color: var(--primary); background: rgba(79, 157, 255, 0.14); box-shadow: 0 0 0 1px var(--primary) inset; }
+.src-pick__opt:disabled { opacity: 0.45; cursor: not-allowed; }
+.src-pick__need { margin-top: 6px; font-size: 13px; font-weight: 600; color: var(--off); }
+
+/* Экран «Смена»: сколько осталось в ящике при закрытой смене */
+.closed-till { display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; margin: 8px 0; border-radius: 12px; background: var(--surface-2); }
+.closed-till__sum { font-size: 16px; }

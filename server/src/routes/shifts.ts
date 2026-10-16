@@ -34,18 +34,75 @@ export async function getAnyOpenShift() {
   return rows[0] ?? null;
 }
 
-// Остаток от прошлой закрытой смены — ожидаемый старт следующей. Деньги
-// физически остаются: и наличные в ящике, и баланс на кошельках (безнал).
-export async function getLastClosing(): Promise<{ cash: number; wallet: number }> {
+// Остаток от прошлой закрытой смены — то, что пересчитали при закрытии.
+export async function getLastClosing(): Promise<{ cash: number; wallet: number; closed_at: string | null }> {
   const rows = await query(
-    `SELECT counted_cash, counted_wallet FROM shifts
+    `SELECT counted_cash, counted_wallet, closed_at FROM shifts
       WHERE status = 'closed' AND counted_cash IS NOT NULL
       ORDER BY closed_at DESC LIMIT 1`,
   );
   return {
     cash: rows.length ? Number(rows[0].counted_cash) : 0,
     wallet: rows.length ? Number(rows[0].counted_wallet ?? 0) : 0,
+    closed_at: rows.length ? rows[0].closed_at : null,
   };
+}
+
+// Касса, когда смена ЗАКРЫТА: ящик никуда не делся. В нём то, что пересчитали
+// при закрытии, минус всё, что владелец взял из него ПОСЛЕ закрытия: изъятия на
+// руки, расходы «из кассы», оплаты поставщикам «из кассы». Такие движения пишутся
+// без смены (shift_id пуст) и позже последнего закрытия. Это и есть стартовый
+// остаток следующей смены: забрали всё — касса 0, утром принимают 0.
+export async function getClosedTill(): Promise<{ cash: number; wallet: number }> {
+  const last = await getLastClosing();
+  const after = last.closed_at ? `AND created_at > $1` : '';
+  const params = last.closed_at ? [last.closed_at] : [];
+  const r = (
+    await query<Record<string, number>>(
+      `SELECT
+         (SELECT COALESCE(SUM(amount),0) FROM cash_withdrawals
+            WHERE shift_id IS NULL AND kind = 'cash' ${after}) AS wd_cash,
+         (SELECT COALESCE(SUM(amount),0) FROM cash_withdrawals
+            WHERE shift_id IS NULL AND kind = 'wallet' ${after}) AS wd_wallet,
+         (SELECT COALESCE(SUM(amount),0) FROM expenses
+            WHERE shift_id IS NULL AND status = 'approved' AND paid_from = 'register' AND kind = 'cash' ${after}) AS ex_cash,
+         (SELECT COALESCE(SUM(amount),0) FROM expenses
+            WHERE shift_id IS NULL AND status = 'approved' AND paid_from = 'register' AND kind = 'wallet' ${after}) AS ex_wallet,
+         (SELECT COALESCE(SUM(amount),0) FROM supplier_payments
+            WHERE shift_id IS NULL AND source = 'cash' ${after}) AS sp_cash,
+         (SELECT COALESCE(SUM(amount),0) FROM supplier_payments
+            WHERE shift_id IS NULL AND source = 'wallet' ${after}) AS sp_wallet`,
+      params,
+    )
+  )[0];
+  return {
+    cash: Number((last.cash - Number(r.wd_cash) - Number(r.ex_cash) - Number(r.sp_cash)).toFixed(2)),
+    wallet: Number((last.wallet - Number(r.wd_wallet) - Number(r.ex_wallet) - Number(r.sp_wallet)).toFixed(2)),
+  };
+}
+
+// Сколько сейчас реально в кассе по виду денег и к какой смене писать движение:
+// открыта смена (чья угодно — касса одна) → её живой расчёт и её id; закрыта →
+// остаток закрытой кассы и без смены. Единое правило для изъятий, расходов и
+// оплат поставщикам «из кассы».
+export async function tillAvailable(kind: 'cash' | 'wallet'): Promise<{ avail: number; shift: any | null }> {
+  const shift = await getAnyOpenShift();
+  if (shift) {
+    const e = await computeExpected(shift);
+    return { avail: kind === 'wallet' ? e.wallet : e.cash, shift };
+  }
+  const c = await getClosedTill();
+  return { avail: kind === 'wallet' ? c.wallet : c.cash, shift: null };
+}
+
+// Понятный текст отказа «в кассе не хватает».
+export function tillShortMessage(kind: 'cash' | 'wallet', avail: number, amount: number, shift: any | null, what: string): string {
+  const label = kind === 'wallet' ? 'на кошельках' : 'наличными';
+  if (!shift) {
+    return `Смена закрыта — в кассе ${label} ${avail.toFixed(2)}, ${what} ${amount.toFixed(2)} нельзя. ` +
+      `Если деньги изъяли на руки — выберите «с рук (подотчёт)».`;
+  }
+  return `В кассе ${label} только ${avail.toFixed(2)} — ${what} ${amount.toFixed(2)} нельзя`;
 }
 
 // Сколько должно быть по чекам этой смены — отдельно наличные и безнал (кошельки).
@@ -95,8 +152,8 @@ export async function computeExpected(shift: any): Promise<{ cash: number; walle
 }
 
 // «Деньги в кассе прямо сейчас» (нал + безнал). Если смена открыта — это её
-// живой расчёт ожидаемого; если открытой смены нет — остаток от последней
-// закрытой смены (деньги физически остались в ящике и на кошельках).
+// живой расчёт ожидаемого; если открытой смены нет — остаток закрытой кассы
+// (пересчитано при закрытии минус то, что после этого изъяли/потратили).
 export async function getCurrentTill(): Promise<{
   cash: number; wallet: number; shift: any | null;
 }> {
@@ -105,8 +162,8 @@ export async function getCurrentTill(): Promise<{
     const exp = await computeExpected(shift);
     return { cash: exp.cash, wallet: exp.wallet, shift };
   }
-  const last = await getLastClosing();
-  return { cash: last.cash, wallet: last.wallet, shift: null };
+  const closed = await getClosedTill();
+  return { cash: closed.cash, wallet: closed.wallet, shift: null };
 }
 
 // Подотчёт сотрудника («на руках») — сквозной, не по сменам: сколько человек
@@ -183,7 +240,7 @@ shiftsRouter.get('/current', async (req, res) => {
 
 // Остаток на старте смены (нал + безнал) для приёма кассы.
 shiftsRouter.get('/expected-opening', async (_req, res) => {
-  res.json(await getLastClosing());
+  res.json(await getClosedTill());
 });
 
 // Открыть смену. Принимаем ОБЕ кассы: наличные и безнал (баланс кошельков).
@@ -201,7 +258,7 @@ shiftsRouter.post('/open', async (req, res) => {
     });
   }
 
-  const prev = await getLastClosing();
+  const prev = await getClosedTill();
   const cashDiff0 = Number((openingCash - prev.cash).toFixed(2));
   const walletDiff0 = Number((openingWallet - prev.wallet).toFixed(2));
   const mismatch = cashDiff0 !== 0 || walletDiff0 !== 0;
@@ -295,20 +352,21 @@ shiftsRouter.post('/withdraw', requireOwner, async (req, res) => {
   const note = String(req.body?.note ?? '').trim() || null;
   if (!(amount > 0)) return res.status(400).json({ error: 'Сумма изъятия должна быть больше нуля' });
 
-  const shift = await getAnyOpenShift();
-  if (!shift) return res.status(409).json({ error: 'no_open_shift', message: 'Нет открытой смены' });
-
-  const exp = await computeExpected(shift);
-  const avail = kind === 'wallet' ? exp.wallet : exp.cash;
-  const label = kind === 'wallet' ? 'на кошельках' : 'наличными';
+  // Изымать можно и при открытой смене, и из закрытой кассы (вечером, после
+  // закрытия смены кассиром) — отдельную смену ради изъятия открывать не нужно.
+  const { avail, shift } = await tillAvailable(kind);
   if (amount > avail + 1e-9) {
-    return res.status(400).json({ error: `В кассе ${label} только ${avail.toFixed(2)} — нельзя изъять ${amount.toFixed(2)}` });
+    return res.status(400).json({ error: tillShortMessage(kind, avail, amount, shift, 'изъять') });
   }
 
   await query(`INSERT INTO cash_withdrawals (shift_id, amount, note, kind, user_id) VALUES ($1,$2,$3,$4,$5)`,
-    [shift.id, amount, note, kind, req.user!.id]);
-  await writeLog({ type: 'cash_withdraw', entity: 'shift', entityId: shift.id, userId: req.user!.id, details: { amount, kind, note } });
-  broadcast('shift', shift);
+    [shift?.id ?? null, amount, note, kind, req.user!.id]);
+  await writeLog({
+    type: 'cash_withdraw', entity: 'shift', entityId: shift?.id ?? null, userId: req.user!.id,
+    details: { amount, kind, note, closed_till: !shift || undefined },
+  });
+  if (shift) broadcast('shift', shift);
+  else broadcast('data_updated', { kind: 'withdraw' });
   void notifyWithdraw({ userId: req.user!.id, amount, kind, note });
   res.status(201).json({ ok: true });
 });
@@ -473,7 +531,7 @@ shiftsRouter.post('/requests/:id/approve', requireOwner, async (req, res) => {
         message: `Смена уже открыта (${anyOpen.full_name || anyOpen.username}).`,
       });
     }
-    const prev = await getLastClosing();
+    const prev = await getClosedTill();
     const shift = await createOpenShift(
       r.user_id, Number(r.counted_cash), Number(r.counted_wallet), prev, approver,
     );

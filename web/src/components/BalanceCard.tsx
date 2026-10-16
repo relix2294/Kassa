@@ -36,7 +36,7 @@ export default function BalanceCard() {
           <span className="balance-chip">💵 Касса: <b>{money(b.till.total)}</b></span>
           {b.hands_total !== 0 && <span className="balance-chip">✋ На руках: <b>{money(b.hands_total)}</b></span>}
         </div>
-        {!b.till.has_open_shift && <div className="balance-card__hint">Смена закрыта — касса по последней сверке</div>}
+        {!b.till.has_open_shift && <div className="balance-card__hint">Смена закрыта — в кассе то, что осталось в ящике после закрытия и изъятий</div>}
       </button>
 
       {open && <BalanceDetail b={b} onClose={() => setOpen(false)} onReload={load} />}

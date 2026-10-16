@@ -3,6 +3,8 @@ import NumberInput from './NumberInput';
 import ShiftWaiting from './ShiftWaiting';
 import { api } from '../api';
 import { useCurrentUser } from '../session';
+import { money } from './RangeControl';
+import { SourcePicker, useMoneyPlaces, tillSub } from './MoneySource';
 
 export const EXPENSE_CATEGORIES = ['Аренда', 'Электричество', 'Вода', 'Зарплата', 'Хозтовары', 'Прочее'];
 
@@ -13,9 +15,11 @@ export default function ExpenseModal({ onClose, onDone }: { onClose: () => void;
   const isOwner = user?.role === 'owner';
   const [amount, setAmount] = useState('');
   const [kind, setKind] = useState<'cash' | 'wallet'>('cash');
-  // Откуда платим: из кассы (ящик) или из подотчёта (изъятые на руки деньги).
-  // Подотчёт — только у владельца/директора (изъятия — его право).
-  const [paidFrom, setPaidFrom] = useState<'register' | 'hand'>('register');
+  // Откуда платим: из кассы (ящик) или с рук (подотчёт — изъятые на руки).
+  // Подотчёт — только у владельца/директора (изъятия — его право). Заранее
+  // ничего не выбрано: владелец нажимает сам, чтобы не списать «по привычке».
+  const [paidFrom, setPaidFrom] = useState<'register' | 'hand' | null>(null);
+  const places = useMoneyPlaces(isOwner);
   const [category, setCategory] = useState('');
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
@@ -26,11 +30,12 @@ export default function ExpenseModal({ onClose, onDone }: { onClose: () => void;
     const a = Number(amount) || 0;
     if (!(a > 0)) { setErr('Укажите сумму'); return; }
     if (!category.trim()) { setErr('Выберите категорию'); return; }
+    if (isOwner && !paidFrom) { setErr('Выберите, откуда деньги: из кассы или с рук'); return; }
     setBusy(true); setErr(null);
     try {
       const res = await api.createExpense({
         amount: a, kind, category: category.trim(), note: note.trim() || undefined,
-        paid_from: isOwner ? paidFrom : undefined,
+        paid_from: isOwner ? (paidFrom ?? undefined) : undefined,
       });
       if (res.pending) setPending({ request: res.request, message: res.message });
       else onDone();
@@ -60,28 +65,43 @@ export default function ExpenseModal({ onClose, onDone }: { onClose: () => void;
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
+      <div className="modal modal--scroll" onClick={(e) => e.stopPropagation()}>
         <h2>Расход</h2>
-        <p className="muted">
-          {!isOwner
-            ? 'Запрос уйдёт владельцу. Деньги спишутся из кассы только после его подтверждения.'
-            : paidFrom === 'hand'
-              ? 'Платим из подотчёта — из денег, ранее изъятых из кассы на руки. Кассу не трогает, уменьшает ваш подотчёт.'
-              : 'Деньги уйдут из кассы и уменьшат ожидаемый остаток.'}
-        </p>
+        {!isOwner && (
+          <p className="muted">Запрос уйдёт владельцу. Деньги спишутся из кассы только после его подтверждения.</p>
+        )}
         {isOwner && (
-          <div className="field">
-            <span>Откуда платим</span>
-            <div className="seg">
-              <button className={`seg__btn ${paidFrom === 'register' ? 'seg__btn--on' : ''}`} onClick={() => setPaidFrom('register')}>Из кассы</button>
-              <button className={`seg__btn ${paidFrom === 'hand' ? 'seg__btn--on' : ''}`} onClick={() => setPaidFrom('hand')}>Из подотчёта (на руки)</button>
-            </div>
+          <>
+            <SourcePicker
+              value={paidFrom}
+              onChange={setPaidFrom}
+              options={[
+                {
+                  value: 'register', title: 'Из кассы', sub: tillSub(places),
+                  disabled: !!places && places.tillCash <= 0 && places.tillWallet <= 0,
+                },
+                {
+                  value: 'hand', title: 'С рук (подотчёт)',
+                  sub: places ? `у вас на руках ${money(places.onHand)}` : undefined,
+                  disabled: !!places && places.onHand <= 0,
+                },
+              ]}
+            />
+            {paidFrom && (
+              <p className="muted">
+                {paidFrom === 'hand'
+                  ? 'Платим из денег, ранее изъятых из кассы на руки. Кассу не трогает, уменьшает «на руках».'
+                  : 'Деньги берём из кассового ящика — касса уменьшится.'}
+              </p>
+            )}
+          </>
+        )}
+        {(!isOwner || paidFrom === 'register') && (
+          <div className="seg">
+            <button className={`seg__btn ${kind === 'cash' ? 'seg__btn--on' : ''}`} onClick={() => setKind('cash')}>Наличные</button>
+            <button className={`seg__btn ${kind === 'wallet' ? 'seg__btn--on' : ''}`} onClick={() => setKind('wallet')}>Безнал</button>
           </div>
         )}
-        <div className="seg">
-          <button className={`seg__btn ${kind === 'cash' ? 'seg__btn--on' : ''}`} onClick={() => setKind('cash')}>Наличные</button>
-          <button className={`seg__btn ${kind === 'wallet' ? 'seg__btn--on' : ''}`} onClick={() => setKind('wallet')}>Безнал</button>
-        </div>
         <label className="field"><span>Сумма</span><NumberInput value={amount} onValue={setAmount} autoFocus /></label>
         <div className="field">
           <span>Категория</span>
@@ -98,7 +118,7 @@ export default function ExpenseModal({ onClose, onDone }: { onClose: () => void;
         {err && <div className="change change--neg">{err}</div>}
         <div className="row">
           <button className="btn" onClick={onClose} disabled={busy}>Отмена</button>
-          <button className="btn btn--primary" onClick={save} disabled={busy}>
+          <button className="btn btn--primary" onClick={save} disabled={busy || (isOwner && !paidFrom)}>
             {user?.role === 'owner' ? 'Записать' : 'Отправить владельцу'}
           </button>
         </div>

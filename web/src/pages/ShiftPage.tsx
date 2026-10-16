@@ -8,6 +8,7 @@ import ShiftRequests from '../components/ShiftRequests';
 import ReturnRequests from '../components/ReturnRequests';
 import ExpenseRequests from '../components/ExpenseRequests';
 import ExpenseModal from '../components/ExpenseModal';
+import { money } from '../components/RangeControl';
 
 type Stats = { expectedCash: number; expectedWallet: number; stats: any } | null;
 
@@ -23,6 +24,10 @@ export default function ShiftPage() {
   const [err, setErr] = useState<string | null>(null);
   const [withdrawOpen, setWithdrawOpen] = useState(false);
   const [expenseOpen, setExpenseOpen] = useState(false);
+  // Касса при ЗАКРЫТОЙ смене: что осталось в ящике после закрытия и изъятий.
+  const [closedTill, setClosedTill] = useState<{ cash: number; wallet: number } | null>(null);
+  // Закрытие с расхождением — только после явного подтверждения.
+  const [confirmMismatch, setConfirmMismatch] = useState(false);
   // Ожидание подтверждения владельца при расхождении (кассир сам не проходит).
   const [pending, setPending] = useState<{ action: 'open' | 'close'; request: any; message?: string | null } | null>(null);
 
@@ -35,8 +40,11 @@ export default function ShiftPage() {
       /* ignore */
     }
   }
+  function loadClosedTill() {
+    api.expectedOpening().then(setClosedTill).catch(() => {});
+  }
   useEffect(() => { refreshShift(); }, []);
-  useEffect(() => { if (shift) loadStats(); }, [shift]);
+  useEffect(() => { if (shift) loadStats(); else loadClosedTill(); }, [shift]);
   // При открытии подставляем остаток от прошлой смены (обе кассы).
   useEffect(() => {
     if (mode === 'open') {
@@ -58,12 +66,20 @@ export default function ShiftPage() {
     } finally { setBusy(false); }
   }
 
+  // Пересчитанное не совпало с ожидаемым? Сначала переспрашиваем: чаще всего
+  // это опечатка или вписали деньги, которые забирают (их надо «Изъять»).
+  const closeMismatch = !!stats && cashIn.trim() !== '' && (
+    (Number(cashIn) || 0) !== Number(stats.expectedCash) || (Number(walletIn) || 0) !== Number(stats.expectedWallet)
+  );
+
   async function doClose() {
+    if (closeMismatch && !confirmMismatch) { setConfirmMismatch(true); return; }
+    setConfirmMismatch(false);
     setBusy(true); setErr(null);
     try {
       const res = await closeShift(Number(cashIn) || 0, Number(walletIn) || 0);
       if (res.pending) { setPending({ action: 'close', request: res.request, message: res.message }); }
-      else { setClosed(res.shift); setMode('view'); setCashIn(''); setWalletIn(''); }
+      else { setClosed(res.shift); setMode('view'); setCashIn(''); setWalletIn(''); loadClosedTill(); }
     } catch (e: any) {
       setErr(e?.body?.message || e?.message || 'Не удалось закрыть смену');
     } finally { setBusy(false); }
@@ -118,6 +134,18 @@ export default function ShiftPage() {
       {!shift && mode === 'view' && !closed && (
         <div className="card">
           <p className="hint">Смена закрыта. Примите кассу, чтобы начать продавать.</p>
+          {closedTill && (
+            <div className="closed-till">
+              <div className="muted">Сейчас в ящике (после закрытия и изъятий)</div>
+              <div className="closed-till__sum">
+                нал <b>{money(closedTill.cash)}</b> · безнал <b>{money(closedTill.wallet)}</b>
+              </div>
+              {closedTill.cash <= 0 && closedTill.wallet <= 0 && <div className="muted">Касса пустая — всё изъято ✓</div>}
+            </div>
+          )}
+          {user?.role === 'owner' && closedTill && (closedTill.cash > 0 || closedTill.wallet > 0) && (
+            <button className="btn btn--ghost" onClick={() => setWithdrawOpen(true)}>Изъять на руки</button>
+          )}
           <button className="btn btn--primary btn--big" onClick={() => setMode('open')}>Принять кассу</button>
         </div>
       )}
@@ -169,24 +197,40 @@ export default function ShiftPage() {
         <ExpenseModal onClose={() => setExpenseOpen(false)} onDone={() => { setExpenseOpen(false); loadStats(); }} />
       )}
 
-      {withdrawOpen && stats && (
+      {withdrawOpen && (shift ? stats : closedTill) && (
         <WithdrawModal
-          maxCash={stats.expectedCash}
-          maxWallet={stats.expectedWallet}
+          maxCash={shift ? stats!.expectedCash : closedTill!.cash}
+          maxWallet={shift ? stats!.expectedWallet : closedTill!.wallet}
+          closedTill={!shift}
           onClose={() => setWithdrawOpen(false)}
-          onDone={() => { setWithdrawOpen(false); loadStats(); }}
+          onDone={() => { setWithdrawOpen(false); if (shift) loadStats(); else loadClosedTill(); }}
         />
       )}
 
       {/* Сдача кассы */}
       {mode === 'close' && (
         <div className="card">
-          <p className="hint">Пересчитайте и введите, сколько сейчас фактически: наличными и на кошельках.</p>
-          <label className="field"><span>Наличные в кассе</span><NumberInput value={cashIn} onValue={setCashIn} autoFocus /></label>
-          <label className="field"><span>Безнал — на кошельках</span><NumberInput value={walletIn} onValue={setWalletIn} /></label>
+          <p className="hint">
+            Пересчитайте и впишите, сколько <b>реально лежит в ящике сейчас</b>. Деньги, которые забираете, сюда не пишите —
+            их нужно «Изъять на руки» (до закрытия или сразу после).
+          </p>
+          {stats && (
+            <p className="muted">По записям должно быть: нал <b>{money(stats.expectedCash)}</b> · безнал <b>{money(stats.expectedWallet)}</b></p>
+          )}
+          <label className="field"><span>Наличные в ящике сейчас</span><NumberInput value={cashIn} onValue={(v) => { setCashIn(v); setConfirmMismatch(false); }} autoFocus /></label>
+          <label className="field"><span>Безнал — на кошельках сейчас</span><NumberInput value={walletIn} onValue={(v) => { setWalletIn(v); setConfirmMismatch(false); }} /></label>
+          {confirmMismatch && stats && (
+            <div className="shift-diff shift-diff--neg">
+              Не сходится с записями: {mismatchText(Number(cashIn) || 0, stats.expectedCash, 'нал')}
+              {mismatchText(Number(walletIn) || 0, stats.expectedWallet, 'безнал')}
+              Перепроверьте. Если всё верно — закройте с расхождением, оно запишется в журнал.
+            </div>
+          )}
           <div className="row">
-            <button className="btn" onClick={() => { setMode('view'); setCashIn(''); setWalletIn(''); }} disabled={busy}>Отмена</button>
-            <button className="btn btn--primary" onClick={() => doClose()} disabled={busy}>Закрыть смену</button>
+            <button className="btn" onClick={() => { setMode('view'); setCashIn(''); setWalletIn(''); setConfirmMismatch(false); }} disabled={busy}>Отмена</button>
+            <button className="btn btn--primary" onClick={() => doClose()} disabled={busy}>
+              {confirmMismatch ? 'Да, закрыть с расхождением' : 'Закрыть смену'}
+            </button>
           </div>
         </div>
       )}
@@ -196,6 +240,13 @@ export default function ShiftPage() {
       {user?.role === 'owner' && <OwnerShifts />}
     </div>
   );
+}
+
+// «нал: посчитали 192,5, а должно 0 → излишек +192,5». Пусто, если сходится.
+function mismatchText(counted: number, expected: number, label: string): string {
+  const d = Number((counted - Number(expected)).toFixed(2));
+  if (d === 0) return '';
+  return `${label}: вписано ${money(counted)}, а должно ${money(expected)} → ${d > 0 ? `излишек +${money(d)}` : `недостача −${money(-d)}`}. `;
 }
 
 function DiffBlock({ label, expected, counted, diff }: { label: string; expected: number; counted: number; diff: number }) {
@@ -212,8 +263,8 @@ function DiffBlock({ label, expected, counted, diff }: { label: string; expected
   );
 }
 
-function WithdrawModal({ maxCash, maxWallet, onClose, onDone }: {
-  maxCash: number; maxWallet: number; onClose: () => void; onDone: () => void;
+function WithdrawModal({ maxCash, maxWallet, closedTill, onClose, onDone }: {
+  maxCash: number; maxWallet: number; closedTill?: boolean; onClose: () => void; onDone: () => void;
 }) {
   const [kind, setKind] = useState<'cash' | 'wallet'>('cash');
   const [amount, setAmount] = useState('');
@@ -231,7 +282,7 @@ function WithdrawModal({ maxCash, maxWallet, onClose, onDone }: {
       await api.withdrawCash(a, kind, note.trim() || undefined);
       onDone();
     } catch (e: any) {
-      setErr(e?.body?.message || e?.message || 'Не удалось изъять');
+      setErr(e?.body?.error || e?.body?.message || e?.message || 'Не удалось изъять');
     } finally { setBusy(false); }
   }
 
@@ -239,11 +290,15 @@ function WithdrawModal({ maxCash, maxWallet, onClose, onDone }: {
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <h2>Изъятие из кассы</h2>
+        {closedTill && <p className="muted">Смена закрыта — забираем из ящика. Деньги перейдут «на руки».</p>}
         <div className="seg">
           <button className={`seg__btn ${kind === 'cash' ? 'seg__btn--on' : ''}`} onClick={() => setKind('cash')}>Наличные</button>
           <button className={`seg__btn ${kind === 'wallet' ? 'seg__btn--on' : ''}`} onClick={() => setKind('wallet')}>Безнал</button>
         </div>
         <p className="muted">Доступно {kind === 'wallet' ? 'на кошельках' : 'наличными'}: <b>{max.toFixed(2)}</b>.</p>
+        {max > 0 && (
+          <button className="btn btn--ghost" onClick={() => setAmount(String(max))}>Забрать всё ({max.toFixed(2)})</button>
+        )}
         <label className="field"><span>Сколько изъять</span><NumberInput value={amount} onValue={setAmount} autoFocus /></label>
         <label className="field"><span>Причина</span>
           <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="напр. инкассация" />
