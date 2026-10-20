@@ -262,6 +262,41 @@ dashboardRouter.get('/expenses', async (req, res) => {
   res.json(rows);
 });
 
+// Долги поставщикам за период: сколько оплачено (с разбивкой откуда деньги)
+// и сколько закуплено новыми накладными. Нужно для статистики на странице «Долги».
+dashboardRouter.get('/supplier-stats', async (req, res) => {
+  const { lo, hi } = await resolveBounds(req.query);
+  const pay = (
+    await query(
+      `SELECT COALESCE(SUM(amount),0)                                        AS paid,
+              COALESCE(SUM(amount) FILTER (WHERE source='cash'),0)           AS paid_cash,
+              COALESCE(SUM(amount) FILTER (WHERE source='wallet'),0)         AS paid_wallet,
+              COALESCE(SUM(amount) FILTER (WHERE source='external'),0)       AS paid_external,
+              COUNT(*)                                                        AS payments
+         FROM supplier_payments
+        WHERE created_at >= $1 AND created_at < $2`,
+      [lo, hi],
+    )
+  )[0];
+  const inv = (
+    await query(
+      `SELECT COALESCE(SUM(total),0) AS purchased, COUNT(*) AS invoices
+         FROM supplier_invoices
+        WHERE created_at >= $1 AND created_at < $2`,
+      [lo, hi],
+    )
+  )[0];
+  res.json({
+    paid: Number(pay.paid),
+    paid_cash: Number(pay.paid_cash),
+    paid_wallet: Number(pay.paid_wallet),
+    paid_external: Number(pay.paid_external),
+    payments: Number(pay.payments),
+    purchased: Number(inv.purchased),
+    invoices: Number(inv.invoices),
+  });
+});
+
 // Разрез по дням недели (Пн–Вс): выручка и маржа. Виден лучший/худший день.
 dashboardRouter.get('/by-weekday', async (req, res) => {
   const { lo, hi } = await resolveBounds(req.query);

@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import NumberInput from '../components/NumberInput';
-import { api } from '../api';
+import { api, type Range } from '../api';
+import { onRealtimeEvent } from '../sync';
+import RangeControl, { money } from '../components/RangeControl';
 
 // Поставщики и долги (постоплата): кому и сколько должны, история платежей.
 export default function SuppliersPage() {
@@ -9,13 +11,27 @@ export default function SuppliersPage() {
   const [adding, setAdding] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [range, setRange] = useState<Range>({ period: '30d' });
+  const [stats, setStats] = useState<{
+    paid: number; paid_cash: number; paid_wallet: number; paid_external: number;
+    payments: number; purchased: number; invoices: number;
+  } | null>(null);
 
   const load = useCallback(() => {
     api.listSuppliers().then((r) => { setSuppliers(r.suppliers); setTotalDebt(r.total_debt); }).catch(() => {});
   }, []);
+  const loadStats = useCallback(() => {
+    api.supplierStats(range).then(setStats).catch(() => {});
+  }, [range]);
   useEffect(() => { load(); }, [load]);
+  useEffect(() => { loadStats(); }, [loadStats]);
+  useEffect(() => onRealtimeEvent((t) => {
+    if (t === 'shift' || t === 'data_updated') { load(); loadStats(); }
+  }), [load, loadStats]);
 
   function flash(m: string) { setToast(m); setTimeout(() => setToast(null), 2500); }
+
+  const paidFromTill = stats ? stats.paid_cash + stats.paid_wallet : 0;
 
   return (
     <div className="page">
@@ -25,8 +41,17 @@ export default function SuppliersPage() {
       </div>
 
       <div className={`kpi ${totalDebt > 0 ? 'kpi--danger' : ''}`}>
-        <div className="kpi__label">Всего должны поставщикам</div>
+        <div className="kpi__label">Всего должны поставщикам сейчас</div>
         <div className="kpi__value">{totalDebt.toFixed(2)}</div>
+      </div>
+
+      <h2 className="sect">Движение за период</h2>
+      <RangeControl range={range} onChange={setRange} />
+      <div className="kpi-grid">
+        <Kpi label="Оплачено поставщикам" value={money(stats?.paid ?? 0)} big />
+        <Kpi label="Из кассы" value={money(paidFromTill)} hint={stats && paidFromTill > 0 ? `нал ${money(stats.paid_cash)} · безнал ${money(stats.paid_wallet)}` : undefined} />
+        <Kpi label="Со стороны" value={money(stats?.paid_external ?? 0)} />
+        <Kpi label="Закуплено (накладные)" value={money(stats?.purchased ?? 0)} hint={stats ? `платежей: ${stats.payments} · накладных: ${stats.invoices}` : undefined} />
       </div>
 
       {suppliers.length === 0 && <p className="hint">Пока нет поставщиков. Заведите первого кнопкой «+ Поставщик».</p>}
@@ -62,6 +87,16 @@ export default function SuppliersPage() {
       )}
 
       {toast && <div className="toast">{toast}</div>}
+    </div>
+  );
+}
+
+function Kpi({ label, value, big, hint }: { label: string; value: string; big?: boolean; hint?: string }) {
+  return (
+    <div className={`kpi ${big ? 'kpi--big' : ''}`}>
+      <div className="kpi__label">{label}</div>
+      <div className="kpi__value">{value}</div>
+      {hint && <div className="kpi__hint">{hint}</div>}
     </div>
   );
 }

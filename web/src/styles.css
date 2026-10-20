@@ -425,6 +425,7 @@ input:focus, .search:focus { outline: none; border-color: var(--primary); }
 .kpi--big .kpi__value { font-size: 26px; }
 .kpi__value--accent { color: var(--ok); }
 .kpi__value--danger { color: var(--danger); }
+.kpi__hint { color: var(--muted); font-size: 12px; margin-top: 4px; }
 
 .sect { font-size: 17px; margin: 20px 0 10px; }
 

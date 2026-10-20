@@ -245,6 +245,11 @@ export const api = {
     req<any>(`/suppliers/${id}/invoices`, { method: 'POST', body: JSON.stringify(payload) }),
   payInvoice: (invoiceId: string, payload: { amount: number; note?: string; source?: 'cash' | 'wallet' | 'external' }) =>
     req<any>(`/suppliers/invoices/${invoiceId}/payments`, { method: 'POST', body: JSON.stringify(payload) }),
+  supplierStats: (range: Range) =>
+    req<{
+      paid: number; paid_cash: number; paid_wallet: number; paid_external: number;
+      payments: number; purchased: number; invoices: number;
+    }>(`/dashboard/supplier-stats?${rangeQS(range)}`),
   writeOff: (payload: { product_id?: string; barcode?: string; qty: number; reason: string }) =>
     req<{ write_off: any; product: Product }>('/analytics/write-off', {
       method: 'POST',
