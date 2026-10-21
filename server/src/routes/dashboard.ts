@@ -471,3 +471,67 @@ dashboardRouter.get('/recent-sales', async (req, res) => {
   );
   res.json(rows);
 });
+
+// Поставщики: движение за период + разбивка «кому сколько оплачено».
+// Источники платежей: cash/wallet (касса), hand (подотчёт, с рук), external (со стороны).
+dashboardRouter.get('/supplier-stats', async (req, res) => {
+  const { lo, hi } = await resolveBounds(req.query);
+  const pay = (
+    await query(
+      `SELECT COALESCE(SUM(amount),0)                                  AS paid,
+              COALESCE(SUM(amount) FILTER (WHERE source='cash'),0)     AS paid_cash,
+              COALESCE(SUM(amount) FILTER (WHERE source='wallet'),0)   AS paid_wallet,
+              COALESCE(SUM(amount) FILTER (WHERE source='hand'),0)     AS paid_hand,
+              COALESCE(SUM(amount) FILTER (WHERE source='external'),0) AS paid_external,
+              COUNT(*)                                                 AS payments
+         FROM supplier_payments
+        WHERE created_at >= $1 AND created_at < $2`,
+      [lo, hi],
+    )
+  )[0];
+  const inv = (
+    await query(
+      `SELECT COALESCE(SUM(total),0) AS purchased, COUNT(*) AS invoices
+         FROM supplier_invoices
+        WHERE created_at >= $1 AND created_at < $2`,
+      [lo, hi],
+    )
+  )[0];
+  // Кому именно оплачено за период — чтобы видеть это сразу, не открывая каждого.
+  const bySupplier = await query(
+    `SELECT s.id, s.name,
+            COALESCE(SUM(sp.amount),0)                                  AS paid,
+            COUNT(*)                                                    AS payments,
+            COALESCE(SUM(sp.amount) FILTER (WHERE sp.source='cash'),0)     AS paid_cash,
+            COALESCE(SUM(sp.amount) FILTER (WHERE sp.source='wallet'),0)   AS paid_wallet,
+            COALESCE(SUM(sp.amount) FILTER (WHERE sp.source='hand'),0)     AS paid_hand,
+            COALESCE(SUM(sp.amount) FILTER (WHERE sp.source='external'),0) AS paid_external
+       FROM supplier_payments sp
+       JOIN supplier_invoices si ON si.id = sp.invoice_id
+       JOIN suppliers s          ON s.id = si.supplier_id
+      WHERE sp.created_at >= $1 AND sp.created_at < $2
+      GROUP BY s.id, s.name
+      ORDER BY paid DESC`,
+    [lo, hi],
+  );
+  res.json({
+    paid: Number(pay.paid),
+    paid_cash: Number(pay.paid_cash),
+    paid_wallet: Number(pay.paid_wallet),
+    paid_hand: Number(pay.paid_hand),
+    paid_external: Number(pay.paid_external),
+    payments: Number(pay.payments),
+    purchased: Number(inv.purchased),
+    invoices: Number(inv.invoices),
+    by_supplier: bySupplier.map((r: any) => ({
+      id: r.id,
+      name: r.name,
+      paid: Number(r.paid),
+      payments: Number(r.payments),
+      paid_cash: Number(r.paid_cash),
+      paid_wallet: Number(r.paid_wallet),
+      paid_hand: Number(r.paid_hand),
+      paid_external: Number(r.paid_external),
+    })),
+  });
+});

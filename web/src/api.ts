@@ -276,6 +276,15 @@ export const api = {
     }),
   // Лента подотчёта: все изъятия/расходы/оплаты/сверки с бегущим остатком.
   ledger: () => req<Ledger>('/dashboard/ledger'),
+  supplierStats: (range: Range) =>
+    req<{
+      paid: number; paid_cash: number; paid_wallet: number; paid_hand: number; paid_external: number;
+      payments: number; purchased: number; invoices: number;
+      by_supplier: {
+        id: string; name: string; paid: number; payments: number;
+        paid_cash: number; paid_wallet: number; paid_hand: number; paid_external: number;
+      }[];
+    }>(`/dashboard/supplier-stats?${rangeQS(range)}`),
   writeOff: (payload: { product_id?: string; barcode?: string; qty: number; reason: string }) =>
     req<{ write_off: any; product: Product }>('/analytics/write-off', {
       method: 'POST',
