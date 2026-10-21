@@ -15,7 +15,9 @@ export default function SuppliersPage() {
   const [stats, setStats] = useState<{
     paid: number; paid_cash: number; paid_wallet: number; paid_external: number;
     payments: number; purchased: number; invoices: number;
+    by_supplier: { id: string; name: string; paid: number; payments: number; paid_external: number }[];
   } | null>(null);
+  const [showPaid, setShowPaid] = useState(false); // разбивка «кому оплачено за период»
 
   const load = useCallback(() => {
     api.listSuppliers().then((r) => { setSuppliers(r.suppliers); setTotalDebt(r.total_debt); }).catch(() => {});
@@ -53,6 +55,31 @@ export default function SuppliersPage() {
         <Kpi label="Со стороны" value={money(stats?.paid_external ?? 0)} />
         <Kpi label="Закуплено (накладные)" value={money(stats?.purchased ?? 0)} hint={stats ? `платежей: ${stats.payments} · накладных: ${stats.invoices}` : undefined} />
       </div>
+
+      {/* Кому именно оплачено за период — чтобы не открывать каждого поставщика. */}
+      {stats && stats.by_supplier.length > 0 && (
+        <div className="paid-by">
+          <button className="btn btn--ghost paid-by__toggle" onClick={() => setShowPaid((v) => !v)}>
+            {showPaid ? 'Скрыть разбивку' : `Кому оплачено за период · ${stats.by_supplier.length}`}
+          </button>
+          {showPaid && (
+            <div className="list">
+              {stats.by_supplier.map((r) => (
+                <button key={r.id} className="list-item" onClick={() => setOpenId(r.id)}>
+                  <div className="list-item__main">
+                    <div className="list-item__name">{r.name}</div>
+                    <div className="muted">
+                      платежей: {r.payments}
+                      {r.paid_external > 0 ? ` · из них со стороны ${money(r.paid_external)}` : ''}
+                    </div>
+                  </div>
+                  <div className="stock">{money(r.paid)}</div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {suppliers.length === 0 && <p className="hint">Пока нет поставщиков. Заведите первого кнопкой «+ Поставщик».</p>}
 

@@ -286,6 +286,23 @@ dashboardRouter.get('/supplier-stats', async (req, res) => {
       [lo, hi],
     )
   )[0];
+  // Разбивка «кому сколько оплачено» за период — чтобы видеть это сразу,
+  // не открывая карточку каждого поставщика.
+  const bySupplier = await query(
+    `SELECT s.id, s.name,
+            COALESCE(SUM(sp.amount),0) AS paid,
+            COUNT(*)                   AS payments,
+            COALESCE(SUM(sp.amount) FILTER (WHERE sp.source='cash'),0)     AS paid_cash,
+            COALESCE(SUM(sp.amount) FILTER (WHERE sp.source='wallet'),0)   AS paid_wallet,
+            COALESCE(SUM(sp.amount) FILTER (WHERE sp.source='external'),0) AS paid_external
+       FROM supplier_payments sp
+       JOIN supplier_invoices si ON si.id = sp.invoice_id
+       JOIN suppliers s          ON s.id = si.supplier_id
+      WHERE sp.created_at >= $1 AND sp.created_at < $2
+      GROUP BY s.id, s.name
+      ORDER BY paid DESC`,
+    [lo, hi],
+  );
   res.json({
     paid: Number(pay.paid),
     paid_cash: Number(pay.paid_cash),
@@ -294,6 +311,15 @@ dashboardRouter.get('/supplier-stats', async (req, res) => {
     payments: Number(pay.payments),
     purchased: Number(inv.purchased),
     invoices: Number(inv.invoices),
+    by_supplier: bySupplier.map((r: any) => ({
+      id: r.id,
+      name: r.name,
+      paid: Number(r.paid),
+      payments: Number(r.payments),
+      paid_cash: Number(r.paid_cash),
+      paid_wallet: Number(r.paid_wallet),
+      paid_external: Number(r.paid_external),
+    })),
   });
 });
 
