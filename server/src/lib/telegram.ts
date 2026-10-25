@@ -506,19 +506,12 @@ export async function buildSummary(): Promise<string> {
 
 let listening = false;
 let updateOffset = 0;
-let botUsername = ''; // имя бота (@...), чтобы узнавать адресованные команды
 
 // Распознаём запрос сводки: любая команда /... ИЛИ ключевое слово.
 function wantsSummary(text: string): boolean {
   const t = text.trim().toLowerCase();
   if (t.startsWith('/')) return true;
   return /\b(сводка|сводку|итог|итоги|баланс|отчёт|отчет|сколько\s+денег|report|summary|status)\b/.test(t);
-}
-
-// Команда явно адресована нашему боту: «/report@oromkassa_bot».
-function addressedToBot(text: string): boolean {
-  if (!botUsername) return false;
-  return new RegExp(`@${botUsername}(?:\\s|$)`, 'i').test(text);
 }
 
 async function tgApi(method: string, params: Record<string, unknown>, timeoutMs: number): Promise<any> {
@@ -574,11 +567,13 @@ async function pollOnce(): Promise<void> {
     if (text) console.log(`Telegram вход: chat=${chatId}(${chatType}) текст="${text.slice(0, 48)}"`);
     if (!text || !chatId) continue;
     if (!wantsSummary(text)) continue;
-    // Отвечаем: в настроенном чате магазина — на любую команду/слово; в любом
-    // другом чате — только если команда ЯВНО адресована нашему боту
-    // (/report@oromkassa_bot). Это обходит смену chat_id при переходе группы в
-    // супергруппу и не отвечает случайным чужим чатам на обычный текст.
-    const allowed = chatId === String(CHAT_ID) || addressedToBot(text);
+    // Отвечаем ТОЛЬКО в настроенном чате магазина. Раньше тут был запасной путь
+    // addressedToBot(text) — он открывал бэкдор: любой посторонний мог написать
+    // боту в личку «/report@бот» и получить финсводку (в личке режим приватности
+    // Telegram не действует, имя бота публично). Путь убран. Если группа
+    // мигрировала в супергруппу и chat_id сменился — обновите TELEGRAM_CHAT_ID;
+    // до этого бот молчит (безопасный отказ, а не утечка).
+    const allowed = chatId === String(CHAT_ID);
     if (!allowed) {
       console.log(`Telegram: команда «${text.slice(0, 32)}» из чата ${chatId} пропущена (ожидался ${CHAT_ID}).`);
       continue;
@@ -596,11 +591,6 @@ async function pollOnce(): Promise<void> {
 export async function startTelegramListener(): Promise<void> {
   if (!telegramEnabled() || listening) return;
   listening = true;
-  // Узнаём своё имя (@...), чтобы распознавать адресованные команды.
-  try {
-    const me = await tgApi('getMe', {}, 8000);
-    if (me?.ok && me.result?.username) botUsername = String(me.result.username);
-  } catch { /* не критично */ }
   // Сбрасываем вебхук, если он вдруг был установлен: пока вебхук активен,
   // getUpdates возвращает 409 и команды не приходят.
   try { await tgApi('deleteWebhook', { drop_pending_updates: false }, 8000); } catch { /* ok */ }
@@ -613,7 +603,7 @@ export async function startTelegramListener(): Promise<void> {
     }
   } catch { /* не критично */ }
   await registerCommands();
-  console.log(`Telegram: слушаю команды — бот @${botUsername || '?'}, чат ${CHAT_ID}. Напишите «/report@${botUsername || 'bot'}».`);
+  console.log(`Telegram: слушаю команды только в чате ${CHAT_ID}. Напишите в него «/report».`);
   // Фоновый цикл опроса. Ошибки не роняют кассу — пауза и продолжаем.
   (async () => {
     while (listening) {

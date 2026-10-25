@@ -17,6 +17,23 @@ set -eu
 
 export PGPASSWORD
 
+# Снимок всей базы содержит хеши PIN, закупочные цены и выручку, а заголовок
+# X-Mirror-Secret — общий секрет зеркала. По открытому HTTP всё это
+# перехватывается на пути. Поэтому по умолчанию принимаем только https://.
+# Для локального теста без TLS можно явно задать MIRROR_ALLOW_INSECURE=1.
+case "$MIRROR_URL" in
+  https://*) : ;;
+  *)
+    if [ "${MIRROR_ALLOW_INSECURE:-0}" = "1" ]; then
+      echo "sync: ВНИМАНИЕ — MIRROR_URL без https, данные пойдут по открытому каналу (MIRROR_ALLOW_INSECURE=1)." >&2
+    else
+      echo "sync: ОТКАЗ — MIRROR_URL должен быть https:// (снимок базы и секрет нельзя слать по HTTP)." >&2
+      echo "      Настройте TLS на зеркале (reverse-proxy с сертификатом) или задайте MIRROR_ALLOW_INSECURE=1 для локального теста." >&2
+      exit 1
+    fi
+    ;;
+esac
+
 echo "sync: старт. Интервал ${SYNC_INTERVAL}s, цель ${MIRROR_URL}"
 
 while true; do
