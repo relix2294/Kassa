@@ -1,11 +1,45 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 // Лёгкие графики на чистом SVG — без внешних библиотек (меньше вес, работает
 // офлайн как PWA). Цвета берём из темы (var(--primary)=выручка, --ok=маржа,
 // --off=третий) — они валидированы и сами подстраиваются под светлую/тёмную.
+// Анимация появления — в styles.css (классы chart__bar, donut__seg,
+// rankbar__fill, chart__line--margin), перезапуск — через key на обёртке.
 
 const fmt = (n: number) =>
   Math.abs(n) >= 1000 ? (n / 1000).toFixed(n % 1000 === 0 ? 0 : 1) + 'к' : String(Math.round(n * 100) / 100);
+
+const reduceMotion = () =>
+  typeof window !== 'undefined' &&
+  window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+
+// Плавно «докручивает» число от прежнего к новому (для KPI-плиток). Уважает
+// prefers-reduced-motion — тогда показывает конечное значение сразу.
+export function useCountUp(value: number, ms = 500): number {
+  const [disp, setDisp] = useState(value);
+  const fromRef = useRef(0);
+  useEffect(() => {
+    const from = fromRef.current;
+    const to = Number.isFinite(value) ? value : 0;
+    if (reduceMotion() || from === to) {
+      fromRef.current = to;
+      setDisp(to);
+      return;
+    }
+    let raf = 0;
+    const start = performance.now();
+    const tick = (now: number) => {
+      const t = Math.min(1, (now - start) / ms);
+      const eased = 1 - Math.pow(1 - t, 3); // плавное торможение
+      setDisp(from + (to - from) * eased);
+      if (t < 1) raf = requestAnimationFrame(tick);
+      else fromRef.current = to;
+    };
+    raf = requestAnimationFrame(tick);
+    return () => { cancelAnimationFrame(raf); fromRef.current = to; };
+  }, [value, ms]);
+  return disp;
+}
 
 type Pt = { label: string; revenue: number; margin: number; receipts: number };
 
@@ -50,7 +84,8 @@ export function ColumnChart({ points, height = 200 }: { points: Pt[]; height?: n
           return (
             <g key={i} onMouseEnter={() => setHover(i)}>
               <rect x={x(i)} y={y(Number(p.revenue))} width={bw} height={h} rx={3}
-                    className="chart__bar" opacity={hover === null || hover === i ? 1 : 0.45} />
+                    className="chart__bar" style={{ animationDelay: `${Math.min(i * 18, 500)}ms` }}
+                    opacity={hover === null || hover === i ? 1 : 0.45} />
               {/* широкая прозрачная зона для наведения */}
               <rect x={padL + gap * i} y={padT} width={gap} height={ih} fill="transparent" />
               {i % everyX === 0 && (
@@ -59,8 +94,8 @@ export function ColumnChart({ points, height = 200 }: { points: Pt[]; height?: n
             </g>
           );
         })}
-        {/* линия маржи */}
-        <polyline points={line} className="chart__line chart__line--margin" fill="none" />
+        {/* линия маржи — «рисуется» слева направо (pathLength=1 + dashoffset) */}
+        <polyline points={line} className="chart__line chart__line--margin" fill="none" pathLength={1} />
         {hover !== null && (
           <line x1={cx(hover)} y1={padT} x2={cx(hover)} y2={padT + ih} className="chart__crosshair" />
         )}
@@ -99,7 +134,8 @@ export function RankBars({
             <b className="rankbar__val">{fmt(it.value)}{unitHint ? ` ${unitHint}` : ''}</b>
           </div>
           <div className="rankbar__track">
-            <div className="rankbar__fill" style={{ width: `${(it.value / max) * 100}%` }} />
+            <div className="rankbar__fill"
+                 style={{ width: `${(it.value / max) * 100}%`, animationDelay: `${Math.min(i * 40, 500)}ms` }} />
           </div>
           {it.sub && <div className="rankbar__sub">{it.sub}</div>}
         </div>
@@ -144,7 +180,8 @@ export function Donut({
     <div className="donut">
       <svg viewBox="0 0 160 160" className="donut__svg">
         {segs.map((s, i) => (
-          <path key={i} d={arc(s.start, s.frac)} fill={s.color} className="donut__seg" />
+          <path key={i} d={arc(s.start, s.frac)} fill={s.color} className="donut__seg"
+                style={{ animationDelay: `${i * 90}ms` }} />
         ))}
         <text x={C} y={C - 2} className="donut__center" textAnchor="middle">{fmt(total)}</text>
         <text x={C} y={C + 16} className="donut__centerlabel" textAnchor="middle">{centerLabel}</text>
@@ -159,6 +196,67 @@ export function Donut({
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+// Вертикальные столбики одной серии: по часам дня (0–23), по дням недели.
+// Читается как «кривая» — сразу видно пики и провалы. Анимация — как у ColumnChart.
+export function BarChart({
+  bars, height = 190, format = fmt,
+}: {
+  bars: { label: string; value: number; sub?: string }[];
+  height?: number;
+  format?: (n: number) => string;
+}) {
+  const [hover, setHover] = useState<number | null>(null);
+  if (bars.length === 0) return <Empty />;
+  const W = 760, H = height;
+  const padL = 40, padR = 12, padT = 16, padB = 28;
+  const iw = W - padL - padR, ih = H - padT - padB;
+  const max = Math.max(1, ...bars.map((b) => b.value));
+  const n = bars.length;
+  const gap = iw / n;
+  const bw = Math.max(3, Math.min(42, gap * 0.66));
+  const x = (i: number) => padL + gap * i + (gap - bw) / 2;
+  const y = (v: number) => padT + ih - (v / max) * ih;
+  const everyX = Math.ceil(n / 12);
+
+  return (
+    <div className="chart">
+      <svg viewBox={`0 0 ${W} ${H}`} className="chart__svg" preserveAspectRatio="xMidYMid meet"
+           onMouseLeave={() => setHover(null)}>
+        {[0, 0.5, 1].map((t) => {
+          const yy = padT + ih - t * ih;
+          return (
+            <g key={t}>
+              <line x1={padL} y1={yy} x2={W - padR} y2={yy} className="chart__grid" />
+              <text x={padL - 6} y={yy + 4} className="chart__ytick" textAnchor="end">{fmt(max * t)}</text>
+            </g>
+          );
+        })}
+        {bars.map((b, i) => {
+          const h = Math.max(0, ih - (y(b.value) - padT));
+          return (
+            <g key={i} onMouseEnter={() => setHover(i)}>
+              <rect x={x(i)} y={y(b.value)} width={bw} height={h} rx={3}
+                    className="chart__bar" style={{ animationDelay: `${Math.min(i * 18, 500)}ms` }}
+                    opacity={hover === null || hover === i ? 1 : 0.45} />
+              <rect x={padL + gap * i} y={padT} width={gap} height={ih} fill="transparent" />
+              {i % everyX === 0 && (
+                <text x={x(i) + bw / 2} y={H - 8} className="chart__xtick" textAnchor="middle">{b.label}</text>
+              )}
+            </g>
+          );
+        })}
+      </svg>
+      {hover !== null && (
+        <div className="chart__tip">
+          <b>{bars[hover].label}</b>
+          <div><b>{format(bars[hover].value)}</b></div>
+          {bars[hover].sub && <div className="muted">{bars[hover].sub}</div>}
+        </div>
+      )}
     </div>
   );
 }

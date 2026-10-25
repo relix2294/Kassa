@@ -496,8 +496,16 @@ input:focus, .search:focus { outline: none; border-color: var(--primary); }
 .chart__svg { width: 100%; height: auto; display: block; }
 .chart__grid { stroke: var(--border); stroke-width: 1; }
 .chart__ytick, .chart__xtick { fill: var(--muted); font-size: 11px; }
-.chart__bar { fill: var(--primary); transition: opacity .1s; }
-.chart__line--margin { stroke: var(--ok); stroke-width: 2; }
+.chart__bar {
+  fill: var(--primary); transition: opacity .1s;
+  transform-box: fill-box; transform-origin: 50% 100%;
+  animation: barGrow .55s cubic-bezier(.22, 1, .36, 1) both;
+}
+.chart__line--margin {
+  stroke: var(--ok); stroke-width: 2;
+  stroke-dasharray: 1; stroke-dashoffset: 1;
+  animation: drawLine .8s .15s ease forwards;
+}
 .chart__crosshair { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 3 3; }
 .chart__legend { display: flex; gap: 16px; justify-content: center; margin-top: 8px; font-size: 13px; color: var(--muted); }
 .dot { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: middle; }
@@ -516,18 +524,41 @@ input:focus, .search:focus { outline: none; border-color: var(--primary); }
 .rankbar__label { font-weight: 600; font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rankbar__val { font-weight: 700; flex: 0 0 auto; }
 .rankbar__track { height: 10px; background: var(--surface-2); border-radius: 6px; overflow: hidden; margin-top: 5px; }
-.rankbar__fill { height: 100%; background: var(--primary); border-radius: 6px; min-width: 2px; }
+.rankbar__fill {
+  height: 100%; background: var(--primary); border-radius: 6px; min-width: 2px;
+  transform-origin: left center;
+  animation: growW .6s cubic-bezier(.22, 1, .36, 1) both;
+}
 .rankbar__sub { color: var(--muted); font-size: 12px; margin-top: 3px; }
 
 /* Кольцо оплат */
 .donut { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
 .donut__svg { width: 160px; height: 160px; flex: 0 0 auto; }
-.donut__seg { stroke: var(--surface); stroke-width: 2; }
+.donut__seg {
+  stroke: var(--surface); stroke-width: 2;
+  transform-box: view-box; transform-origin: 80px 80px;
+  animation: segIn .5s ease both;
+}
 .donut__center { fill: var(--text); font-size: 22px; font-weight: 800; }
 .donut__centerlabel { fill: var(--muted); font-size: 11px; }
 .donut__legend { flex: 1 1 160px; display: flex; flex-direction: column; gap: 8px; }
 .donut__row { display: flex; align-items: center; gap: 8px; font-size: 14px; }
 .donut__row b { margin-left: auto; }
+
+/* --- Анимация появления графиков (оживляем дашборд) --- */
+@keyframes barGrow { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+@keyframes growW   { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes segIn   { from { transform: scale(.6); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+@keyframes drawLine { to { stroke-dashoffset: 0; } }
+
+/* Уважаем «уменьшить движение»: показываем всё сразу, без анимаций. */
+@media (prefers-reduced-motion: reduce) {
+  .chart__bar, .rankbar__fill, .donut__seg, .chart__line--margin {
+    animation: none !important;
+    transform: none !important;
+    stroke-dashoffset: 0 !important;
+  }
+}
 
 .list-item--alert { border-left: 3px solid var(--danger); }
 .log-details { color: var(--muted); font-size: 13px; margin-top: 4px; }

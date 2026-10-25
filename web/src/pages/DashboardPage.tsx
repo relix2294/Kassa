@@ -9,7 +9,7 @@ import ReturnRequests from '../components/ReturnRequests';
 import ExpenseRequests from '../components/ExpenseRequests';
 import BalanceCard from '../components/BalanceCard';
 import ProductEditModal from '../components/ProductEditModal';
-import { ColumnChart, RankBars, Donut } from '../components/charts';
+import { ColumnChart, RankBars, Donut, BarChart, useCountUp } from '../components/charts';
 import RangeControl, { money } from '../components/RangeControl';
 import type { LogRow, Product } from '../types';
 import { isLowStock, LOW_STOCK_THRESHOLD } from '../stock';
@@ -140,6 +140,22 @@ export default function DashboardPage() {
     revenue: Number(p.revenue), margin: Number(p.margin), receipts: Number(p.receipts),
   }));
 
+  // Перезапуск анимаций графиков при смене периода (а не на каждый realtime-тик).
+  const animKey = `${range.period}:${range.from ?? ''}:${range.to ?? ''}`;
+
+  // По часам дня: полная ось 0–23, чтобы видеть «кривую» дня целиком.
+  const hourMap = new Map(hours.map((h: any) => [Number(h.hour), h]));
+  const hoursBars = hours.length === 0 ? [] : Array.from({ length: 24 }, (_, hr) => {
+    const h = hourMap.get(hr);
+    return { label: String(hr).padStart(2, '0'), value: h ? Number(h.revenue) : 0, sub: h ? `${h.receipts} чек.` : 'нет продаж' };
+  });
+  // По дням недели: Пн–Вс по порядку (dow 1..7).
+  const dowMap = new Map(weekday.map((w: any) => [Number(w.dow), w]));
+  const weekdayBars = weekday.length === 0 ? [] : [1, 2, 3, 4, 5, 6, 7].map((dow) => {
+    const w = dowMap.get(dow);
+    return { label: WEEKDAYS[dow], value: w ? Number(w.revenue) : 0, sub: w ? `маржа ${money(w.margin)} · ${w.receipts} чек.` : 'нет продаж' };
+  });
+
   return (
     <div className="page page--wide">
       <h1>Кабинет</h1>
@@ -170,25 +186,23 @@ export default function DashboardPage() {
       {tab === 'overview' && (
         <>
           <Card title="Динамика выручки и маржи">
-            <ColumnChart points={points} />
+            <ColumnChart key={animKey} points={points} />
           </Card>
 
           <div className="donut-grid">
             <Card title="Чем платят">
-              <Donut data={payData} centerLabel="продажи" />
+              <Donut key={animKey} data={payData} centerLabel="продажи" />
             </Card>
             <Card title="Маржа и себестоимость">
-              <Donut data={revData} centerLabel="продажи" />
+              <Donut key={animKey} data={revData} centerLabel="продажи" />
             </Card>
             <Card title="Прибыль и расходы">
-              <Donut data={profitData} centerLabel="маржа" />
+              <Donut key={animKey} data={profitData} centerLabel="маржа" />
             </Card>
           </div>
 
           <Card title="Выручка по часам дня">
-            <RankBars items={hours
-              .filter((h: any) => Number(h.revenue) > 0)
-              .map((h: any) => ({ label: `${String(h.hour).padStart(2, '0')}:00`, value: Number(h.revenue), sub: `${h.receipts} чек.` }))} />
+            <BarChart key={animKey} bars={hoursBars} format={money} />
           </Card>
 
           <Card
@@ -201,7 +215,7 @@ export default function DashboardPage() {
               </div>
             }
           >
-            <RankBars items={top.map((p: any) => ({
+            <RankBars key={`${animKey}:${topSort}`} items={top.map((p: any) => ({
               label: p.name,
               value: topSort === 'qty' ? Number(p.qty) : topSort === 'margin' ? Number(p.margin) : Number(p.revenue),
               sub: `${Number(p.qty)} ${p.unit === 'kg' ? 'кг' : 'шт'} · маржа ${money(p.margin)}`,
@@ -217,23 +231,19 @@ export default function DashboardPage() {
 
           <div className="chart-grid">
             <Card title="По категориям">
-              <RankBars items={cats.map((c: any) => ({ label: c.category, value: Number(c.revenue), sub: `маржа ${money(c.margin)}` }))} />
+              <RankBars key={animKey} items={cats.map((c: any) => ({ label: c.category, value: Number(c.revenue), sub: `маржа ${money(c.margin)}` }))} />
             </Card>
             <Card title="По кассирам">
-              <RankBars items={cashiers.map((c: any) => ({ label: c.cashier, value: Number(c.revenue), sub: `${c.receipts} чек. · маржа ${money(c.margin)}` }))} />
+              <RankBars key={animKey} items={cashiers.map((c: any) => ({ label: c.cashier, value: Number(c.revenue), sub: `${c.receipts} чек. · маржа ${money(c.margin)}` }))} />
             </Card>
           </div>
 
           <Card title="По дням недели">
-            <RankBars items={weekday.map((w: any) => ({
-              label: WEEKDAYS[w.dow] || String(w.dow),
-              value: Number(w.revenue),
-              sub: `маржа ${money(w.margin)} · ${w.receipts} чек.`,
-            }))} />
+            <BarChart key={animKey} bars={weekdayBars} format={money} />
           </Card>
 
           <Card title="Расходы по категориям">
-            <RankBars items={expenseByCat.map((e) => ({ label: e.category, value: e.total }))} />
+            <RankBars key={animKey} items={expenseByCat.map((e) => ({ label: e.category, value: e.total }))} />
           </Card>
         </>
       )}
@@ -280,30 +290,35 @@ function AlertsStrip({ onStock }: { onStock: () => void }) {
   );
 }
 
+const intFmt = (n: number) => String(Math.round(n));
+
 function KpiRow({ s }: { s: any }) {
   return (
     <div className="kpi-grid">
-      <Kpi label="Выручка" value={money(s.net_revenue)} big change={s.prev?.revenue_change} />
-      <Kpi label={`Маржа · ${s.margin_pct}%`} value={money(s.margin)} big accent change={s.prev?.margin_change} />
-      <Kpi label="Средний чек" value={money(s.avg_check)} />
-      <Kpi label="Чеков" value={String(s.receipts)} />
-      <Kpi label="Наличные" value={money(s.cash)} />
-      <Kpi label="Безнал" value={money(s.card)} />
-      <Kpi label="Товаров продано" value={money(s.items)} />
-      <Kpi label="Возвраты" value={money(s.refunds_total)} danger={s.refunds_total > 0} />
-      <Kpi label="Расходы" value={money(s.expenses)} danger={s.expenses > 0} />
-      <Kpi label="Чистая прибыль" value={money(s.net_profit)} big accent />
+      <Kpi label="Выручка" num={s.net_revenue} big change={s.prev?.revenue_change} />
+      <Kpi label={`Маржа · ${s.margin_pct}%`} num={s.margin} big accent change={s.prev?.margin_change} />
+      <Kpi label="Средний чек" num={s.avg_check} />
+      <Kpi label="Чеков" num={s.receipts} format={intFmt} />
+      <Kpi label="Наличные" num={s.cash} />
+      <Kpi label="Безнал" num={s.card} />
+      <Kpi label="Товаров продано" num={s.items} format={intFmt} />
+      <Kpi label="Возвраты" num={s.refunds_total} danger={s.refunds_total > 0} />
+      <Kpi label="Расходы" num={s.expenses} danger={s.expenses > 0} />
+      <Kpi label="Чистая прибыль" num={s.net_profit} big accent />
     </div>
   );
 }
 
-function Kpi({ label, value, big, accent, danger, change }: {
-  label: string; value: string; big?: boolean; accent?: boolean; danger?: boolean; change?: number | null;
+function Kpi({ label, num, format = money, big, accent, danger, change }: {
+  label: string; num: number; format?: (n: number) => string;
+  big?: boolean; accent?: boolean; danger?: boolean; change?: number | null;
 }) {
+  // Число плавно «докручивается» от прежнего к новому — плитка «живая».
+  const shown = useCountUp(Number(num) || 0);
   return (
     <div className={`kpi ${big ? 'kpi--big' : ''}`}>
       <div className="kpi__label">{label}</div>
-      <div className={`kpi__value ${accent ? 'kpi__value--accent' : ''} ${danger ? 'kpi__value--danger' : ''}`}>{value}</div>
+      <div className={`kpi__value ${accent ? 'kpi__value--accent' : ''} ${danger ? 'kpi__value--danger' : ''}`}>{format(shown)}</div>
       {change != null && (
         <div className={`kpi__change ${change >= 0 ? 'kpi__change--up' : 'kpi__change--down'}`}>
           {change >= 0 ? '▲' : '▼'} {Math.abs(change)}% <span className="muted">к пред.</span>
