@@ -118,7 +118,7 @@ export default function DashboardPage() {
 
   // Данные для трёх колец структуры.
   const PAY_META: Record<string, [string, string]> = {
-    cash: ['Наличные', 'var(--ok)'], card: ['Безнал', 'var(--primary)'], mixed: ['Смешанная', 'var(--off)'],
+    cash: ['Наличные', 'var(--ok)'], card: ['Безнал', 'var(--primary)'], mixed: ['Смешанная', 'var(--c3)'],
   };
   const payData = pay.map((p: any) => ({
     label: PAY_META[p.method]?.[0] ?? p.method, value: Number(p.total), color: PAY_META[p.method]?.[1] ?? 'var(--muted)',
@@ -129,7 +129,7 @@ export default function DashboardPage() {
   ] : [];
   const profitData = summary ? [
     { label: 'Чистая прибыль', value: Math.max(0, Number(summary.net_profit)), color: 'var(--ok)' },
-    { label: 'Расходы', value: Number(summary.expenses), color: 'var(--off)' },
+    { label: 'Расходы', value: Number(summary.expenses), color: 'var(--c3)' },
   ] : [];
 
   // Временной ряд → точки для графика (подпись = дата/час).

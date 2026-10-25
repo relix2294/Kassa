@@ -8,15 +8,18 @@
   --border: #2a3650;
   --text: #eaf0f8;
   --muted: #8ea0ba;
-  --primary: #4f9dff;
-  --primary-2: #6ea8ff;
-  --primary-ink: #06122a;
+  --primary: #3f6fcf;
+  --primary-2: #5886e0;
+  --primary-ink: #ffffff;
   --ok: #34d399;
-  --off: #fbbf24;
+  --off: #d8a53c;
+  /* Третий цвет только для графиков (смешанная оплата, расходы) — спокойный
+     сине-фиолетовый вместо «яичного» жёлтого. Предупреждения остаются на --off. */
+  --c3: #8e8ff2;
   --danger: #f87171;
-  --radius: 16px;
-  --shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
-  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.25);
+  --radius: 13px;
+  --shadow: 0 8px 24px rgba(0, 0, 0, 0.30);
+  --shadow-sm: 0 2px 6px rgba(0, 0, 0, 0.22);
   --overlay: rgba(3, 7, 18, 0.66);
 }
 
@@ -29,14 +32,15 @@
   --border: #dce2ec;
   --text: #10192e;
   --muted: #5b6a82;
-  --primary: #2563eb;
-  --primary-2: #3b82f6;
+  --primary: #2457cf;
+  --primary-2: #3b73e8;
   --primary-ink: #ffffff;
   --ok: #059669;
-  --off: #d97706;
+  --off: #c2740a;
+  --c3: #5b53c8;
   --danger: #dc2626;
-  --shadow: 0 12px 30px rgba(30, 50, 90, 0.12);
-  --shadow-sm: 0 1px 4px rgba(30, 50, 90, 0.08);
+  --shadow: 0 8px 22px rgba(30, 50, 90, 0.10);
+  --shadow-sm: 0 1px 3px rgba(30, 50, 90, 0.07);
   --overlay: rgba(15, 23, 42, 0.4);
 }
 
@@ -536,8 +540,8 @@ input:focus, .search:focus { outline: none; border-color: var(--primary); }
 .donut__svg { width: 160px; height: 160px; flex: 0 0 auto; }
 .donut__seg {
   stroke: var(--surface); stroke-width: 2;
-  transform-box: view-box; transform-origin: 80px 80px;
-  animation: segIn .5s ease both;
+  transform-box: fill-box; transform-origin: center;
+  animation: segPop .5s cubic-bezier(.22, 1, .36, 1) both;
 }
 .donut__center { fill: var(--text); font-size: 22px; font-weight: 800; }
 .donut__centerlabel { fill: var(--muted); font-size: 11px; }
@@ -548,7 +552,7 @@ input:focus, .search:focus { outline: none; border-color: var(--primary); }
 /* --- Анимация появления графиков (оживляем дашборд) --- */
 @keyframes barGrow { from { transform: scaleY(0); } to { transform: scaleY(1); } }
 @keyframes growW   { from { transform: scaleX(0); } to { transform: scaleX(1); } }
-@keyframes segIn   { from { transform: scale(.6); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+@keyframes segPop  { from { transform: scale(.4); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 @keyframes drawLine { to { stroke-dashoffset: 0; } }
 
 /* Уважаем «уменьшить движение»: показываем всё сразу, без анимаций. */
