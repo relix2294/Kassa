@@ -7,6 +7,7 @@ import { useShift } from '../shift';
 import { useGuardedClose } from '../components/Confirm';
 import ProductPicker from '../components/ProductPicker';
 import ShiftWaiting from '../components/ShiftWaiting';
+import Icon from '../components/Icon';
 import { api } from '../api';
 import type { Product } from '../types';
 
@@ -134,7 +135,7 @@ export default function ReturnPanel({ onClose, onDone }: { onClose: () => void; 
 
         {/* Поиск по названию — для весового, выпечки и всего, что неудобно сканировать. */}
         <button className="btn btn--ghost btn--pick" onClick={() => setPickerOpen(true)}>
-          🔎 Найти товар по названию
+          <Icon name="search" /> Найти товар по названию
         </button>
 
         {err && <div className="change change--neg">{err}</div>}

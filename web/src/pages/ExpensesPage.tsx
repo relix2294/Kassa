@@ -5,6 +5,7 @@ import RangeControl, { money } from '../components/RangeControl';
 import { RankBars } from '../components/charts';
 import ExpenseModal from '../components/ExpenseModal';
 import ExpenseRequests from '../components/ExpenseRequests';
+import Icon from '../components/Icon';
 
 // Раздел «Расходы» для владельца: запись, одобрение, история и аналитика
 // операционных затрат точки (аренда, коммуналка, хозтовары и т.п.).
@@ -42,7 +43,7 @@ export default function ExpensesPage() {
     <div className="page page--wide">
       <div className="sale-head">
         <h1>Расходы</h1>
-        <button className="btn btn--primary" style={{ flex: '0 0 auto' }} onClick={() => setModal(true)}>➖ Записать расход</button>
+        <button className="btn btn--primary" style={{ flex: '0 0 auto' }} onClick={() => setModal(true)}><Icon name="minus" /> Записать расход</button>
       </div>
 
       <ExpenseRequests />

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '../api';
 import { onRealtimeEvent } from '../sync';
+import Icon from './Icon';
 
 // Панель для владельца: запросы кассиров на возврат. Возврат — выдача денег из
 // кассы, поэтому кассир сам не может; владелец видит сумму/причину и решает.
@@ -46,7 +47,7 @@ export default function ReturnRequests() {
 
   return (
     <div className="card card--alert" style={{ marginBottom: 16 }}>
-      <h2>↩️ Запросы на возврат — нужно ваше решение</h2>
+      <h2><Icon name="return" /> Запросы на возврат — нужно ваше решение</h2>
       <p className="hint">Кассир не может сам вернуть деньги из кассы. Проверьте и дайте добро или отклоните.</p>
       {err && <div className="change change--neg">{err}</div>}
       <div className="list">

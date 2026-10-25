@@ -18,6 +18,7 @@ import ProductPicker from '../components/ProductPicker';
 import Confirm from '../components/Confirm';
 import Calculator from '../components/Calculator';
 import ShiftWaiting from '../components/ShiftWaiting';
+import Icon from '../components/Icon';
 import RecentReceipts from '../components/RecentReceipts';
 import { StuckBanner } from './QueuePage';
 import { postCustomer } from '../customer';
@@ -295,7 +296,7 @@ export default function SalePage() {
 
     {/* Большой поиск товара (весовой, выпечка, выбор из списка) — как было. */}
     <button className="btn btn--ghost btn--pick" onClick={() => setPickerOpen(true)}>
-      🔎 Найти товар по названию
+      <Icon name="search" /> Найти товар по названию
     </button>
     </>
   );
@@ -438,7 +439,7 @@ export default function SalePage() {
 
       {/* Калькулятор — доп-опция, всегда под рукой. */}
       <button className="calc-fab" onClick={() => setCalcOpen(true)} title="Калькулятор">
-        🧮
+        <Icon name="calculator" />
       </button>
       {calcOpen && <Calculator onClose={() => setCalcOpen(false)} />}
 

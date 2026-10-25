@@ -5,6 +5,7 @@ import { api } from '../api';
 import { useGuardedClose } from '../components/Confirm';
 import { useShift } from '../shift';
 import ProductPicker from '../components/ProductPicker';
+import Icon from '../components/Icon';
 import type { Product } from '../types';
 
 interface CountLine {
@@ -148,7 +149,7 @@ export default function InventoryPanel({ onClose, onDone }: { onClose: () => voi
         </form>
 
         <button className="btn btn--ghost btn--pick" onClick={() => setPickerOpen(true)}>
-          🔎 Найти товар по названию
+          <Icon name="search" /> Найти товар по названию
         </button>
 
         {err && <div className="change change--neg">{err}</div>}

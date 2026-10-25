@@ -2,45 +2,45 @@
 :root,
 :root[data-theme='dark'] {
   color-scheme: dark;
-  --bg: #0b1220;
-  --surface: #151d2e;
-  --surface-2: #26324a;
-  --border: #2a3650;
-  --text: #eaf0f8;
-  --muted: #8ea0ba;
-  --primary: #3f6fcf;
-  --primary-2: #5886e0;
+  --bg: #0b0d1a;
+  --surface: #15182b;
+  --surface-2: #232845;
+  --border: #2c3160;
+  --text: #eceefb;
+  --muted: #9aa0c8;
+  --primary: #6d6cff;
+  --primary-2: #8b8bff;
   --primary-ink: #ffffff;
-  --ok: #34d399;
-  --off: #d8a53c;
-  /* Третий цвет только для графиков (смешанная оплата, расходы) — спокойный
-     сине-фиолетовый вместо «яичного» жёлтого. Предупреждения остаются на --off. */
-  --c3: #8e8ff2;
-  --danger: #f87171;
-  --radius: 13px;
-  --shadow: 0 8px 24px rgba(0, 0, 0, 0.30);
-  --shadow-sm: 0 2px 6px rgba(0, 0, 0, 0.22);
+  --ok: #2fd38a;
+  --off: #f0a33a;
+  /* Третий цвет только для графиков (смешанная оплата, расходы). Предупреждения
+     остаются на --off (мелкие: низкий остаток, бейджи). */
+  --c3: #22d3ee;
+  --danger: #ff6b81;
+  --radius: 14px;
+  --shadow: 0 10px 30px rgba(0, 0, 0, 0.38);
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.26);
   --overlay: rgba(3, 7, 18, 0.66);
 }
 
 /* Светлая тема — день. */
 :root[data-theme='light'] {
   color-scheme: light;
-  --bg: #eef2f9;
+  --bg: #f3f4ff;
   --surface: #ffffff;
-  --surface-2: #eceff5;
-  --border: #dce2ec;
-  --text: #10192e;
-  --muted: #5b6a82;
-  --primary: #2457cf;
-  --primary-2: #3b73e8;
+  --surface-2: #eeeeff;
+  --border: #e0e0f7;
+  --text: #14162e;
+  --muted: #5c6090;
+  --primary: #5a57f0;
+  --primary-2: #6d6cff;
   --primary-ink: #ffffff;
-  --ok: #059669;
+  --ok: #0ea371;
   --off: #c2740a;
-  --c3: #5b53c8;
-  --danger: #dc2626;
-  --shadow: 0 8px 22px rgba(30, 50, 90, 0.10);
-  --shadow-sm: 0 1px 3px rgba(30, 50, 90, 0.07);
+  --c3: #0891b2;
+  --danger: #e11d48;
+  --shadow: 0 10px 26px rgba(40, 40, 110, 0.12);
+  --shadow-sm: 0 1px 3px rgba(40, 40, 110, 0.08);
   --overlay: rgba(15, 23, 42, 0.4);
 }
 
@@ -51,7 +51,7 @@ html, body, #root { height: 100%; margin: 0; }
 body {
   background: var(--bg);
   color: var(--text);
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-family: "Plus Jakarta Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
   transition: background-color 0.3s ease, color 0.3s ease;
 }
@@ -211,7 +211,10 @@ input:focus, .search:focus { outline: none; border-color: var(--primary); }
   font-size: 12px;
 }
 .tab.active { color: var(--primary); }
-.tab__icon { font-size: 22px; }
+.tab__icon { display: inline-flex; }
+/* Линейные SVG-иконки: наследуют цвет текста, тонкая обводка. */
+.ic { display: inline-block; width: 1em; height: 1em; vertical-align: -0.14em; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; flex: 0 0 auto; }
+.tab__icon .ic { width: 23px; height: 23px; stroke-width: 1.7; }
 
 .toast {
   position: fixed;
@@ -683,7 +686,7 @@ select:focus { outline: none; border-color: var(--primary); }
   }
   .tab:hover { background: var(--surface); }
   .tab.active { background: var(--surface-2); color: var(--primary); }
-  .tab__icon { font-size: 20px; }
+  .tab__icon .ic { width: 20px; height: 20px; }
 
   .content { padding: 24px 28px; }
   .page > h1 { font-size: 26px; }

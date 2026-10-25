@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import Keypad from './Keypad';
+import Icon from './Icon';
 
 // Форма оплаты. Используется двумя способами:
 //  - на телефоне — внутри модалки;
@@ -132,13 +133,13 @@ export default function PaymentForm({
       {method === null && (
         <div className="pay-methods">
           <button className="btn btn--primary btn--big" disabled={disabled} onClick={() => setMethod('cash')}>
-            💵 Наличные
+            <Icon name="cash" /> Наличные
           </button>
           <button className="btn btn--primary btn--big" disabled={disabled} onClick={() => setMethod('card')}>
-            💳 Карта
+            <Icon name="card" /> Карта
           </button>
           <button className="btn btn--big" disabled={disabled} onClick={() => setMethod('mixed')}>
-            💵➕💳 Смешанная
+            <Icon name="mixed" /> Смешанная
           </button>
           {onCancel && (
             <button className="btn" onClick={onCancel}>
@@ -165,7 +166,7 @@ export default function PaymentForm({
               Назад
             </button>
             <button className="btn btn--primary" disabled={disabled} onClick={() => onPay('card')}>
-              ✅ Провести
+              <Icon name="check" /> Провести
             </button>
           </div>
         </>

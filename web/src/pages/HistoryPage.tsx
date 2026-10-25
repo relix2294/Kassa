@@ -30,7 +30,7 @@ function periodFrom(p: Period): string | undefined {
   return d.toISOString();
 }
 
-const METHOD: Record<string, string> = { cash: '💵 Наличные', card: '💳 Карта', mixed: '💵➕💳 Смешанная' };
+const METHOD: Record<string, string> = { cash: 'Наличные', card: 'Карта', mixed: 'Смешанная' };
 
 function fmtTime(iso: string): string {
   return new Date(iso).toLocaleString('ru-RU', {

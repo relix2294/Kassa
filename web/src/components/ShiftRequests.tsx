@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { api } from '../api';
 import { onRealtimeEvent } from '../sync';
 import { refreshShift } from '../shift';
+import Icon from './Icon';
 
 // Панель для владельца: запросы кассиров на открытие/закрытие кассы с
 // расхождением. Владелец видит, сколько не хватает, и даёт «добро» или
@@ -51,7 +52,7 @@ export default function ShiftRequests() {
 
   return (
     <div className="card card--alert" style={{ marginBottom: 16 }}>
-      <h2>🔔 Запросы на кассу — нужно ваше решение</h2>
+      <h2><Icon name="bell" /> Запросы на кассу — нужно ваше решение</h2>
       <p className="hint">
         Кассир не может сам открыть/закрыть кассу с расхождением. Проверьте суммы и дайте добро или отклоните.
       </p>

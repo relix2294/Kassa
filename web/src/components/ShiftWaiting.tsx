@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../api';
+import Icon from './Icon';
 
 // Экран ожидания для кассира: действие с расхождением/возврат отправлено
 // владельцу. Пока владелец не даст добро из своего кабинета — продолжить нельзя.
@@ -67,7 +68,7 @@ export default function ShiftWaiting({
 
   return (
     <div className="card card--alert">
-      <h2>⏳ Ждём подтверждения владельца</h2>
+      <h2><Icon name="wait" /> Ждём подтверждения владельца</h2>
       {message && <div className="warn" style={{ textAlign: 'left', whiteSpace: 'pre-line' }}>{message}</div>}
       <p className="hint" style={{ textAlign: 'left' }}>
         Позвоните владельцу и объясните ситуацию. Он подтвердит из своего кабинета — и {what} автоматически.

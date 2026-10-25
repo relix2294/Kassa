@@ -6,6 +6,7 @@ import { api } from '../api';
 import { createProduct, receiveGoods } from '../sync';
 import { CostNote } from './ReceivingPage';
 import type { Product } from '../types';
+import Icon from '../components/Icon';
 
 // Конвейерный завод товаров.
 //
@@ -342,7 +343,7 @@ export default function BulkEntryPage() {
             <h2 className="sect" style={{ margin: 0 }}>Последние</h2>
             {added.some((a) => a.id) && (
               <Link className="btn btn--ghost" to={`/tags?ids=${added.filter((a) => a.id).map((a) => a.id).join(',')}`}>
-                🏷️ Ценники заведённых
+                <Icon name="tag" /> Ценники заведённых
               </Link>
             )}
           </div>
@@ -356,7 +357,7 @@ export default function BulkEntryPage() {
                 {a.qty > 0 && <div className="stock">+{a.qty}</div>}
                 {a.id && (
                   <Link className="btn btn--ghost" to={`/tags?ids=${a.id}`} title="Напечатать ценник">
-                    🏷️ Ценник
+                    <Icon name="tag" /> Ценник
                   </Link>
                 )}
               </div>

@@ -8,7 +8,7 @@ type Receipt = {
   items: { name: string; qty: number; unit_price: number; line_total: number }[];
 };
 
-const PAY_LABEL: Record<string, string> = { cash: '💵 наличные', card: '💳 карта', mixed: '💵➕💳 смешанная' };
+const PAY_LABEL: Record<string, string> = { cash: 'наличные', card: 'карта', mixed: 'смешанная' };
 
 // Последние чеки текущей смены на экране кассы. Кассир может открыть любой и
 // посмотреть состав — например, сверить с покупателем, что именно пробили.

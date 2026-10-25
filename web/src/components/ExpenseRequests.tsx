@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '../api';
 import { onRealtimeEvent } from '../sync';
+import Icon from './Icon';
 
 // Панель для владельца: запросы кассиров на расход. Деньги уходят из кассы,
 // поэтому кассир сам не проводит — владелец видит сумму/категорию и решает.
@@ -30,7 +31,7 @@ export default function ExpenseRequests() {
 
   return (
     <div className="card card--alert" style={{ marginBottom: 16 }}>
-      <h2>💸 Запросы на расход — нужно ваше решение</h2>
+      <h2><Icon name="expenses" /> Запросы на расход — нужно ваше решение</h2>
       <p className="hint">Кассир не может сам взять деньги из кассы на расход. Проверьте и дайте добро или отклоните.</p>
       {err && <div className="change change--neg">{err}</div>}
       <div className="list">

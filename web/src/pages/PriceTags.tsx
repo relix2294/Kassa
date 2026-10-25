@@ -6,6 +6,7 @@ import { db } from '../db';
 import { api } from '../api';
 import { pullProducts } from '../sync';
 import type { Product } from '../types';
+import Icon from '../components/Icon';
 
 // Печать ценников со штрих-кодом. Штучному печатаем его штрих-код; товару без
 // штрих-кода можно присвоить внутренний код — и он станет сканируемым.
@@ -116,7 +117,7 @@ export default function PriceTags() {
 
         <div className="row" style={{ marginTop: 12 }}>
           <button className="btn btn--primary btn--big" disabled={readyToPrint.length === 0} onClick={() => window.print()}>
-            🖨️ Печать ценников ({readyToPrint.length})
+            <Icon name="printer" /> Печать ценников ({readyToPrint.length})
           </button>
         </div>
         {chosen.length > readyToPrint.length && (

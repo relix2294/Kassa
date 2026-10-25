@@ -9,6 +9,7 @@ import ReturnRequests from '../components/ReturnRequests';
 import ExpenseRequests from '../components/ExpenseRequests';
 import BalanceCard from '../components/BalanceCard';
 import ProductEditModal from '../components/ProductEditModal';
+import Icon from '../components/Icon';
 import { ColumnChart, RankBars, Donut, BarChart, useCountUp } from '../components/charts';
 import RangeControl, { money } from '../components/RangeControl';
 import type { LogRow, Product } from '../types';
@@ -173,7 +174,7 @@ export default function DashboardPage() {
       {summary && <KpiRow s={summary} />}
 
       <div className="dash-actions">
-        <button className="btn btn--ghost" onClick={exportCsv} disabled={!summary}>⬇ Скачать отчёт (CSV)</button>
+        <button className="btn btn--ghost" onClick={exportCsv} disabled={!summary}><Icon name="download" /> Скачать отчёт (CSV)</button>
       </div>
 
       <div className="seg seg--tabs" ref={tabsRef}>
@@ -278,12 +279,12 @@ function AlertsStrip({ onStock }: { onStock: () => void }) {
     <div className="alerts-strip">
       {low.length > 0 && (
         <button className="alert-chip alert-chip--warn" onClick={onStock}>
-          🛒 Пора закупить: <b>{low.length}</b> {low.length === 1 ? 'товар' : 'товаров'}
+          <Icon name="cart" /> Пора закупить: <b>{low.length}</b> {low.length === 1 ? 'товар' : 'товаров'}
         </button>
       )}
       {debt > 0 && (
         <button className="alert-chip alert-chip--debt" onClick={() => navigate('/debts')}>
-          💰 Долг поставщикам: <b>{money(debt)}</b>
+          <Icon name="wallet" /> Долг поставщикам: <b>{money(debt)}</b>
         </button>
       )}
     </div>
@@ -349,8 +350,8 @@ function RecentTab({ recent }: { recent: any[] }) {
         {recent.map((s) => (
           <div key={s.id} className="list-item list-item--static">
             <div className="list-item__main">
-              <div className="list-item__name">
-                {money(s.total)} {s.payment_method === 'cash' ? '💵' : s.payment_method === 'card' ? '💳' : '💵💳'}
+              <div className="list-item__name" style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
+                {money(s.total)} <Icon name={s.payment_method === 'cash' ? 'cash' : s.payment_method === 'card' ? 'card' : 'mixed'} />
               </div>
               <div className="muted">
                 {new Date(s.created_at).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}

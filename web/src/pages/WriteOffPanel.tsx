@@ -5,6 +5,7 @@ import { api } from '../api';
 import { pullProducts } from '../sync';
 import { useGuardedClose } from '../components/Confirm';
 import ProductPicker from '../components/ProductPicker';
+import Icon from '../components/Icon';
 import type { Product } from '../types';
 
 // Быстрое списание: бой, порча, просрочка. Уменьшает остаток и учитывается
@@ -86,7 +87,7 @@ export default function WriteOffPanel({ onClose, onDone }: { onClose: () => void
               <NumberInput ref={scanRef} mode="int" placeholder="Скан товара…" value={barcode} onValue={setBarcode} />
             </form>
             <button className="btn btn--ghost btn--pick" onClick={() => setPickerOpen(true)}>
-              🔎 Найти товар по названию
+              <Icon name="search" /> Найти товар по названию
             </button>
           </>
         ) : (

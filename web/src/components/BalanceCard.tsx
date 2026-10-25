@@ -3,6 +3,7 @@ import { api } from '../api';
 import { onRealtimeEvent } from '../sync';
 import { money } from './RangeControl';
 import HandsLedger from './HandsLedger';
+import Icon from './Icon';
 
 type Balance = Awaited<ReturnType<typeof api.balance>>;
 
@@ -33,8 +34,8 @@ export default function BalanceCard() {
         </div>
         <div className="balance-card__total">{money(b.total_cash)}</div>
         <div className="balance-card__rows">
-          <span className="balance-chip">💵 Касса: <b>{money(b.till.total)}</b></span>
-          {b.hands_total !== 0 && <span className="balance-chip">✋ На руках: <b>{money(b.hands_total)}</b></span>}
+          <span className="balance-chip"><Icon name="cash" /> Касса: <b>{money(b.till.total)}</b></span>
+          {b.hands_total !== 0 && <span className="balance-chip"><Icon name="hand" /> На руках: <b>{money(b.hands_total)}</b></span>}
         </div>
         {!b.till.has_open_shift && <div className="balance-card__hint">Смена закрыта — в кассе то, что осталось в ящике после закрытия и изъятий</div>}
       </button>
@@ -74,7 +75,7 @@ function HandRow({ h, onReload }: { h: Balance['hands'][number]; onReload: () =>
         </span>
         {!editing && (
           <button className="btn btn--fix" onClick={() => { setVal(String(h.on_hand)); setEditing(true); }}>
-            ✏️ Поправить остаток
+            <Icon name="edit" /> Поправить остаток
           </button>
         )}
         {editing && (
@@ -151,7 +152,7 @@ function BalanceDetail({ b, onClose, onReload }: { b: Balance; onClose: () => vo
 
         {b.supplier_debt > 0 && (
           <div className="balance-note">
-            💰 Долг поставщикам: <b className="diff-neg">{money(b.supplier_debt)}</b>
+            <Icon name="wallet" /> Долг поставщикам: <b className="diff-neg">{money(b.supplier_debt)}</b>
             <span className="muted"> — это не наши деньги, мы их должны</span>
           </div>
         )}

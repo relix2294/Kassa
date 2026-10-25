@@ -20,6 +20,7 @@ import PriceTags from './pages/PriceTags';
 import QueuePage, { QueueBadge } from './pages/QueuePage';
 import BulkEntryPage from './pages/BulkEntryPage';
 import CustomerDisplay from './pages/CustomerDisplay';
+import Icon from './components/Icon';
 
 function OnlineBadge() {
   const [online, setOnline] = useState(isOnline);
@@ -30,10 +31,10 @@ function OnlineBadge() {
 }
 
 function ThemeButton() {
-  const { icon, label, cycle } = useThemeMode();
+  const { mode, label, cycle } = useThemeMode();
   return (
     <button className="theme-btn" onClick={cycle} title={`Тема: ${label} (нажмите, чтобы сменить)`}>
-      {icon}
+      <Icon name={mode === 'auto' ? 'auto' : mode === 'light' ? 'sun' : 'moon'} />
     </button>
   );
 }
@@ -112,7 +113,7 @@ export default function App() {
           <OnlineBadge />
           <ThemeButton />
           <button className="user-chip" onClick={logout} title="Выйти">
-            {user.full_name || user.username} ⏻
+            {user.full_name || user.username} <Icon name="power" />
           </button>
         </div>
       </header>
@@ -120,7 +121,7 @@ export default function App() {
       <main className="content">
         {mirror && (
           <div className="mirror-banner">
-            👁️ Витрина руководителя — только просмотр. Данные приходят из магазина, обновляются каждые ~10 минут.
+            <Icon name="eye" /> Витрина руководителя — только просмотр. Данные приходят из магазина, обновляются каждые ~10 минут.
           </div>
         )}
         {mirror ? (
@@ -156,67 +157,67 @@ export default function App() {
       <nav className="tabbar">
         {owner && (
           <NavLink to="/dashboard" className="tab">
-            <span className="tab__icon">📊</span>
+            <span className="tab__icon"><Icon name="dashboard" /></span>
             <span>Кабинет</span>
           </NavLink>
         )}
         {!mirror && (
           <NavLink to="/sale" className="tab">
-            <span className="tab__icon">🧾</span>
+            <span className="tab__icon"><Icon name="sale" /></span>
             <span>Продажа</span>
           </NavLink>
         )}
         {!mirror && (owner || shiftRevealed) && (
           <NavLink to="/shift" className="tab">
-            <span className="tab__icon">🕐</span>
+            <span className="tab__icon"><Icon name="shift" /></span>
             <span>Смена</span>
           </NavLink>
         )}
         {!mirror && (
           <NavLink to="/receiving" className="tab">
-            <span className="tab__icon">📦</span>
+            <span className="tab__icon"><Icon name="receiving" /></span>
             <span>Приём</span>
           </NavLink>
         )}
         {owner && !mirror && (
           <NavLink to="/products" className="tab">
-            <span className="tab__icon">🏷️</span>
+            <span className="tab__icon"><Icon name="products" /></span>
             <span>Товары</span>
           </NavLink>
         )}
         {owner && !mirror && (
           <NavLink to="/bulk" className="tab">
-            <span className="tab__icon">⚡</span>
+            <span className="tab__icon"><Icon name="bulk" /></span>
             <span>Завод</span>
           </NavLink>
         )}
         {owner && (
           <NavLink to="/analytics" className="tab">
-            <span className="tab__icon">📈</span>
+            <span className="tab__icon"><Icon name="analytics" /></span>
             <span>Аналитика</span>
           </NavLink>
         )}
         {owner && (
           <NavLink to="/history" className="tab">
-            <span className="tab__icon">📜</span>
+            <span className="tab__icon"><Icon name="history" /></span>
             <span>Чеки</span>
           </NavLink>
         )}
         {owner && (
           <NavLink to="/debts" className="tab">
-            <span className="tab__icon">💰</span>
+            <span className="tab__icon"><Icon name="debts" /></span>
             <span>Долги</span>
           </NavLink>
         )}
         {owner && (
           <NavLink to="/expenses" className="tab">
-            <span className="tab__icon">💸</span>
+            <span className="tab__icon"><Icon name="expenses" /></span>
             <span>Расходы</span>
           </NavLink>
         )}
         {owner && !mirror && (
           <NavLink to="/staff" className="tab">
-            <span className="tab__icon">👥</span>
+            <span className="tab__icon"><Icon name="staff" /></span>
             <span>Сотрудники</span>
           </NavLink>
         )}

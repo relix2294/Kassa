@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import { api } from '../api';
 import { pullProducts } from '../sync';
+import Icon from '../components/Icon';
 
 // Выгрузка/загрузка каталога товаров.
 // Смысл: ваша ручная база местных штрихкодов + названий + цен — это ценность,
@@ -116,7 +117,7 @@ export default function CatalogPanel({ onClose, onDone }: { onClose: () => void;
         </p>
 
         <div className="card" style={{ marginBottom: 12 }}>
-          <div className="product-name">📤 Сохранить каталог</div>
+          <div className="product-name"><Icon name="upload" /> Сохранить каталог</div>
           <p className="hint">Скачает CSV со всеми товарами (штрихкод, название, категория, цены). Открывается в Excel.</p>
           <button className="btn btn--primary" onClick={download} disabled={busy}>
             Скачать CSV
@@ -124,7 +125,7 @@ export default function CatalogPanel({ onClose, onDone }: { onClose: () => void;
         </div>
 
         <div className="card">
-          <div className="product-name">📥 Загрузить каталог</div>
+          <div className="product-name"><Icon name="download" /> Загрузить каталог</div>
           <p className="hint">
             Добавит товары из файла. Уже существующие (по штрихкоду или названию) не трогаются —
             цены не перезапишутся. Идеально для второго магазина.

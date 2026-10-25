@@ -5,6 +5,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db';
 import { createProduct } from '../sync';
 import ProductEditModal from '../components/ProductEditModal';
+import Icon from '../components/Icon';
 import type { Product } from '../types';
 import { isLowStock } from '../stock';
 
@@ -57,7 +58,7 @@ export default function ProductsPage() {
         <h1>Товары</h1>
         <div className="staff-actions">
           <Link className="btn btn--ghost" to="/bulk">Быстрый завод</Link>
-          <Link className="btn btn--ghost" to="/tags">🏷️ Ценники</Link>
+          <Link className="btn btn--ghost" to="/tags"><Icon name="tag" /> Ценники</Link>
           <button className="btn btn--ghost" onClick={() => setAdding(true)}>
             + Товар
           </button>

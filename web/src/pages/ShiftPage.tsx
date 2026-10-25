@@ -10,6 +10,7 @@ import ExpenseRequests from '../components/ExpenseRequests';
 import ExpenseModal from '../components/ExpenseModal';
 import { money } from '../components/RangeControl';
 import { useMoneyPlaces } from '../components/MoneySource';
+import Icon from '../components/Icon';
 
 type Stats = { expectedCash: number; expectedWallet: number; stats: any } | null;
 
@@ -207,7 +208,7 @@ export default function ShiftPage() {
               <div className="shift-expected">Ожидается на кошельках: <b>{stats.expectedWallet}</b></div>
             </>
           )}
-          <button className="btn btn--ghost" onClick={() => setExpenseOpen(true)}>➖ Записать расход</button>
+          <button className="btn btn--ghost" onClick={() => setExpenseOpen(true)}><Icon name="minus" /> Записать расход</button>
           {user?.role === 'owner' && (
             <button className="btn btn--ghost" onClick={() => setWithdrawOpen(true)}>Изъять из кассы</button>
           )}
