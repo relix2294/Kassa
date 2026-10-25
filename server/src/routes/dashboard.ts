@@ -347,6 +347,26 @@ dashboardRouter.get('/top-products', async (req, res) => {
   res.json(rows);
 });
 
+// ABC-анализ товаров: вклад каждого товара в выручку за период (отсортировано
+// по убыванию). Классы A/B/C клиент считает по накопленной доле. Без лимита —
+// нужен весь список, чтобы разбить на классы корректно.
+dashboardRouter.get('/abc', async (req, res) => {
+  const { lo, hi } = await resolveBounds(req.query);
+  const rows = await query(
+    `SELECT si.name, MAX(si.barcode) AS barcode,
+            SUM(si.qty)        AS qty,
+            SUM(si.line_total) AS revenue,
+            SUM(si.line_total - si.unit_cost * si.qty) AS margin
+       FROM sale_items si
+       JOIN sales s ON s.id = si.sale_id
+      WHERE s.created_at >= $1 AND s.created_at < $2
+      GROUP BY si.name
+      ORDER BY revenue DESC`,
+    [lo, hi],
+  );
+  res.json(rows);
+});
+
 // Разрез по категориям: выручка и маржа.
 dashboardRouter.get('/by-category', async (req, res) => {
   const { lo, hi } = await resolveBounds(req.query);

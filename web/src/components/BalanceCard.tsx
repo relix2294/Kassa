@@ -34,8 +34,9 @@ export default function BalanceCard() {
         </div>
         <div className="balance-card__total">{money(b.total_cash)}</div>
         <div className="balance-card__rows">
-          <span className="balance-chip"><Icon name="cash" /> Касса: <b>{money(b.till.total)}</b></span>
+          <span className="balance-chip balance-chip--cash"><Icon name="cash" /> Касса: <b>{money(b.till.total)}</b></span>
           {b.hands_total !== 0 && <span className="balance-chip"><Icon name="hand" /> На руках: <b>{money(b.hands_total)}</b></span>}
+          {b.supplier_debt > 0 && <span className="balance-chip balance-chip--debt"><Icon name="wallet" /> Долг: <b>{money(b.supplier_debt)}</b></span>}
         </div>
         {!b.till.has_open_shift && <div className="balance-card__hint">Смена закрыта — в кассе то, что осталось в ящике после закрытия и изъятий</div>}
       </button>

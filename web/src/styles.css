@@ -464,7 +464,7 @@ input:focus, .search:focus { outline: none; border-color: var(--primary); }
   font-size: 15px; font-weight: 600; flex: 1 1 220px; text-align: left;
 }
 .alert-chip--warn { background: rgba(217, 119, 6, 0.15); color: var(--off); }
-.alert-chip--debt { background: rgba(37, 99, 235, 0.12); color: var(--primary); }
+.alert-chip--debt { background: color-mix(in srgb, var(--primary) 14%, transparent); color: var(--primary); }
 .alert-chip b { font-weight: 800; }
 .expense--rejected { opacity: 0.55; }
 .expense--rejected .list-item__name { text-decoration: line-through; }
@@ -1241,30 +1241,45 @@ kbd {
   width: 100%;
   text-align: left;
   cursor: pointer;
-  border: 1px solid var(--border);
+  border: 1px solid color-mix(in srgb, var(--primary) 32%, var(--border));
   border-radius: var(--radius);
-  padding: 16px 18px;
-  margin-bottom: 16px;
-  background:
-    linear-gradient(180deg, rgba(79, 157, 255, 0.14), rgba(79, 157, 255, 0.04)),
-    var(--surface);
+  padding: 12px 15px;
+  margin-bottom: 14px;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--primary) 20%, var(--surface)), var(--surface) 72%);
   color: var(--text);
 }
 .balance-card:hover { border-color: var(--primary); }
 .balance-card__head {
   display: flex; align-items: center; justify-content: space-between; gap: 10px;
 }
-.balance-card__label { color: var(--muted); font-size: 14px; font-weight: 600; }
+.balance-card__label { color: color-mix(in srgb, var(--primary) 55%, var(--text)); font-size: 12px; font-weight: 700; letter-spacing: 0.03em; text-transform: uppercase; }
 .balance-card__more { color: var(--primary); font-size: 13px; font-weight: 700; }
-.balance-card__total { font-size: 34px; font-weight: 800; margin: 6px 0 10px; letter-spacing: 0.2px; }
-.balance-card__rows { display: flex; flex-wrap: wrap; gap: 8px; }
+.balance-card__total { font-size: 27px; font-weight: 800; margin: 3px 0 9px; letter-spacing: -0.01em; color: var(--primary); }
+.balance-card__rows { display: flex; flex-wrap: wrap; gap: 7px; }
 .balance-chip {
-  background: var(--surface-2); border-radius: 999px; padding: 6px 12px;
+  display: inline-flex; align-items: center; gap: 5px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 999px; padding: 5px 11px;
   font-size: 13px; color: var(--muted);
 }
+.balance-chip .ic { color: var(--primary); font-size: 15px; }
 .balance-chip b { color: var(--text); font-weight: 700; }
-.balance-chip--debt b { color: var(--off); }
-.balance-card__hint { margin-top: 10px; font-size: 12px; color: var(--muted); }
+.balance-chip--cash .ic { color: var(--ok); }
+.balance-chip--debt { border-color: color-mix(in srgb, var(--danger) 40%, var(--border)); }
+.balance-chip--debt .ic, .balance-chip--debt b { color: var(--danger); }
+.balance-card__hint { margin-top: 7px; font-size: 12px; color: var(--muted); }
+
+/* Таблицы отчётов */
+.report-table-wrap { overflow-x: auto; margin-top: 4px; }
+.report-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.report-table th { text-align: left; color: var(--muted); font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: .03em; padding: 8px 10px; border-bottom: 1px solid var(--border); }
+.report-table td { padding: 9px 10px; border-bottom: 1px solid var(--border); }
+.report-table .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.report-table tbody tr:last-child td { border-bottom: none; }
+/* Бейдж класса ABC */
+.abc-badge { display: inline-block; min-width: 20px; text-align: center; font-weight: 800; font-size: 12px; padding: 2px 7px; border-radius: 6px; }
+.abc-a { background: color-mix(in srgb, var(--ok) 20%, transparent); color: var(--ok); }
+.abc-b { background: color-mix(in srgb, var(--primary) 18%, transparent); color: var(--primary); }
+.abc-c { background: color-mix(in srgb, var(--muted) 22%, transparent); color: var(--muted); }
 
 .modal--wide { max-width: 720px; }
 .balance-total-big {
@@ -1284,7 +1299,7 @@ kbd {
 .balance-row__main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .balance-row__main .muted { font-size: 12px; }
 .balance-row__val { font-weight: 700; white-space: nowrap; }
-.balance-row--strong { background: rgba(79, 157, 255, 0.08); }
+.balance-row--strong { background: color-mix(in srgb, var(--primary) 10%, transparent); }
 .balance-row--strong .balance-row__val,
 .balance-row--strong .balance-row__main > span:first-child { font-weight: 800; }
 .balance-note {

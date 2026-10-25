@@ -165,6 +165,8 @@ export const api = {
     ),
   byCategory: (range: Range) =>
     req<{ category: string; revenue: number; margin: number }[]>(`/dashboard/by-category?${rangeQS(range)}`),
+  abc: (range: Range) =>
+    req<{ name: string; barcode: string; qty: number; revenue: number; margin: number }[]>(`/dashboard/abc?${rangeQS(range)}`),
   byCashier: (range: Range) =>
     req<{ cashier: string; receipts: string; revenue: number; margin: number }[]>(`/dashboard/by-cashier?${rangeQS(range)}`),
   byHour: (range: Range) =>

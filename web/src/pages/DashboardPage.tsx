@@ -40,16 +40,20 @@ export default function DashboardPage() {
   const [pay, setPay] = useState<any[]>([]);
   const [expenses, setExpenses] = useState<any[]>([]);
   const [recent, setRecent] = useState<any[]>([]);
+  const [supPaid, setSupPaid] = useState(0); // оплачено поставщикам за период
+  const [supDebt, setSupDebt] = useState(0); // текущий долг поставщикам (всего)
 
   const load = useCallback(async () => {
     try {
-      const [s, ts, t, c, ca, h, wd, p, ex, r] = await Promise.all([
+      const [s, ts, t, c, ca, h, wd, p, ex, r, sp, sup] = await Promise.all([
         api.summary(range), api.timeseries(range), api.topProducts(range, topSort, topOpen ? 30 : 10),
         api.byCategory(range), api.byCashier(range), api.byHour(range),
         api.byWeekday(range), api.paymentSplit(range), api.expensesByCategory(range), api.recentSales(15),
+        api.supplierStats(range), api.listSuppliers(),
       ]);
       setSummary(s); setSeries(ts); setTop(t); setCats(c); setCashiers(ca);
       setHours(h); setWeekday(wd); setPay(p); setExpenses(ex); setRecent(r);
+      setSupPaid(Number(sp.paid) || 0); setSupDebt(Number(sup.total_debt) || 0);
     } catch { /* ignore */ }
   }, [range, topSort, topOpen]);
 
@@ -171,7 +175,7 @@ export default function DashboardPage() {
 
       <RangeControl range={range} onChange={setRange} />
 
-      {summary && <KpiRow s={summary} />}
+      {summary && <KpiRow s={summary} paid={supPaid} debt={supDebt} />}
 
       <div className="dash-actions">
         <button className="btn btn--ghost" onClick={exportCsv} disabled={!summary}><Icon name="download" /> Скачать отчёт (CSV)</button>
@@ -293,7 +297,7 @@ function AlertsStrip({ onStock }: { onStock: () => void }) {
 
 const intFmt = (n: number) => String(Math.round(n));
 
-function KpiRow({ s }: { s: any }) {
+function KpiRow({ s, paid, debt }: { s: any; paid: number; debt: number }) {
   return (
     <div className="kpi-grid">
       <Kpi label="Выручка" num={s.net_revenue} big change={s.prev?.revenue_change} />
@@ -305,6 +309,8 @@ function KpiRow({ s }: { s: any }) {
       <Kpi label="Товаров продано" num={s.items} format={intFmt} />
       <Kpi label="Возвраты" num={s.refunds_total} danger={s.refunds_total > 0} />
       <Kpi label="Расходы" num={s.expenses} danger={s.expenses > 0} />
+      <Kpi label="Оплачено поставщикам" num={paid} />
+      <Kpi label="Долг поставщикам" num={debt} danger={debt > 0} />
       <Kpi label="Чистая прибыль" num={s.net_profit} big accent />
     </div>
   );

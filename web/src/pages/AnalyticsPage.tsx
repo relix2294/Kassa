@@ -1,15 +1,19 @@
 import { useCallback, useEffect, useState } from 'react';
-import { api } from '../api';
+import { api, type Range } from '../api';
 import { onRealtimeEvent } from '../sync';
+import RangeControl, { money } from '../components/RangeControl';
+import { ColumnChart, RankBars, Donut, BarChart } from '../components/charts';
 import InventoryPanel from './InventoryPanel';
 import WriteOffPanel from './WriteOffPanel';
 import BulkPricePanel from './BulkPricePanel';
 import CatalogPanel from './CatalogPanel';
 
-type Tab = 'restock' | 'stale' | 'tools';
+type Tab = 'metrics' | 'restock' | 'stale' | 'tools';
+
+const WEEKDAYS = ['', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
 
 export default function AnalyticsPage() {
-  const [tab, setTab] = useState<Tab>('restock');
+  const [tab, setTab] = useState<Tab>('metrics');
   const [toast, setToast] = useState<string | null>(null);
 
   function flash(m: string) {
@@ -18,26 +22,187 @@ export default function AnalyticsPage() {
   }
 
   return (
-    <div className="page">
+    <div className="page page--wide">
       <h1>Аналитика</h1>
 
-      <div className="seg">
-        <button className={`seg__btn ${tab === 'restock' ? 'seg__btn--on' : ''}`} onClick={() => setTab('restock')}>
-          Пора закупить
-        </button>
-        <button className={`seg__btn ${tab === 'stale' ? 'seg__btn--on' : ''}`} onClick={() => setTab('stale')}>
-          Залежалый
-        </button>
-        <button className={`seg__btn ${tab === 'tools' ? 'seg__btn--on' : ''}`} onClick={() => setTab('tools')}>
-          Инструменты
-        </button>
+      <div className="seg seg--tabs">
+        {([['metrics', 'Показатели'], ['restock', 'Пора закупить'], ['stale', 'Залежалый'], ['tools', 'Инструменты']] as [Tab, string][])
+          .map(([k, lbl]) => (
+            <button key={k} className={`seg__btn ${tab === k ? 'seg__btn--on' : ''}`} onClick={() => setTab(k)}>{lbl}</button>
+          ))}
       </div>
 
+      {tab === 'metrics' && <MetricsTab />}
       {tab === 'restock' && <RestockTab />}
       {tab === 'stale' && <StaleTab />}
       {tab === 'tools' && <ToolsTab onDone={flash} />}
 
       {toast && <div className="toast">{toast}</div>}
+    </div>
+  );
+}
+
+// Card для аналитики (та же обёртка, что в Кабинете).
+function Card({ title, action, children }: { title: string; action?: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <div className="dash-card">
+      <div className="dash-card__head">
+        <h2 className="dash-card__title">{title}</h2>
+        {action}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+// «Показатели» — максимум аналитики по товарам и продажам за период.
+function MetricsTab() {
+  const [range, setRange] = useState<Range>({ period: '30d' });
+  const [data, setData] = useState<any | null>(null);
+  const [topSort, setTopSort] = useState<'revenue' | 'margin' | 'qty'>('margin');
+
+  const load = useCallback(async () => {
+    try {
+      const [summary, series, cats, cashiers, hours, weekday, pay, abc, topM] = await Promise.all([
+        api.summary(range), api.timeseries(range), api.byCategory(range), api.byCashier(range),
+        api.byHour(range), api.byWeekday(range), api.paymentSplit(range), api.abc(range),
+        api.topProducts(range, topSort, 15),
+      ]);
+      setData({ summary, series, cats, cashiers, hours, weekday, pay, abc, topM });
+    } catch { /* ignore */ }
+  }, [range, topSort]);
+  useEffect(() => { load(); }, [load]);
+  useEffect(() => onRealtimeEvent((t) => (t === 'sale' || t === 'return' || t === 'data_updated') && load()), [load]);
+
+  if (!data) return <p className="hint">Загружаю показатели…</p>;
+  const { summary: s, series, cats, cashiers, hours, weekday, pay, abc, topM } = data;
+  const animKey = `${range.period}:${range.from ?? ''}:${range.to ?? ''}`;
+
+  const points = (series?.points ?? []).map((p: any) => ({
+    label: series.bucket === 'hour'
+      ? new Date(p.bucket).toLocaleTimeString('ru-RU', { hour: '2-digit' })
+      : new Date(p.bucket).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' }),
+    revenue: Number(p.revenue), margin: Number(p.margin), receipts: Number(p.receipts),
+  }));
+
+  const hourMap = new Map<number, any>(hours.map((h: any) => [Number(h.hour), h]));
+  const hoursBars = hours.length === 0 ? [] : Array.from({ length: 24 }, (_, hr) => {
+    const h = hourMap.get(hr);
+    return { label: String(hr).padStart(2, '0'), value: h ? Number(h.revenue) : 0, sub: h ? `${h.receipts} чек.` : 'нет продаж' };
+  });
+  const dowMap = new Map<number, any>(weekday.map((w: any) => [Number(w.dow), w]));
+  const weekdayBars = weekday.length === 0 ? [] : [1, 2, 3, 4, 5, 6, 7].map((dow) => {
+    const w = dowMap.get(dow);
+    return { label: WEEKDAYS[dow], value: w ? Number(w.revenue) : 0, sub: w ? `маржа ${money(w.margin)} · ${w.receipts} чек.` : 'нет продаж' };
+  });
+  const PAY_META: Record<string, [string, string]> = {
+    cash: ['Наличные', 'var(--ok)'], card: ['Безнал', 'var(--primary)'], mixed: ['Смешанная', 'var(--c3)'],
+  };
+  const payData = pay.map((p: any) => ({
+    label: PAY_META[p.method]?.[0] ?? p.method, value: Number(p.total), color: PAY_META[p.method]?.[1] ?? 'var(--muted)',
+  }));
+
+  // ABC-анализ: по накопленной доле выручки. A — до 80%, B — до 95%, C — хвост.
+  const abcTotal = abc.reduce((a: number, r: any) => a + Number(r.revenue), 0) || 1;
+  let acc = 0;
+  const abcRows = abc.map((r: any) => {
+    acc += Number(r.revenue);
+    const cum = (acc / abcTotal) * 100;
+    const cls = cum <= 80 ? 'A' : cum <= 95 ? 'B' : 'C';
+    return { ...r, share: (Number(r.revenue) / abcTotal) * 100, cum, cls };
+  });
+  const abcCount = { A: abcRows.filter((r: any) => r.cls === 'A').length, B: abcRows.filter((r: any) => r.cls === 'B').length, C: abcRows.filter((r: any) => r.cls === 'C').length };
+
+  return (
+    <>
+      <RangeControl range={range} onChange={setRange} />
+
+      {s && (
+        <div className="kpi-grid">
+          <MKpi label="Выручка" value={money(s.net_revenue)} big change={s.prev?.revenue_change} />
+          <MKpi label={`Маржа · ${s.margin_pct}%`} value={money(s.margin)} big accent change={s.prev?.margin_change} />
+          <MKpi label="Чистая прибыль" value={money(s.net_profit)} big accent />
+          <MKpi label="Чеков" value={String(s.receipts)} />
+          <MKpi label="Средний чек" value={money(s.avg_check)} />
+          <MKpi label="Товаров продано" value={money(s.items)} />
+        </div>
+      )}
+
+      <Card title="Динамика выручки и маржи">
+        <ColumnChart key={animKey} points={points} />
+      </Card>
+
+      <Card
+        title="ABC-анализ товаров"
+        action={<span className="muted" style={{ fontSize: 12 }}>A: {abcCount.A} · B: {abcCount.B} · C: {abcCount.C}</span>}
+      >
+        <p className="hint">A — дают 80% выручки (главные), B — следующие 15%, C — хвост 5% (кандидаты на вывод).</p>
+        <div className="report-table-wrap">
+          <table className="report-table">
+            <thead><tr><th>Товар</th><th className="num">Выручка</th><th className="num">Доля</th><th className="num">Класс</th></tr></thead>
+            <tbody>
+              {abcRows.slice(0, 40).map((r: any, i: number) => (
+                <tr key={i}>
+                  <td>{r.name}</td>
+                  <td className="num">{money(r.revenue)}</td>
+                  <td className="num">{r.share.toFixed(1)}%</td>
+                  <td className="num"><span className={`abc-badge abc-${r.cls.toLowerCase()}`}>{r.cls}</span></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+
+      <Card
+        title="Топ товаров"
+        action={
+          <div className="seg seg--mini">
+            {([['revenue', 'выручка'], ['margin', 'маржа'], ['qty', 'кол-во']] as const).map(([k, l]) => (
+              <button key={k} className={`seg__btn ${topSort === k ? 'seg__btn--on' : ''}`} onClick={() => setTopSort(k)}>{l}</button>
+            ))}
+          </div>
+        }
+      >
+        <RankBars key={`${animKey}:${topSort}`} items={topM.map((p: any) => ({
+          label: p.name,
+          value: topSort === 'qty' ? Number(p.qty) : topSort === 'margin' ? Number(p.margin) : Number(p.revenue),
+          sub: `${Number(p.qty)} ${p.unit === 'kg' ? 'кг' : 'шт'} · маржа ${money(p.margin)}`,
+        }))} unitHint={topSort === 'qty' ? '' : undefined} />
+      </Card>
+
+      <div className="chart-grid">
+        <Card title="По категориям">
+          <RankBars key={animKey} items={cats.map((c: any) => ({ label: c.category, value: Number(c.revenue), sub: `маржа ${money(c.margin)}` }))} />
+        </Card>
+        <Card title="По кассирам">
+          <RankBars key={animKey} items={cashiers.map((c: any) => ({ label: c.cashier, value: Number(c.revenue), sub: `${c.receipts} чек. · маржа ${money(c.margin)}` }))} />
+        </Card>
+      </div>
+
+      <Card title="Выручка по часам дня">
+        <BarChart key={animKey} bars={hoursBars} format={money} />
+      </Card>
+      <Card title="По дням недели">
+        <BarChart key={animKey} bars={weekdayBars} format={money} />
+      </Card>
+      <Card title="Чем платят">
+        <Donut key={animKey} data={payData} centerLabel="продажи" />
+      </Card>
+    </>
+  );
+}
+
+function MKpi({ label, value, big, accent, change }: { label: string; value: string; big?: boolean; accent?: boolean; change?: number | null }) {
+  return (
+    <div className={`kpi ${big ? 'kpi--big' : ''}`}>
+      <div className="kpi__label">{label}</div>
+      <div className={`kpi__value ${accent ? 'kpi__value--accent' : ''}`}>{value}</div>
+      {change != null && (
+        <div className={`kpi__change ${change >= 0 ? 'kpi__change--up' : 'kpi__change--down'}`}>
+          {change >= 0 ? '▲' : '▼'} {Math.abs(change)}% <span className="muted">к пред.</span>
+        </div>
+      )}
     </div>
   );
 }

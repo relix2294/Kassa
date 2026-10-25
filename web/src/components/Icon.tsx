@@ -8,7 +8,7 @@ export type IconName =
   | 'analytics' | 'history' | 'debts' | 'expenses' | 'staff'
   | 'power' | 'eye' | 'cart' | 'wallet' | 'search' | 'printer' | 'calculator'
   | 'cash' | 'card' | 'mixed' | 'minus' | 'download' | 'upload' | 'tag'
-  | 'bell' | 'return' | 'wait' | 'edit' | 'hand' | 'check'
+  | 'bell' | 'return' | 'wait' | 'edit' | 'hand' | 'check' | 'report'
   | 'sun' | 'moon' | 'auto';
 
 // Содержимое каждой иконки — пути в системе координат 24×24.
@@ -44,6 +44,7 @@ const PATHS: Record<IconName, JSX.Element> = {
   edit: <><path d="M14.5 5.5l4 4" /><path d="M4 20l1-4L16 5a2 2 0 0 1 3 3L8 19l-4 1z" /></>,
   hand: <><path d="M8 11V5.5a1.5 1.5 0 0 1 3 0V10M11 10V4.5a1.5 1.5 0 0 1 3 0V10M14 10V6.5a1.5 1.5 0 0 1 3 0V14a6 6 0 0 1-6 6h-.5a6 6 0 0 1-5-2.7L5 14a1.6 1.6 0 0 1 2.6-1.8L8 13" /></>,
   check: <><path d="M5 12.5l4.5 4.5L19 7" /></>,
+  report: <><rect x="5" y="3" width="14" height="18" rx="2" /><path d="M9 16v-4M12 16v-7M15 16v-2.5" /></>,
   sun: <><circle cx="12" cy="12" r="4.2" /><path d="M12 2.5v2.5M12 19v2.5M4.5 4.5l1.8 1.8M17.7 17.7l1.8 1.8M2.5 12H5M19 12h2.5M4.5 19.5l1.8-1.8M17.7 6.3l1.8-1.8" /></>,
   moon: <><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a7 7 0 1 0 10.5 10.5z" /></>,
   auto: <><circle cx="12" cy="12" r="8.5" /><path d="M12 3.5v17" /><path d="M12 3.5a8.5 8.5 0 0 1 0 17z" fill="currentColor" stroke="none" /></>,
