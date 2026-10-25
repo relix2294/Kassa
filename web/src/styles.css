@@ -540,12 +540,11 @@ input:focus, .search:focus { outline: none; border-color: var(--primary); }
 
 /* Кольцо оплат */
 .donut { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
-.donut__svg { width: 160px; height: 160px; flex: 0 0 auto; }
-.donut__seg {
-  stroke: var(--surface); stroke-width: 2;
-  transform-box: fill-box; transform-origin: center;
-  animation: segPop .5s cubic-bezier(.22, 1, .36, 1) both;
-}
+/* Всё кольцо плавно появляется (масштаб + проявление) — надёжно на всех
+   браузерах, включая iOS (трансформа на самом <svg>, не на дугах). */
+.donut__svg { width: 160px; height: 160px; flex: 0 0 auto; transform-origin: 50% 50%; animation: donutIn .6s cubic-bezier(.22, 1, .36, 1) both; }
+/* Сегменты проявляются по очереди (opacity анимируется везде одинаково). */
+.donut__seg { stroke: var(--surface); stroke-width: 2; animation: segFade .5s ease both; }
 .donut__center { fill: var(--text); font-size: 22px; font-weight: 800; }
 .donut__centerlabel { fill: var(--muted); font-size: 11px; }
 .donut__legend { flex: 1 1 160px; display: flex; flex-direction: column; gap: 8px; }
@@ -555,14 +554,16 @@ input:focus, .search:focus { outline: none; border-color: var(--primary); }
 /* --- Анимация появления графиков (оживляем дашборд) --- */
 @keyframes barGrow { from { transform: scaleY(0); } to { transform: scaleY(1); } }
 @keyframes growW   { from { transform: scaleX(0); } to { transform: scaleX(1); } }
-@keyframes segPop  { from { transform: scale(.4); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+@keyframes donutIn { from { opacity: 0; transform: scale(.78); } to { opacity: 1; transform: scale(1); } }
+@keyframes segFade { from { opacity: 0; } to { opacity: 1; } }
 @keyframes drawLine { to { stroke-dashoffset: 0; } }
 
 /* Уважаем «уменьшить движение»: показываем всё сразу, без анимаций. */
 @media (prefers-reduced-motion: reduce) {
-  .chart__bar, .rankbar__fill, .donut__seg, .chart__line--margin {
+  .chart__bar, .rankbar__fill, .donut__seg, .donut__svg, .chart__line--margin {
     animation: none !important;
     transform: none !important;
+    opacity: 1 !important;
     stroke-dashoffset: 0 !important;
   }
 }
