@@ -76,6 +76,26 @@ suppliersRouter.post('/', async (req, res) => {
   res.status(201).json(row);
 });
 
+// Изменить поставщика: только справочные данные — имя и телефон. Накладные,
+// долги и платежи не трогаем (это денежная история, правится своими путями).
+suppliersRouter.patch('/:id', async (req, res) => {
+  const name = req.body?.name !== undefined ? String(req.body.name).trim() : undefined;
+  const phone = req.body?.phone !== undefined ? (String(req.body.phone).trim() || null) : undefined;
+  if (name !== undefined && !name) return res.status(400).json({ error: 'Имя поставщика не может быть пустым' });
+  if (name === undefined && phone === undefined) return res.status(400).json({ error: 'Нечего менять' });
+
+  const rows = await query(
+    `UPDATE suppliers SET name = COALESCE($2, name), phone = COALESCE($3, phone) WHERE id = $1 RETURNING *`,
+    [req.params.id, name ?? null, phone === undefined ? null : phone],
+  );
+  if (!rows[0]) return res.status(404).json({ error: 'not_found' });
+  await writeLog({
+    type: 'supplier_update', entity: 'supplier', entityId: req.params.id, userId: req.user!.id,
+    details: { name, phone },
+  });
+  res.json(rows[0]);
+});
+
 // Карточка поставщика: накладные (с остатком долга) и платежи.
 suppliersRouter.get('/:id', async (req, res) => {
   const s = (await query(`SELECT * FROM suppliers WHERE id = $1`, [req.params.id]))[0];

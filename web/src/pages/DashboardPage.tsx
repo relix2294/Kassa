@@ -8,6 +8,7 @@ import ShiftRequests from '../components/ShiftRequests';
 import ReturnRequests from '../components/ReturnRequests';
 import ExpenseRequests from '../components/ExpenseRequests';
 import BalanceCard from '../components/BalanceCard';
+import ProductEditModal from '../components/ProductEditModal';
 import { ColumnChart, RankBars, Donut } from '../components/charts';
 import RangeControl, { money } from '../components/RangeControl';
 import type { LogRow, Product } from '../types';
@@ -400,6 +401,8 @@ function ReturnsTab() {
 
 function StockTab() {
   const products = useLiveQuery(() => db.products.orderBy('name').toArray(), [], [] as Product[]);
+  const [editing, setEditing] = useState<Product | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
   // Низкий остаток — по единому правилу, сортируем от самых пустых.
   const low = products.filter(isLowStock).sort((a, b) => a.stock - b.stock);
   return (
@@ -409,29 +412,38 @@ function StockTab() {
           <h2 className="sect">Пора закупить <span className="muted">({low.length})</span></h2>
           <div className="list">
             {low.map((p) => (
-              <div key={p.id} className="list-item list-item--static">
+              <button key={p.id} className="list-item" onClick={() => setEditing(p)}>
                 <div className="list-item__main">
                   <div className="list-item__name">{p.name}</div>
                   <div className="muted">{p.min_stock > 0 ? `минимум ${p.min_stock}` : `порог ${LOW_STOCK_THRESHOLD}`}</div>
                 </div>
                 <div className="stock stock--low">{p.stock} {p.unit === 'kg' ? 'кг' : 'шт'}</div>
-              </div>
+              </button>
             ))}
           </div>
         </>
       )}
-      <h2 className="sect">Все остатки</h2>
+      <h2 className="sect">Все остатки <span className="muted">(нажмите, чтобы изменить)</span></h2>
       <div className="list">
         {products.map((p) => (
-          <div key={p.id} className="list-item list-item--static">
+          <button key={p.id} className="list-item" onClick={() => setEditing(p)}>
             <div className="list-item__main">
               <div className="list-item__name">{p.name}</div>
               <div className="muted">прод. {p.sale_price} · закуп. {p.cost_price}</div>
             </div>
             <div className={`stock ${isLowStock(p) ? 'stock--low' : ''}`}>{p.stock} {p.unit === 'kg' ? 'кг' : 'шт'}</div>
-          </div>
+          </button>
         ))}
       </div>
+
+      {editing && (
+        <ProductEditModal
+          product={editing}
+          onClose={() => setEditing(null)}
+          onSaved={(m) => { setEditing(null); setToast(m); setTimeout(() => setToast(null), 2500); }}
+        />
+      )}
+      {toast && <div className="toast">{toast}</div>}
     </>
   );
 }

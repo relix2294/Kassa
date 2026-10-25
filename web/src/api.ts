@@ -210,7 +210,7 @@ export const api = {
   listUsers: () => req<(User & { has_pin: boolean; created_at: string })[]>('/users'),
   createUser: (payload: { username: string; full_name?: string; pin: string; role?: 'owner' | 'cashier' }) =>
     req<User>('/users', { method: 'POST', body: JSON.stringify(payload) }),
-  updateUser: (id: string, payload: { full_name?: string; is_blocked?: boolean; pin?: string }) =>
+  updateUser: (id: string, payload: { full_name?: string; username?: string; is_blocked?: boolean; pin?: string }) =>
     req<User>(`/users/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
   listLogs: (limit = 200) => req<LogRow[]>(`/logs?limit=${limit}`),
   restock: () =>
@@ -242,6 +242,8 @@ export const api = {
     ),
   createSupplier: (payload: { name: string; phone?: string }) =>
     req<any>('/suppliers', { method: 'POST', body: JSON.stringify(payload) }),
+  updateSupplier: (id: string, payload: { name?: string; phone?: string }) =>
+    req<any>(`/suppliers/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
   getSupplier: (id: string) =>
     req<{
       supplier: { id: string; name: string; phone: string | null };

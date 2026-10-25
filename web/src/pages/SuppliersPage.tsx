@@ -174,6 +174,7 @@ function SupplierDetail({ id, onClose, onChange, onFlash }: {
   const [data, setData] = useState<any | null>(null);
   const [addInv, setAddInv] = useState(false);
   const [payFor, setPayFor] = useState<any | null>(null);
+  const [editSup, setEditSup] = useState(false);
 
   const reload = useCallback(() => {
     api.getSupplier(id).then(setData).catch(() => {});
@@ -185,7 +186,10 @@ function SupplierDetail({ id, onClose, onChange, onFlash }: {
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
-        <h2>{data.supplier.name}</h2>
+        <div className="sale-head">
+          <h2>{data.supplier.name}</h2>
+          <button className="btn btn--ghost" onClick={() => setEditSup(true)}>Изменить</button>
+        </div>
         <div className="muted mb">
           {data.supplier.phone || 'без телефона'} · долг:{' '}
           <b className={data.debt > 0 ? 'diff-neg' : ''}>{Number(data.debt).toFixed(2)}</b>
@@ -238,6 +242,51 @@ function SupplierDetail({ id, onClose, onChange, onFlash }: {
           onDone={() => { setPayFor(null); reload(); onChange(); onFlash('Платёж внесён'); }}
         />
       )}
+      {editSup && (
+        <EditSupplier
+          supplier={data.supplier}
+          onClose={() => setEditSup(false)}
+          onDone={() => { setEditSup(false); reload(); onChange(); onFlash('Поставщик изменён'); }}
+        />
+      )}
+    </div>
+  );
+}
+
+// Правка справочных данных поставщика: имя и телефон. Долги/платежи не трогаем.
+function EditSupplier({ supplier, onClose, onDone }: {
+  supplier: { id: string; name: string; phone: string | null }; onClose: () => void; onDone: () => void;
+}) {
+  const [name, setName] = useState(supplier.name);
+  const [phone, setPhone] = useState(supplier.phone ?? '');
+  const [err, setErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function save() {
+    if (!name.trim()) { setErr('Укажите имя'); return; }
+    setBusy(true); setErr(null);
+    try {
+      await api.updateSupplier(supplier.id, { name: name.trim(), phone: phone.trim() });
+      onDone();
+    } catch (e: any) { setErr(e?.body?.error || e.message); } finally { setBusy(false); }
+  }
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <h2>Изменить поставщика</h2>
+        <label className="field"><span>Название / имя</span>
+          <input value={name} onChange={(e) => setName(e.target.value)} autoFocus />
+        </label>
+        <label className="field"><span>Телефон</span>
+          <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="необязательно" />
+        </label>
+        {err && <div className="change change--neg">{err}</div>}
+        <div className="row">
+          <button className="btn" onClick={onClose} disabled={busy}>Отмена</button>
+          <button className="btn btn--primary" onClick={save} disabled={busy}>Сохранить</button>
+        </div>
+      </div>
     </div>
   );
 }

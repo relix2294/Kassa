@@ -9,6 +9,7 @@ export default function StaffPage() {
   const [users, setUsers] = useState<Staff[]>([]);
   const [adding, setAdding] = useState(false);
   const [pinFor, setPinFor] = useState<Staff | null>(null);
+  const [editFor, setEditFor] = useState<Staff | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
   async function reload() {
@@ -53,6 +54,9 @@ export default function StaffPage() {
               <div className="muted">@{u.username}</div>
             </div>
             <div className="staff-actions">
+              <button className="btn btn--ghost" onClick={() => setEditFor(u)}>
+                Изменить
+              </button>
               <button className="btn btn--ghost" onClick={() => setPinFor(u)}>
                 PIN
               </button>
@@ -73,6 +77,18 @@ export default function StaffPage() {
             setAdding(false);
             reload();
             flash('Кассир добавлен');
+          }}
+        />
+      )}
+
+      {editFor && (
+        <EditStaff
+          user={editFor}
+          onClose={() => setEditFor(null)}
+          onDone={() => {
+            setEditFor(null);
+            reload();
+            flash('Данные сохранены');
           }}
         />
       )}
@@ -153,6 +169,57 @@ function AddCashier({ onClose, onDone }: { onClose: () => void; onDone: () => vo
           </button>
           <button className="btn btn--primary" onClick={save} disabled={busy}>
             Создать
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Правка данных сотрудника: имя и логин (PIN — отдельной кнопкой).
+function EditStaff({ user, onClose, onDone }: { user: Staff; onClose: () => void; onDone: () => void }) {
+  const [fullName, setFullName] = useState(user.full_name ?? '');
+  const [username, setUsername] = useState(user.username);
+  const [err, setErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function save() {
+    if (!username.trim()) {
+      setErr('Логин не может быть пустым');
+      return;
+    }
+    setBusy(true);
+    setErr(null);
+    try {
+      await api.updateUser(user.id, { full_name: fullName.trim(), username: username.trim() });
+      onDone();
+    } catch (e: any) {
+      setErr(e.message || 'Не удалось сохранить');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <h2>Данные {user.role === 'owner' ? 'владельца' : 'кассира'}</h2>
+        <label className="field">
+          <span>Имя</span>
+          <input value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Азиз" autoFocus />
+        </label>
+        <label className="field">
+          <span>Логин</span>
+          <input value={username} onChange={(e) => setUsername(e.target.value)} autoCapitalize="none" />
+        </label>
+        <p className="hint">PIN меняется отдельной кнопкой «PIN».</p>
+        {err && <div className="change change--neg">{err}</div>}
+        <div className="row">
+          <button className="btn" onClick={onClose} disabled={busy}>
+            Отмена
+          </button>
+          <button className="btn btn--primary" onClick={save} disabled={busy}>
+            Сохранить
           </button>
         </div>
       </div>

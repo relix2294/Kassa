@@ -162,7 +162,10 @@ export default function HistoryPage() {
                     {s.change_given != null && Number(s.change_given) > 0 && (
                       <Row label="Сдача" value={Number(s.change_given).toFixed(2)} />
                     )}
-                    <Row label="Прибыль" value={margin.toFixed(2)} />
+                    <Row
+                      label="Прибыль"
+                      value={`${margin.toFixed(2)}${Number(s.total) > 0 ? ` · ${((margin / Number(s.total)) * 100).toFixed(1)}%` : ''}`}
+                    />
                   </div>
                 </div>
               )}
