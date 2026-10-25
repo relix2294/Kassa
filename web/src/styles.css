@@ -225,6 +225,23 @@ input:focus, .search:focus { outline: none; border-color: var(--primary); }
   text-align: center;
 }
 
+/* Секретная зона: 6 тапов в правый нижний угол показывают/прячут вкладку
+   «Смена» у кассира. Невидима и не мешает — ловит тап только в самом углу. */
+.corner-tap {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  width: 46px;
+  height: 46px;
+  padding: 0;
+  margin: 0;
+  border: none;
+  background: transparent;
+  z-index: 60;
+  cursor: default;
+  -webkit-tap-highlight-color: transparent;
+}
+
 .modal-backdrop {
   position: fixed;
   inset: 0;

@@ -50,6 +50,29 @@ export default function App() {
     api.health().then((h) => setMirror(h.role === 'mirror')).catch(() => {});
   }, []);
 
+  // Вкладка «Смена» у кассира скрыта по умолчанию. Показать/скрыть её — 6 тапов
+  // в правый нижний угол (секретная зона). Состояние живёт в памяти: при
+  // перезагрузке и новом входе вкладка снова скрыта. У владельца всегда видна.
+  const [shiftRevealed, setShiftRevealed] = useState(false);
+  const [revealHint, setRevealHint] = useState<string | null>(null);
+  const tapCount = useRef(0);
+  const lastTap = useRef(0);
+  function secretCornerTap() {
+    const now = Date.now();
+    // Сбрасываем счётчик, если тапы редкие (случайные нажатия не копятся).
+    tapCount.current = now - lastTap.current > 1500 ? 1 : tapCount.current + 1;
+    lastTap.current = now;
+    if (tapCount.current >= 6) {
+      tapCount.current = 0;
+      setShiftRevealed((v) => {
+        const nv = !v;
+        setRevealHint(nv ? 'Вкладка «Смена» показана' : 'Вкладка «Смена» скрыта');
+        window.setTimeout(() => setRevealHint(null), 2000);
+        return nv;
+      });
+    }
+  }
+
   // После входа подтягиваем каталог, смену и переподключаем realtime
   // под новой ролью (сервер шлёт кассиру не то же, что владельцу).
   useEffect(() => {
@@ -57,6 +80,7 @@ export default function App() {
       pullProducts();
       refreshShift();
       reconnectRealtime();
+      setShiftRevealed(false); // новый вход — вкладка «Смена» снова скрыта
     }
   }, [user?.id]);
 
@@ -142,7 +166,7 @@ export default function App() {
             <span>Продажа</span>
           </NavLink>
         )}
-        {!mirror && (
+        {!mirror && (owner || shiftRevealed) && (
           <NavLink to="/shift" className="tab">
             <span className="tab__icon">🕐</span>
             <span>Смена</span>
@@ -197,6 +221,13 @@ export default function App() {
           </NavLink>
         )}
       </nav>
+
+      {/* Секретная зона для кассира: 6 тапов в правый нижний угол показывают/
+          прячут вкладку «Смена». Невидима, у владельца и на витрине не нужна. */}
+      {!owner && !mirror && (
+        <button aria-hidden className="corner-tap" tabIndex={-1} onClick={secretCornerTap} />
+      )}
+      {revealHint && <div className="toast">{revealHint}</div>}
     </div>
   );
 }
