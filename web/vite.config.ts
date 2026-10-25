@@ -7,12 +7,17 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
+      workbox: {
+        // Тяжёлый ExcelJS (нужен только владельцу при выгрузке) не пред-кешируем:
+        // грузится по требованию, кассиры его не качают.
+        globIgnores: ['**/exceljs*.js'],
+      },
       manifest: {
         name: 'Kassa',
         short_name: 'Kassa',
         description: 'Учёт для магазина',
-        theme_color: '#0f172a',
-        background_color: '#0f172a',
+        theme_color: '#0b0d1a',
+        background_color: '#0b0d1a',
         display: 'standalone',
         start_url: '/',
         icons: [

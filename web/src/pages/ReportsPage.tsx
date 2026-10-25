@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { api, type Range } from '../api';
 import RangeControl, { money } from '../components/RangeControl';
 import Icon from '../components/Icon';
+import { exportXlsx } from '../xlsx';
 
 // Отчёты: сводка за период для учёта и печати. Всё — на готовых данных сервера,
 // плюс выгрузка в CSV (Excel) и печать. Удобно отдать бухгалтеру или подшить.
@@ -26,44 +27,37 @@ export default function ReportsPage() {
 
   const expTotal = exp.reduce((a, e) => a + Number(e.total), 0);
 
-  function downloadCsv() {
+  async function downloadXlsx() {
     if (!s) return;
-    const esc = (v: any) => {
-      const str = String(v ?? '');
-      return /[",;\n]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
-    };
-    const rows: string[][] = [];
-    rows.push(['Отчёт за период', `${new Date(s.from).toLocaleDateString('ru-RU')} — ${new Date(s.to).toLocaleDateString('ru-RU')}`]);
-    rows.push([]);
-    rows.push(['Показатель', 'Значение']);
-    rows.push(['Выручка (за вычетом возвратов)', String(s.net_revenue)]);
-    rows.push(['Маржа', String(s.margin)]);
-    rows.push(['Маржа, %', String(s.margin_pct)]);
-    rows.push(['Чеков', String(s.receipts)]);
-    rows.push(['Средний чек', String(s.avg_check)]);
-    rows.push(['Наличные', String(s.cash)]);
-    rows.push(['Безнал', String(s.card)]);
-    rows.push(['Возвраты', String(s.refunds_total)]);
-    rows.push(['Расходы', String(s.expenses)]);
-    rows.push(['Оплачено поставщикам', String(sup?.paid ?? 0)]);
-    rows.push(['Чистая прибыль', String(s.net_profit)]);
-    rows.push([]);
-    rows.push(['Топ товаров', 'Кол-во', 'Выручка', 'Маржа']);
-    top.forEach((p) => rows.push([p.name, String(p.qty), String(p.revenue), String(p.margin)]));
-    rows.push([]);
-    rows.push(['Категория', 'Выручка', 'Маржа']);
-    cats.forEach((c) => rows.push([c.category, String(c.revenue), String(c.margin)]));
-    rows.push([]);
-    rows.push(['Расход (категория)', 'Сумма']);
-    exp.forEach((e) => rows.push([e.category, String(e.total)]));
-
-    const csv = '﻿' + rows.map((r) => r.map(esc).join(';')).join('\r\n');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `kassa-otchet-${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(a.href);
+    const period = `${new Date(s.from).toLocaleDateString('ru-RU')} — ${new Date(s.to).toLocaleDateString('ru-RU')}`;
+    await exportXlsx('kassa-otchet', `Отчёт за период: ${period}`, [
+      { caption: 'Сводка', columns: [{ header: 'Показатель' }, { header: 'Значение', num: true }], rows: [
+        ['Выручка (за вычетом возвратов)', Number(s.net_revenue)],
+        ['Маржа', Number(s.margin)],
+        ['Маржа, %', Number(s.margin_pct)],
+        ['Чеков', Number(s.receipts)],
+        ['Средний чек', Number(s.avg_check)],
+        ['Наличные', Number(s.cash)],
+        ['Безнал', Number(s.card)],
+        ['Возвраты', Number(s.refunds_total)],
+        ['Расходы', Number(s.expenses)],
+        ['Оплачено поставщикам', Number(sup?.paid ?? 0)],
+        ['Чистая прибыль', Number(s.net_profit)],
+      ] },
+      { caption: 'Топ товаров', columns: [{ header: 'Товар' }, { header: 'Кол-во', num: true }, { header: 'Выручка', num: true }, { header: 'Маржа', num: true }],
+        rows: top.map((p) => [p.name, Number(p.qty), Number(p.revenue), Number(p.margin)]) },
+      { caption: 'По категориям', columns: [{ header: 'Категория' }, { header: 'Выручка', num: true }, { header: 'Маржа', num: true }],
+        rows: cats.map((c) => [c.category, Number(c.revenue), Number(c.margin)]) },
+      { caption: 'Расходы по категориям', columns: [{ header: 'Категория' }, { header: 'Сумма', num: true }],
+        rows: exp.map((e) => [e.category, Number(e.total)]) },
+      { caption: 'Поставщики', columns: [{ header: 'Показатель' }, { header: 'Сумма', num: true }], rows: [
+        ['Оплачено всего', Number(sup?.paid ?? 0)],
+        ['Из кассы', Number((sup?.paid_cash ?? 0) + (sup?.paid_wallet ?? 0))],
+        ['С рук (подотчёт)', Number(sup?.paid_hand ?? 0)],
+        ['Со стороны', Number(sup?.paid_external ?? 0)],
+        ['Закуплено (накладные)', Number(sup?.purchased ?? 0)],
+      ] },
+    ]);
   }
 
   return (
@@ -72,7 +66,7 @@ export default function ReportsPage() {
       <RangeControl range={range} onChange={setRange} />
 
       <div className="dash-actions no-print">
-        <button className="btn btn--ghost" onClick={downloadCsv} disabled={!s}><Icon name="download" /> Скачать CSV</button>
+        <button className="btn btn--ghost" onClick={downloadXlsx} disabled={!s}><Icon name="download" /> Скачать Excel</button>
         <button className="btn btn--ghost" onClick={() => window.print()} disabled={!s}><Icon name="printer" /> Печать</button>
       </div>
 

@@ -4,6 +4,7 @@ import { onRealtimeEvent } from '../sync';
 import RangeControl, { money } from '../components/RangeControl';
 import { ColumnChart, RankBars, Donut, BarChart } from '../components/charts';
 import Icon from '../components/Icon';
+import { exportXlsx } from '../xlsx';
 import InventoryPanel from './InventoryPanel';
 import WriteOffPanel from './WriteOffPanel';
 import BulkPricePanel from './BulkPricePanel';
@@ -177,21 +178,6 @@ function MKpi({ label, value, big, accent, change }: { label: string; value: str
   );
 }
 
-// Выгрузка таблицы в CSV (Excel).
-function downloadCsv(filename: string, rows: (string | number)[][]) {
-  const esc = (v: any) => {
-    const s = String(v ?? '');
-    return /[",;\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-  };
-  const csv = '﻿' + rows.map((r) => r.map(esc).join(';')).join('\r\n');
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = `${filename}-${new Date().toISOString().slice(0, 10)}.csv`;
-  a.click();
-  URL.revokeObjectURL(a.href);
-}
-
 // «По товарам»: ABC-анализ (по выручке / прибыли / количеству, классы A/B/C с
 // листанием и выгрузкой) + маржинальность (что продаём почти без прибыли).
 type AbcMetric = 'revenue' | 'margin' | 'qty';
@@ -239,10 +225,13 @@ function ProductsAnalyticsTab() {
   const filtered = cls === 'all' ? abc : abc.filter((r) => r.c === cls);
   const shown = filtered.slice(0, limit);
 
-  function exportAbc() {
-    const head = ['Товар', 'Штрихкод', METRIC_LABEL[metric], 'Доля %', 'Накопл. %', 'Маржа %', 'Кол-во', 'Класс'];
-    const body = filtered.map((r) => [r.name, r.barcode ?? '', r.v, r.share.toFixed(1), r.cum.toFixed(1), r.marginPct.toFixed(1), Number(r.qty), r.c]);
-    downloadCsv('kassa-abc', [head, ...body]);
+  async function exportAbc() {
+    await exportXlsx('kassa-abc', `ABC-анализ · ${METRIC_LABEL[metric]}`, [{
+      columns: [{ header: 'Товар' }, { header: 'Штрихкод' }, { header: METRIC_LABEL[metric], num: true },
+        { header: 'Доля %', pct: true }, { header: 'Накопл. %', pct: true }, { header: 'Маржа %', pct: true },
+        { header: 'Кол-во', num: true }, { header: 'Класс' }],
+      rows: filtered.map((r) => [r.name, r.barcode ?? '', r.v, Number(r.share.toFixed(1)), Number(r.cum.toFixed(1)), Number(r.marginPct.toFixed(1)), Number(r.qty), r.c]),
+    }]);
   }
 
   // Маржинальность: что приносит мало прибыли или торгуем в минус.
@@ -252,11 +241,11 @@ function ProductsAnalyticsTab() {
     .sort((a, b) => a.marginPct - b.marginPct);
   const badList = onlyBad ? byMargin.filter((r) => r.marginPct < 10) : byMargin;
 
-  function exportMargin() {
-    downloadCsv('kassa-marzha', [
-      ['Товар', 'Выручка', 'Прибыль', 'Маржа %', 'Кол-во'],
-      ...byMargin.map((r) => [r.name, Number(r.revenue), Number(r.margin), r.marginPct.toFixed(1), Number(r.qty)]),
-    ]);
+  async function exportMargin() {
+    await exportXlsx('kassa-marzha', 'Маржинальность товаров', [{
+      columns: [{ header: 'Товар' }, { header: 'Выручка', num: true }, { header: 'Прибыль', num: true }, { header: 'Маржа %', pct: true }, { header: 'Кол-во', num: true }],
+      rows: byMargin.map((r) => [r.name, Number(r.revenue), Number(r.margin), Number(r.marginPct.toFixed(1)), Number(r.qty)]),
+    }]);
   }
 
   // Оборачиваемость: скорость продаж и «на сколько хватит остатка».
@@ -269,11 +258,11 @@ function ProductsAnalyticsTab() {
     ? turn.filter((r: any) => Number(r.stock) > 0 && (r.daysLeft == null || r.daysLeft > 60))
         .sort((a: any, b: any) => (b.daysLeft ?? 1e9) - (a.daysLeft ?? 1e9))
     : [...turn].filter((r: any) => Number(r.sold) > 0).sort((a: any, b: any) => b.perDay - a.perDay);
-  function exportTurn() {
-    downloadCsv('kassa-oborachivaemost', [
-      ['Товар', 'Продано', 'Остаток', 'Шт/день', 'Хватит на, дней'],
-      ...turn.map((r: any) => [r.name, Number(r.sold), Number(r.stock), r.perDay.toFixed(2), r.daysLeft == null ? '' : Math.round(r.daysLeft)]),
-    ]);
+  async function exportTurn() {
+    await exportXlsx('kassa-oborachivaemost', 'Оборачиваемость', [{
+      columns: [{ header: 'Товар' }, { header: 'Продано', num: true }, { header: 'Остаток', num: true }, { header: 'Шт/день', num: true }, { header: 'Хватит на, дней', num: true }],
+      rows: turn.map((r: any) => [r.name, Number(r.sold), Number(r.stock), Number(r.perDay.toFixed(2)), r.daysLeft == null ? '' : Math.round(r.daysLeft)]),
+    }]);
   }
 
   // XYZ: стабильность спроса по коэффициенту вариации дневных продаж.
@@ -314,7 +303,7 @@ function ProductsAnalyticsTab() {
 
       <Card
         title="ABC-анализ"
-        action={<button className="btn btn--ghost btn--sm" onClick={exportAbc}><Icon name="download" /> CSV</button>}
+        action={<button className="btn btn--ghost btn--sm" onClick={exportAbc}><Icon name="download" /> Excel</button>}
       >
         <p className="hint">
           Товары по вкладу в выбранную метрику. <b>A</b> — дают 80% (главные, держим всегда),
@@ -370,7 +359,7 @@ function ProductsAnalyticsTab() {
 
       <Card
         title="Маржинальность"
-        action={<button className="btn btn--ghost btn--sm" onClick={exportMargin}><Icon name="download" /> CSV</button>}
+        action={<button className="btn btn--ghost btn--sm" onClick={exportMargin}><Icon name="download" /> Excel</button>}
       >
         <p className="hint">Самое невыгодное сверху: где маржа низкая или торгуем в минус — повод поднять цену или убрать.</p>
         <div className="seg seg--mini" style={{ marginBottom: 10 }}>
@@ -397,7 +386,7 @@ function ProductsAnalyticsTab() {
 
       <Card
         title="Оборачиваемость"
-        action={<button className="btn btn--ghost btn--sm" onClick={exportTurn}><Icon name="download" /> CSV</button>}
+        action={<button className="btn btn--ghost btn--sm" onClick={exportTurn}><Icon name="download" /> Excel</button>}
       >
         <p className="hint">Скорость продаж и на сколько хватит текущего остатка. «Медленные» — лежат долго при живом остатке (замороженные деньги).</p>
         <div className="seg seg--mini" style={{ marginBottom: 10 }}>
@@ -480,18 +469,18 @@ function LossesReturnsTab() {
 
   if (!loss || !ret) return <p className="hint">Загружаю…</p>;
 
-  function exportLosses() {
-    const rows: (string | number)[][] = [['Потери за период', '']];
-    rows.push(['Списания (бой/порча)', loss.writeoffs_total]);
-    rows.push(['Недостачи по инвентаризации', loss.inventory_loss]);
-    rows.push(['Всего потерь', loss.total]);
-    rows.push([]);
-    rows.push(['Списание — товар', 'Кол-во', 'Потеря', 'Причина', 'Кто']);
-    loss.writeoffs.forEach((w: any) => rows.push([w.name, Number(w.qty), Number(w.loss_value), w.reason, w.full_name || w.username || '']));
-    rows.push([]);
-    rows.push(['Недостача — товар', 'Разница', 'Потеря']);
-    loss.inventory.forEach((r: any) => rows.push([r.name, Number(r.difference), Number(r.loss_value)]));
-    downloadCsv('kassa-poteri', rows);
+  async function exportLosses() {
+    await exportXlsx('kassa-poteri', 'Потери за период', [
+      { caption: 'Сводка', columns: [{ header: 'Показатель' }, { header: 'Сумма', num: true }], rows: [
+        ['Списания (бой/порча)', Number(loss.writeoffs_total)],
+        ['Недостачи по инвентаризации', Number(loss.inventory_loss)],
+        ['Всего потерь', Number(loss.total)],
+      ] },
+      { caption: 'Списания', columns: [{ header: 'Товар' }, { header: 'Кол-во', num: true }, { header: 'Потеря', num: true }, { header: 'Причина' }, { header: 'Кто' }],
+        rows: loss.writeoffs.map((w: any) => [w.name, Number(w.qty), Number(w.loss_value), w.reason, w.full_name || w.username || '']) },
+      { caption: 'Недостачи по инвентаризации', columns: [{ header: 'Товар' }, { header: 'Разница', num: true }, { header: 'Потеря', num: true }],
+        rows: loss.inventory.map((r: any) => [r.name, Number(r.difference), Math.abs(Number(r.loss_value))]) },
+    ]);
   }
 
   return (
@@ -500,7 +489,7 @@ function LossesReturnsTab() {
 
       <Card
         title="Потери за период"
-        action={<button className="btn btn--ghost btn--sm" onClick={exportLosses}><Icon name="download" /> CSV</button>}
+        action={<button className="btn btn--ghost btn--sm" onClick={exportLosses}><Icon name="download" /> Excel</button>}
       >
         <div className="kpi-grid">
           <div className="kpi kpi--big"><div className="kpi__label">Всего потерь</div><div className="kpi__value kpi__value--danger">{money(loss.total)}</div></div>
