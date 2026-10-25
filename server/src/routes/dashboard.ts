@@ -347,22 +347,126 @@ dashboardRouter.get('/top-products', async (req, res) => {
   res.json(rows);
 });
 
-// ABC-анализ товаров: вклад каждого товара в выручку за период (отсортировано
-// по убыванию). Классы A/B/C клиент считает по накопленной доле. Без лимита —
-// нужен весь список, чтобы разбить на классы корректно.
+// Число дней в периоде [lo, hi) — для расчётов «в день».
+function periodDays(lo: string, hi: string): number {
+  return Math.max(1, Math.round((new Date(hi).getTime() - new Date(lo).getTime()) / 86400000));
+}
+
+// ABC + данные для XYZ: по каждому товару за период — выручка/прибыль/кол-во и
+// сумма квадратов дневных количеств (sumsq) для коэффициента вариации (XYZ).
+// Классы A/B/C и X/Y/Z клиент считает сам. Без лимита — нужен весь список.
 dashboardRouter.get('/abc', async (req, res) => {
   const { lo, hi } = await resolveBounds(req.query);
   const rows = await query(
-    `SELECT si.name, MAX(si.barcode) AS barcode,
-            SUM(si.qty)        AS qty,
-            SUM(si.line_total) AS revenue,
-            SUM(si.line_total - si.unit_cost * si.qty) AS margin
-       FROM sale_items si
-       JOIN sales s ON s.id = si.sale_id
-      WHERE s.created_at >= $1 AND s.created_at < $2
-      GROUP BY si.name
-      ORDER BY revenue DESC`,
+    `WITH daily AS (
+       SELECT si.name,
+              date_trunc('day', s.created_at AT TIME ZONE '${TZ}') AS d,
+              SUM(si.qty) AS q,
+              SUM(si.line_total) AS rev,
+              SUM(si.line_total - si.unit_cost * si.qty) AS marg,
+              MAX(si.barcode) AS bc
+         FROM sale_items si
+         JOIN sales s ON s.id = si.sale_id
+        WHERE s.created_at >= $1 AND s.created_at < $2
+        GROUP BY si.name, d
+     )
+     SELECT name, MAX(bc) AS barcode,
+            SUM(q)      AS qty,
+            SUM(rev)    AS revenue,
+            SUM(marg)   AS margin,
+            SUM(q * q)  AS sumsq
+       FROM daily GROUP BY name
+       ORDER BY revenue DESC`,
     [lo, hi],
+  );
+  res.json({ days: periodDays(lo, hi), rows });
+});
+
+// Оборачиваемость: по каждому активному товару — продано за период и текущий
+// остаток. Клиент считает «на сколько хватит» и скорость продаж.
+dashboardRouter.get('/turnover', async (req, res) => {
+  const { lo, hi } = await resolveBounds(req.query);
+  const rows = await query(
+    `SELECT p.id, p.name, p.barcode, p.unit, p.stock, p.cost_price,
+            COALESCE(sold.qty, 0) AS sold
+       FROM products p
+       LEFT JOIN (
+         SELECT si.product_id, SUM(si.qty) AS qty
+           FROM sale_items si JOIN sales s ON s.id = si.sale_id
+          WHERE s.created_at >= $1 AND s.created_at < $2
+          GROUP BY si.product_id
+       ) sold ON sold.product_id = p.id
+      WHERE p.is_archived = false
+      ORDER BY sold DESC`,
+    [lo, hi],
+  );
+  res.json({ days: periodDays(lo, hi), rows });
+});
+
+// Потери за период: списания (бой/порча) + недостачи по инвентаризации.
+dashboardRouter.get('/losses', async (req, res) => {
+  const { lo, hi } = await resolveBounds(req.query);
+  const writeoffs = await query(
+    `SELECT w.name, w.qty, w.loss_value, w.reason, w.created_at,
+            u.full_name, u.username
+       FROM write_offs w LEFT JOIN users u ON u.id = w.user_id
+      WHERE w.created_at >= $1 AND w.created_at < $2
+      ORDER BY w.loss_value DESC`,
+    [lo, hi],
+  );
+  // Недостачи инвентаризации: позиции с отрицательной разницей за период.
+  const shortage = await query(
+    `SELECT ii.name, ii.difference, ii.loss_value, i.created_at
+       FROM inventory_items ii JOIN inventories i ON i.id = ii.inventory_id
+      WHERE i.created_at >= $1 AND i.created_at < $2 AND ii.difference < 0
+      ORDER BY ii.loss_value ASC`,
+    [lo, hi],
+  );
+  const woTotal = writeoffs.reduce((s: number, w: any) => s + Number(w.loss_value), 0);
+  const invTotal = shortage.reduce((s: number, r: any) => s + Math.abs(Number(r.loss_value)), 0);
+  res.json({
+    writeoffs, inventory: shortage,
+    writeoffs_total: Number(woTotal.toFixed(2)),
+    inventory_loss: Number(invTotal.toFixed(2)),
+    total: Number((woTotal + invTotal).toFixed(2)),
+  });
+});
+
+// Возвраты за период: по причинам и по товарам.
+dashboardRouter.get('/returns-stats', async (req, res) => {
+  const { lo, hi } = await resolveBounds(req.query);
+  const byReason = await query(
+    `SELECT COALESCE(NULLIF(r.reason, ''), 'без причины') AS reason,
+            COUNT(*) AS count, COALESCE(SUM(r.total), 0) AS total
+       FROM returns r
+      WHERE r.created_at >= $1 AND r.created_at < $2
+      GROUP BY 1 ORDER BY total DESC`,
+    [lo, hi],
+  );
+  const byProduct = await query(
+    `SELECT ri.name, SUM(ri.qty) AS qty, COALESCE(SUM(ri.line_total), 0) AS total, COUNT(DISTINCT r.id) AS returns
+       FROM return_items ri JOIN returns r ON r.id = ri.return_id
+      WHERE r.created_at >= $1 AND r.created_at < $2
+      GROUP BY ri.name ORDER BY total DESC`,
+    [lo, hi],
+  );
+  const total = byReason.reduce((s: number, r: any) => s + Number(r.total), 0);
+  res.json({ by_reason: byReason, by_product: byProduct, total: Number(total.toFixed(2)) });
+});
+
+// Рост/падение: выручка товара за период vs предыдущий равный период.
+dashboardRouter.get('/product-trend', async (req, res) => {
+  const { lo, hi } = await resolveBounds(req.query);
+  const span = new Date(hi).getTime() - new Date(lo).getTime();
+  const prevLo = new Date(new Date(lo).getTime() - span).toISOString();
+  const rows = await query(
+    `SELECT si.name,
+            COALESCE(SUM(si.line_total) FILTER (WHERE s.created_at >= $1 AND s.created_at < $2), 0) AS cur,
+            COALESCE(SUM(si.line_total) FILTER (WHERE s.created_at >= $3 AND s.created_at < $1), 0) AS prev
+       FROM sale_items si JOIN sales s ON s.id = si.sale_id
+      WHERE s.created_at >= $3 AND s.created_at < $2
+      GROUP BY si.name`,
+    [lo, hi, prevLo],
   );
   res.json(rows);
 });

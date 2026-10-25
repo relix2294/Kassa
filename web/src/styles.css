@@ -1286,6 +1286,13 @@ kbd {
 .abc-sum--on { border-color: var(--primary); background: color-mix(in srgb, var(--primary) 12%, var(--surface-2)); }
 .abc-sum b { font-weight: 800; }
 .btn--sm { padding: 6px 11px; font-size: 13px; min-height: 0; flex: 0 0 auto; display: inline-flex; align-items: center; gap: 5px; }
+/* Матрица ABC × XYZ */
+.matrix { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
+.matrix__row { display: grid; grid-template-columns: 44px 1fr 1fr 1fr; gap: 6px; align-items: center; }
+.matrix__row--head span { color: var(--muted); font-size: 11px; font-weight: 700; text-align: center; }
+.matrix__cell { text-align: center; font-weight: 800; font-size: 16px; padding: 12px 6px; background: var(--surface-2); border-radius: 10px; font-variant-numeric: tabular-nums; }
+.matrix__cell--good { background: color-mix(in srgb, var(--ok) 20%, var(--surface-2)); color: var(--ok); }
+.matrix__cell--bad { background: color-mix(in srgb, var(--danger) 18%, var(--surface-2)); color: var(--danger); }
 
 .modal--wide { max-width: 720px; }
 .balance-total-big {

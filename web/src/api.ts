@@ -166,7 +166,23 @@ export const api = {
   byCategory: (range: Range) =>
     req<{ category: string; revenue: number; margin: number }[]>(`/dashboard/by-category?${rangeQS(range)}`),
   abc: (range: Range) =>
-    req<{ name: string; barcode: string; qty: number; revenue: number; margin: number }[]>(`/dashboard/abc?${rangeQS(range)}`),
+    req<{ days: number; rows: { name: string; barcode: string; qty: number; revenue: number; margin: number; sumsq: number }[] }>(`/dashboard/abc?${rangeQS(range)}`),
+  turnover: (range: Range) =>
+    req<{ days: number; rows: { id: string; name: string; barcode: string | null; unit: 'pcs' | 'kg'; stock: number; cost_price: number; sold: number }[] }>(`/dashboard/turnover?${rangeQS(range)}`),
+  losses: (range: Range) =>
+    req<{
+      writeoffs: { name: string; qty: number; loss_value: number; reason: string; created_at: string; full_name: string | null; username: string | null }[];
+      inventory: { name: string; difference: number; loss_value: number; created_at: string }[];
+      writeoffs_total: number; inventory_loss: number; total: number;
+    }>(`/dashboard/losses?${rangeQS(range)}`),
+  returnsStats: (range: Range) =>
+    req<{
+      by_reason: { reason: string; count: number; total: number }[];
+      by_product: { name: string; qty: number; total: number; returns: number }[];
+      total: number;
+    }>(`/dashboard/returns-stats?${rangeQS(range)}`),
+  productTrend: (range: Range) =>
+    req<{ name: string; cur: number; prev: number }[]>(`/dashboard/product-trend?${rangeQS(range)}`),
   byCashier: (range: Range) =>
     req<{ cashier: string; receipts: string; revenue: number; margin: number }[]>(`/dashboard/by-cashier?${rangeQS(range)}`),
   byHour: (range: Range) =>
