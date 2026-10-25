@@ -3,12 +3,13 @@ import { api, type Range } from '../api';
 import { onRealtimeEvent } from '../sync';
 import RangeControl, { money } from '../components/RangeControl';
 import { ColumnChart, RankBars, Donut, BarChart } from '../components/charts';
+import Icon from '../components/Icon';
 import InventoryPanel from './InventoryPanel';
 import WriteOffPanel from './WriteOffPanel';
 import BulkPricePanel from './BulkPricePanel';
 import CatalogPanel from './CatalogPanel';
 
-type Tab = 'metrics' | 'restock' | 'stale' | 'tools';
+type Tab = 'metrics' | 'products' | 'restock' | 'stale' | 'tools';
 
 const WEEKDAYS = ['', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
 
@@ -26,13 +27,14 @@ export default function AnalyticsPage() {
       <h1>Аналитика</h1>
 
       <div className="seg seg--tabs">
-        {([['metrics', 'Показатели'], ['restock', 'Пора закупить'], ['stale', 'Залежалый'], ['tools', 'Инструменты']] as [Tab, string][])
+        {([['metrics', 'Показатели'], ['products', 'По товарам'], ['restock', 'Пора закупить'], ['stale', 'Залежалый'], ['tools', 'Инструменты']] as [Tab, string][])
           .map(([k, lbl]) => (
             <button key={k} className={`seg__btn ${tab === k ? 'seg__btn--on' : ''}`} onClick={() => setTab(k)}>{lbl}</button>
           ))}
       </div>
 
       {tab === 'metrics' && <MetricsTab />}
+      {tab === 'products' && <ProductsAnalyticsTab />}
       {tab === 'restock' && <RestockTab />}
       {tab === 'stale' && <StaleTab />}
       {tab === 'tools' && <ToolsTab onDone={flash} />}
@@ -63,19 +65,19 @@ function MetricsTab() {
 
   const load = useCallback(async () => {
     try {
-      const [summary, series, cats, cashiers, hours, weekday, pay, abc, topM] = await Promise.all([
+      const [summary, series, cats, cashiers, hours, weekday, pay, topM] = await Promise.all([
         api.summary(range), api.timeseries(range), api.byCategory(range), api.byCashier(range),
-        api.byHour(range), api.byWeekday(range), api.paymentSplit(range), api.abc(range),
+        api.byHour(range), api.byWeekday(range), api.paymentSplit(range),
         api.topProducts(range, topSort, 15),
       ]);
-      setData({ summary, series, cats, cashiers, hours, weekday, pay, abc, topM });
+      setData({ summary, series, cats, cashiers, hours, weekday, pay, topM });
     } catch { /* ignore */ }
   }, [range, topSort]);
   useEffect(() => { load(); }, [load]);
   useEffect(() => onRealtimeEvent((t) => (t === 'sale' || t === 'return' || t === 'data_updated') && load()), [load]);
 
   if (!data) return <p className="hint">Загружаю показатели…</p>;
-  const { summary: s, series, cats, cashiers, hours, weekday, pay, abc, topM } = data;
+  const { summary: s, series, cats, cashiers, hours, weekday, pay, topM } = data;
   const animKey = `${range.period}:${range.from ?? ''}:${range.to ?? ''}`;
 
   const points = (series?.points ?? []).map((p: any) => ({
@@ -102,17 +104,6 @@ function MetricsTab() {
     label: PAY_META[p.method]?.[0] ?? p.method, value: Number(p.total), color: PAY_META[p.method]?.[1] ?? 'var(--muted)',
   }));
 
-  // ABC-анализ: по накопленной доле выручки. A — до 80%, B — до 95%, C — хвост.
-  const abcTotal = abc.reduce((a: number, r: any) => a + Number(r.revenue), 0) || 1;
-  let acc = 0;
-  const abcRows = abc.map((r: any) => {
-    acc += Number(r.revenue);
-    const cum = (acc / abcTotal) * 100;
-    const cls = cum <= 80 ? 'A' : cum <= 95 ? 'B' : 'C';
-    return { ...r, share: (Number(r.revenue) / abcTotal) * 100, cum, cls };
-  });
-  const abcCount = { A: abcRows.filter((r: any) => r.cls === 'A').length, B: abcRows.filter((r: any) => r.cls === 'B').length, C: abcRows.filter((r: any) => r.cls === 'C').length };
-
   return (
     <>
       <RangeControl range={range} onChange={setRange} />
@@ -130,28 +121,6 @@ function MetricsTab() {
 
       <Card title="Динамика выручки и маржи">
         <ColumnChart key={animKey} points={points} />
-      </Card>
-
-      <Card
-        title="ABC-анализ товаров"
-        action={<span className="muted" style={{ fontSize: 12 }}>A: {abcCount.A} · B: {abcCount.B} · C: {abcCount.C}</span>}
-      >
-        <p className="hint">A — дают 80% выручки (главные), B — следующие 15%, C — хвост 5% (кандидаты на вывод).</p>
-        <div className="report-table-wrap">
-          <table className="report-table">
-            <thead><tr><th>Товар</th><th className="num">Выручка</th><th className="num">Доля</th><th className="num">Класс</th></tr></thead>
-            <tbody>
-              {abcRows.slice(0, 40).map((r: any, i: number) => (
-                <tr key={i}>
-                  <td>{r.name}</td>
-                  <td className="num">{money(r.revenue)}</td>
-                  <td className="num">{r.share.toFixed(1)}%</td>
-                  <td className="num"><span className={`abc-badge abc-${r.cls.toLowerCase()}`}>{r.cls}</span></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
       </Card>
 
       <Card
@@ -204,6 +173,171 @@ function MKpi({ label, value, big, accent, change }: { label: string; value: str
         </div>
       )}
     </div>
+  );
+}
+
+// Выгрузка таблицы в CSV (Excel).
+function downloadCsv(filename: string, rows: (string | number)[][]) {
+  const esc = (v: any) => {
+    const s = String(v ?? '');
+    return /[",;\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  const csv = '﻿' + rows.map((r) => r.map(esc).join(';')).join('\r\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `${filename}-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+// «По товарам»: ABC-анализ (по выручке / прибыли / количеству, классы A/B/C с
+// листанием и выгрузкой) + маржинальность (что продаём почти без прибыли).
+type AbcMetric = 'revenue' | 'margin' | 'qty';
+const METRIC_LABEL: Record<AbcMetric, string> = { revenue: 'Выручка', margin: 'Прибыль', qty: 'Количество' };
+
+function ProductsAnalyticsTab() {
+  const [range, setRange] = useState<Range>({ period: '30d' });
+  const [rows, setRows] = useState<any[] | null>(null);
+  const [metric, setMetric] = useState<AbcMetric>('revenue');
+  const [cls, setCls] = useState<'all' | 'A' | 'B' | 'C'>('all');
+  const [limit, setLimit] = useState(50);
+  const [onlyBad, setOnlyBad] = useState(false);
+
+  const load = useCallback(() => { api.abc(range).then(setRows).catch(() => {}); }, [range]);
+  useEffect(() => { load(); }, [load]);
+  useEffect(() => { setLimit(50); }, [metric, cls, range]);
+
+  if (!rows) return <p className="hint">Загружаю…</p>;
+
+  const val = (r: any) => metric === 'revenue' ? Number(r.revenue) : metric === 'margin' ? Number(r.margin) : Number(r.qty);
+  const fmt = (n: number) => metric === 'qty' ? String(Math.round(n * 1000) / 1000) : money(n);
+
+  // ABC: сортируем по выбранной метрике, считаем накопленную долю.
+  const sorted = [...rows].sort((a, b) => val(b) - val(a));
+  const total = sorted.reduce((s, r) => s + Math.max(0, val(r)), 0) || 1;
+  let acc = 0;
+  const abc = sorted.map((r) => {
+    const v = val(r);
+    acc += Math.max(0, v);
+    const cum = (acc / total) * 100;
+    const c = v <= 0 ? 'C' : cum <= 80 ? 'A' : cum <= 95 ? 'B' : 'C';
+    const marginPct = Number(r.revenue) > 0 ? (Number(r.margin) / Number(r.revenue)) * 100 : 0;
+    return { ...r, v, share: (v / total) * 100, cum, c, marginPct };
+  });
+  const count = { A: 0, B: 0, C: 0, sumA: 0, sumB: 0, sumC: 0 } as any;
+  abc.forEach((r) => { count[r.c]++; count['sum' + r.c] += Math.max(0, r.v); });
+
+  const filtered = cls === 'all' ? abc : abc.filter((r) => r.c === cls);
+  const shown = filtered.slice(0, limit);
+
+  function exportAbc() {
+    const head = ['Товар', 'Штрихкод', METRIC_LABEL[metric], 'Доля %', 'Накопл. %', 'Маржа %', 'Кол-во', 'Класс'];
+    const body = filtered.map((r) => [r.name, r.barcode ?? '', r.v, r.share.toFixed(1), r.cum.toFixed(1), r.marginPct.toFixed(1), Number(r.qty), r.c]);
+    downloadCsv('kassa-abc', [head, ...body]);
+  }
+
+  // Маржинальность: что приносит мало прибыли или торгуем в минус.
+  const byMargin = [...rows]
+    .filter((r) => Number(r.revenue) > 0)
+    .map((r) => ({ ...r, marginPct: (Number(r.margin) / Number(r.revenue)) * 100 }))
+    .sort((a, b) => a.marginPct - b.marginPct);
+  const badList = onlyBad ? byMargin.filter((r) => r.marginPct < 10) : byMargin;
+
+  function exportMargin() {
+    downloadCsv('kassa-marzha', [
+      ['Товар', 'Выручка', 'Прибыль', 'Маржа %', 'Кол-во'],
+      ...byMargin.map((r) => [r.name, Number(r.revenue), Number(r.margin), r.marginPct.toFixed(1), Number(r.qty)]),
+    ]);
+  }
+
+  return (
+    <>
+      <RangeControl range={range} onChange={setRange} />
+
+      <Card
+        title="ABC-анализ"
+        action={<button className="btn btn--ghost btn--sm" onClick={exportAbc}><Icon name="download" /> CSV</button>}
+      >
+        <p className="hint">
+          Товары по вкладу в выбранную метрику. <b>A</b> — дают 80% (главные, держим всегда),
+          <b> B</b> — следующие 15%, <b>C</b> — хвост 5% (кандидаты на вывод). Торговля в минус — сразу в C.
+        </p>
+
+        <div className="seg seg--mini" style={{ marginBottom: 10 }}>
+          {(['revenue', 'margin', 'qty'] as AbcMetric[]).map((m) => (
+            <button key={m} className={`seg__btn ${metric === m ? 'seg__btn--on' : ''}`} onClick={() => setMetric(m)}>{METRIC_LABEL[m]}</button>
+          ))}
+        </div>
+
+        <div className="abc-summary">
+          {(['A', 'B', 'C'] as const).map((c) => (
+            <button key={c} className={`abc-sum ${cls === c ? 'abc-sum--on' : ''}`} onClick={() => setCls(cls === c ? 'all' : c)}>
+              <span className={`abc-badge abc-${c.toLowerCase()}`}>{c}</span>
+              <b>{count[c]}</b> <span className="muted">тов.</span>
+              <span className="muted"> · {total > 0 ? Math.round((count['sum' + c] / total) * 100) : 0}%</span>
+            </button>
+          ))}
+          {cls !== 'all' && <button className="btn btn--ghost btn--sm" onClick={() => setCls('all')}>Все</button>}
+        </div>
+
+        <div className="report-table-wrap">
+          <table className="report-table">
+            <thead><tr>
+              <th>Товар</th><th className="num">{METRIC_LABEL[metric]}</th><th className="num">Доля</th>
+              <th className="num">Накопл.</th><th className="num">Маржа%</th><th className="num">Класс</th>
+            </tr></thead>
+            <tbody>
+              {shown.map((r, i) => (
+                <tr key={i}>
+                  <td>{r.name}</td>
+                  <td className="num">{fmt(r.v)}</td>
+                  <td className="num">{r.share.toFixed(1)}%</td>
+                  <td className="num">{r.cum.toFixed(1)}%</td>
+                  <td className="num" style={{ color: r.marginPct < 0 ? 'var(--danger)' : undefined }}>{r.marginPct.toFixed(0)}%</td>
+                  <td className="num"><span className={`abc-badge abc-${r.c.toLowerCase()}`}>{r.c}</span></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {shown.length < filtered.length && (
+          <div className="top-more">
+            <button className="btn btn--ghost" onClick={() => setLimit((n) => n + 50)}>
+              Показать ещё {Math.min(50, filtered.length - shown.length)} из {filtered.length}
+            </button>
+          </div>
+        )}
+        {filtered.length === 0 && <p className="hint">Нет товаров за период.</p>}
+      </Card>
+
+      <Card
+        title="Маржинальность"
+        action={<button className="btn btn--ghost btn--sm" onClick={exportMargin}><Icon name="download" /> CSV</button>}
+      >
+        <p className="hint">Самое невыгодное сверху: где маржа низкая или торгуем в минус — повод поднять цену или убрать.</p>
+        <div className="seg seg--mini" style={{ marginBottom: 10 }}>
+          <button className={`seg__btn ${!onlyBad ? 'seg__btn--on' : ''}`} onClick={() => setOnlyBad(false)}>Все</button>
+          <button className={`seg__btn ${onlyBad ? 'seg__btn--on' : ''}`} onClick={() => setOnlyBad(true)}>Маржа &lt; 10%</button>
+        </div>
+        <div className="report-table-wrap">
+          <table className="report-table">
+            <thead><tr><th>Товар</th><th className="num">Выручка</th><th className="num">Прибыль</th><th className="num">Маржа%</th></tr></thead>
+            <tbody>
+              {badList.slice(0, 40).map((r, i) => (
+                <tr key={i}>
+                  <td>{r.name}</td>
+                  <td className="num">{money(r.revenue)}</td>
+                  <td className="num" style={{ color: Number(r.margin) < 0 ? 'var(--danger)' : undefined }}>{money(r.margin)}</td>
+                  <td className="num" style={{ color: r.marginPct < 0 ? 'var(--danger)' : r.marginPct < 10 ? 'var(--off)' : undefined }}>{r.marginPct.toFixed(0)}%</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {badList.length === 0 && <p className="hint">Нет товаров под фильтр.</p>}
+      </Card>
+    </>
   );
 }
 

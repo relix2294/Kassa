@@ -1280,6 +1280,12 @@ kbd {
 .abc-a { background: color-mix(in srgb, var(--ok) 20%, transparent); color: var(--ok); }
 .abc-b { background: color-mix(in srgb, var(--primary) 18%, transparent); color: var(--primary); }
 .abc-c { background: color-mix(in srgb, var(--muted) 22%, transparent); color: var(--muted); }
+/* Сводка классов ABC — кликабельные фильтры */
+.abc-summary { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; }
+.abc-sum { display: inline-flex; align-items: center; gap: 6px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; padding: 7px 11px; font-size: 13px; cursor: pointer; color: var(--text); font-family: inherit; }
+.abc-sum--on { border-color: var(--primary); background: color-mix(in srgb, var(--primary) 12%, var(--surface-2)); }
+.abc-sum b { font-weight: 800; }
+.btn--sm { padding: 6px 11px; font-size: 13px; min-height: 0; flex: 0 0 auto; display: inline-flex; align-items: center; gap: 5px; }
 
 .modal--wide { max-width: 720px; }
 .balance-total-big {
