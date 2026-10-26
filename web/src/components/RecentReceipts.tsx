@@ -18,11 +18,18 @@ export default function RecentReceipts({ reloadKey }: { reloadKey: number }) {
 
   useEffect(() => {
     let alive = true;
-    api.recentReceipts(4).then((r) => { if (alive) setRows(r); }).catch(() => {});
+    api.recentReceipts(10).then((r) => { if (alive) setRows(r); }).catch(() => {});
     return () => { alive = false; };
   }, [reloadKey]);
 
-  if (rows.length === 0) return null;
+  if (rows.length === 0) {
+    return (
+      <div className="recent-receipts">
+        <div className="recent-receipts__title">Последние чеки</div>
+        <p className="hint">В этой смене чеков пока нет.</p>
+      </div>
+    );
+  }
 
   const t = (iso: string) => new Date(iso).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
 

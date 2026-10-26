@@ -31,6 +31,7 @@ export async function addToCart(product: Product, qty = 1) {
     discount_price: product.discount_price ?? null,
     discount_left: product.discount_left ?? null,
     qty,
+    added_at: Date.now(),
   };
   await db.cart.put(line);
 }

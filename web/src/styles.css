@@ -283,10 +283,31 @@ input:focus, .search:focus { outline: none; border-color: var(--primary); }
 .btn--pay { flex: 2; }
 .btn--big { padding: 22px; font-size: 20px; min-height: 64px; }
 
-.scan-row { margin-bottom: 12px; }
+.scan-row { margin: 0; }
 .scan-row input { font-size: 22px; padding: 16px; }
+/* Поле скана и кнопка каталога — в одну строку, чтобы не съедать высоту. */
+.scan-bar { display: flex; gap: 10px; align-items: stretch; margin-bottom: 12px; }
+.scan-bar .scan-wrap { flex: 1; min-width: 0; }
 
-.cart { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
+/* Чек: единственная прокручиваемая область экрана продажи. */
+.cart {
+  flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 6px;
+  scrollbar-width: thin; padding-right: 2px;
+}
+.cart-empty {
+  margin: auto; text-align: center; color: var(--muted);
+  display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 24px;
+}
+.cart-empty .ic { width: 44px; height: 44px; opacity: 0.6; }
+.cart-empty p { margin: 0; font-size: 16px; }
+.cart-line__no { flex: 0 0 auto; width: 22px; text-align: center; color: var(--muted); font-size: 13px; font-weight: 700; }
+.cart-line--last { box-shadow: inset 3px 0 0 var(--primary); background: color-mix(in srgb, var(--primary) 10%, var(--surface)); }
+.cart-foot {
+  flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; padding-top: 10px; color: var(--muted); font-size: 15px;
+}
+.cart-foot b { color: var(--text); }
+.cart-foot .btn--clear { margin: 0; }
 .cart-line {
   display: flex;
   align-items: center;
@@ -705,14 +726,20 @@ select:focus { outline: none; border-color: var(--primary); }
 /* Две колонки на экране продажи — только когда они реально помещаются. */
 @media (min-width: 1000px) {
   /* --- Продажа: чек слева, оплата справа --- */
+  /* Высота экрана жёсткая: строка грида = высота окна, поэтому прокручивается
+     только список позиций чека, а шапка, поиск и итоги всегда на месте. */
   .page--sale-desk {
     display: grid;
     grid-template-columns: minmax(0, 1fr) 480px;
-    gap: 24px;
-    align-items: start;
+    grid-template-rows: auto minmax(0, 1fr);
+    column-gap: 24px;
+    row-gap: 0;
+    align-items: stretch;
     height: 100%;
     max-width: none;
   }
+  .page--sale-desk > .sale-main,
+  .page--sale-desk > .sale-side { grid-row: 2; }
   .sale-main {
     display: flex;
     flex-direction: column;
@@ -721,8 +748,14 @@ select:focus { outline: none; border-color: var(--primary); }
   }
   .sale-main .cart { overflow-y: auto; }
   .scan-row input { font-size: 20px; padding: 16px; }
+  .btn--pick { padding: 0 20px; font-size: 17px; margin: 0; width: auto; white-space: nowrap; }
+  .cart-line { padding: 9px 14px; }
+  .cart-line__name { font-size: 17px; }
+  .qty-btn, .qty-num { height: 40px; }
+  .cart-line__del { width: 40px; height: 40px; font-size: 26px; }
 
   .sale-side {
+    align-self: start;
     position: sticky;
     top: 0;
     display: flex;
@@ -736,7 +769,7 @@ select:focus { outline: none; border-color: var(--primary); }
     scrollbar-width: thin;
   }
 
-  .btn--clear { margin-top: 12px; flex: 0 0 auto; align-self: flex-start; padding: 10px 18px; }
+  .btn--clear { flex: 0 0 auto; padding: 10px 18px; }
 
   .kpi-grid { grid-template-columns: repeat(4, 1fr); }
 }
@@ -934,17 +967,21 @@ kbd {
 .force-desktop .page--sale-desk {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(260px, 340px);
-  gap: 16px;
-  align-items: start;
+  grid-template-rows: auto minmax(0, 1fr);
+  column-gap: 16px;
+  row-gap: 0;
+  align-items: stretch;
   height: 100%;
   max-width: none;
 }
+.force-desktop .page--sale-desk > .sale-main,
+.force-desktop .page--sale-desk > .sale-side { grid-row: 2; }
 .force-desktop .sale-main { display: flex; flex-direction: column; min-height: 0; height: 100%; }
 .force-desktop .sale-side {
   position: sticky; top: 0; display: flex; flex-direction: column; gap: 12px;
   max-height: calc(100vh - 110px); overflow-y: auto;
 }
-.force-desktop .btn--clear { margin-top: 12px; flex: 0 0 auto; align-self: flex-start; padding: 10px 18px; }
+.force-desktop .btn--clear { flex: 0 0 auto; padding: 10px 18px; }
 
 /* Обратный режим: смотрим мобильную раскладку на широком экране. */
 .force-mobile .app {
@@ -964,7 +1001,7 @@ kbd {
 .warn--inline { display: block; margin-top: 6px; font-size: 13px; }
 
 /* Кнопка выбора товара без штрихкода — под полем скана. */
-.btn--pick { width: 100%; margin-bottom: 12px; padding: 18px; font-size: 20px; font-weight: 700; }
+.btn--pick { margin: 0; padding: 0 18px; font-size: 17px; font-weight: 700; white-space: nowrap; display: inline-flex; align-items: center; gap: 8px; }
 
 /* Конвейерный завод товаров. */
 .batch-settings { margin-bottom: 12px; background: var(--surface-2); }

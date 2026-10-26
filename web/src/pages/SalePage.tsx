@@ -46,9 +46,19 @@ export default function SalePage() {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [weighing, setWeighing] = useState<Product | null>(null);
   const [calcOpen, setCalcOpen] = useState(false);
+  const [receiptsOpen, setReceiptsOpen] = useState(false);
   const scanRef = useRef<HTMLInputElement>(null);
+  const cartRef = useRef<HTMLDivElement>(null);
+  // Последняя тронутая позиция: подсвечиваем и прокручиваем к ней список.
+  const prevQty = useRef<Map<string, number>>(new Map());
+  const [lastKey, setLastKey] = useState<string | null>(null);
 
-  const lines = useLiveQuery(() => db.cart.toArray(), [], [] as CartLine[]);
+  // Чек показываем в порядке пробития (а не по штрихкоду), новая позиция — внизу.
+  const lines = useLiveQuery(
+    async () => (await db.cart.toArray()).sort((a, b) => (a.added_at ?? 0) - (b.added_at ?? 0)),
+    [],
+    [] as CartLine[],
+  );
   const products = useLiveQuery(() => db.products.orderBy('name').toArray(), [], [] as Product[]);
   const total = cartTotal(lines);
 
@@ -106,8 +116,32 @@ export default function SalePage() {
   // предыдущую позицию, вместо того чтобы попасть в поле штрихкода).
   const cartSig = lines.map((l) => `${l.key}:${l.qty}`).join('|');
   useEffect(() => {
-    if (shift && !payOpen && !qtyEdit && !returnOpen && !pickerOpen && !weighing) scanRef.current?.focus();
-  }, [payOpen, qtyEdit, returnOpen, pickerOpen, weighing, cartSig, shift]);
+    if (shift && !payOpen && !qtyEdit && !returnOpen && !pickerOpen && !weighing && !receiptsOpen) scanRef.current?.focus();
+  }, [payOpen, qtyEdit, returnOpen, pickerOpen, weighing, receiptsOpen, cartSig, shift]);
+
+  // Нашли, какая позиция изменилась (новая или поменялось количество), —
+  // подсвечиваем её и докручиваем список, чтобы кассир всегда видел последнее
+  // пробитое, сколько бы позиций ни было в чеке.
+  useEffect(() => {
+    const prev = prevQty.current;
+    let touched: string | null = null;
+    for (const l of lines) {
+      if (prev.get(l.key) !== l.qty) touched = l.key;
+    }
+    prevQty.current = new Map(lines.map((l) => [l.key, l.qty]));
+    if (lines.length === 0) {
+      setLastKey(null);
+      return;
+    }
+    if (touched) {
+      setLastKey(touched);
+      requestAnimationFrame(() => {
+        cartRef.current
+          ?.querySelector<HTMLElement>(`[data-key="${CSS.escape(touched!)}"]`)
+          ?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      });
+    }
+  }, [cartSig]);
 
   // Горячие клавиши кассы (десктоп): F2 — оплата, Esc — закрыть/очистить.
   useEffect(() => {
@@ -167,7 +201,7 @@ export default function SalePage() {
   // в поле скана, чтобы следующий скан не «ушёл в никуда». Кнопки/поля не трогаем.
   function stickyRefocus() {
     setTimeout(() => {
-      if (payOpen || qtyEdit || returnOpen || pickerOpen || weighing) return;
+      if (payOpen || qtyEdit || returnOpen || pickerOpen || weighing || receiptsOpen) return;
       if (document.activeElement === document.body) scanRef.current?.focus();
     }, 60);
   }
@@ -212,10 +246,16 @@ export default function SalePage() {
   }
 
   const cart = (
-    <div className="cart">
-      {lines.length === 0 && <p className="hint">Отсканируйте товар, чтобы начать чек.</p>}
-      {lines.map((l) => (
-        <div key={l.key} className="cart-line">
+    <div className="cart" ref={cartRef}>
+      {lines.length === 0 && (
+        <div className="cart-empty">
+          <Icon name="cart" />
+          <p>Отсканируйте товар, чтобы начать чек</p>
+        </div>
+      )}
+      {lines.map((l, i) => (
+        <div key={l.key} data-key={l.key} className={`cart-line${l.key === lastKey ? ' cart-line--last' : ''}`}>
+          <span className="cart-line__no">{i + 1}</span>
           <div className="cart-line__main">
             <div className="cart-line__name">
               {l.name}
@@ -257,6 +297,7 @@ export default function SalePage() {
 
   const scanForm = (
     <>
+    <div className="scan-bar">
     <div className="scan-wrap">
       <form
         className="scan-row"
@@ -300,8 +341,9 @@ export default function SalePage() {
 
     {/* Большой поиск товара (весовой, выпечка, выбор из списка) — как было. */}
     <button className="btn btn--ghost btn--pick" onClick={() => setPickerOpen(true)}>
-      <Icon name="search" /> Найти товар по названию
+      <Icon name="search" /> Каталог
     </button>
+    </div>
     </>
   );
 
@@ -318,6 +360,9 @@ export default function SalePage() {
                 <button className="btn btn--ghost" onClick={openCustomer} title="Открыть экран для покупателя">
                   Экран клиента
                 </button>
+                <button className="btn btn--ghost" onClick={() => setReceiptsOpen(true)}>
+                  <Icon name="history" /> Чеки
+                </button>
                 <button className="btn btn--ghost" onClick={() => setReturnOpen(true)}>
                   Возврат
                 </button>
@@ -325,12 +370,16 @@ export default function SalePage() {
             </div>
             {scanForm}
             {cart}
-            {lines.length > 0 && (
-              <button className="btn btn--clear" onClick={() => setAskClear(true)}>
-                Очистить чек
-              </button>
-            )}
-            <RecentReceipts reloadKey={saleTick} />
+            <div className="cart-foot">
+              <span>
+                Позиций: <b>{lines.length}</b>
+              </span>
+              {lines.length > 0 && (
+                <button className="btn btn--clear" onClick={() => setAskClear(true)}>
+                  Очистить чек
+                </button>
+              )}
+            </div>
           </div>
 
           <aside className="sale-side">
@@ -354,6 +403,9 @@ export default function SalePage() {
               <button className="btn btn--ghost" onClick={openCustomer} title="Открыть экран для покупателя">
                 Экран клиента
               </button>
+              <button className="btn btn--ghost" onClick={() => setReceiptsOpen(true)}>
+                <Icon name="history" /> Чеки
+              </button>
               <button className="btn btn--ghost" onClick={() => setReturnOpen(true)}>
                 Возврат
               </button>
@@ -371,8 +423,17 @@ export default function SalePage() {
               </button>
             </div>
           )}
-          <RecentReceipts reloadKey={saleTick} />
         </>
+      )}
+
+      {/* Последние чеки смены — по кнопке «Чеки», не занимают место под чеком. */}
+      {receiptsOpen && (
+        <div className="modal-backdrop" onClick={() => setReceiptsOpen(false)}>
+          <div className="modal modal--scroll" onClick={(e) => e.stopPropagation()}>
+            <RecentReceipts reloadKey={saleTick} />
+            <button className="btn" onClick={() => setReceiptsOpen(false)}>Закрыть</button>
+          </div>
+        </div>
       )}
 
       {qtyEdit && (

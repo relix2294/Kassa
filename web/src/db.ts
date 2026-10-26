@@ -33,6 +33,8 @@ export interface CartLine {
   discount_price?: number | null;
   discount_left?: number | null;
   qty: number;
+  /** Когда позиция попала в чек — чтобы показывать в порядке пробития. */
+  added_at?: number;
 }
 
 class KassaDB extends Dexie {
