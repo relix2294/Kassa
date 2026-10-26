@@ -100,10 +100,14 @@ export default function SalePage() {
     refreshShift();
   }, []);
 
-  // Фокус всегда в поле скана — сканер печатает «вслепую».
+  // Фокус всегда в поле скана — сканер печатает «вслепую». Возвращаем фокус при
+  // ЛЮБОМ изменении чека, включая смену количества кнопками +/− (иначе фокус
+  // застревал на кнопке «+», и скан следующего товара жал её, увеличивая
+  // предыдущую позицию, вместо того чтобы попасть в поле штрихкода).
+  const cartSig = lines.map((l) => `${l.key}:${l.qty}`).join('|');
   useEffect(() => {
     if (shift && !payOpen && !qtyEdit && !returnOpen && !pickerOpen && !weighing) scanRef.current?.focus();
-  }, [payOpen, qtyEdit, returnOpen, pickerOpen, weighing, lines.length, shift]);
+  }, [payOpen, qtyEdit, returnOpen, pickerOpen, weighing, cartSig, shift]);
 
   // Горячие клавиши кассы (десктоп): F2 — оплата, Esc — закрыть/очистить.
   useEffect(() => {
@@ -233,13 +237,13 @@ export default function SalePage() {
           </div>
           <div className="qty-ctrl">
             {/* Весовой товар меняем шагом 100 г, штучный — по одной штуке. */}
-            <button className="qty-btn" onClick={() => setQty(l.key, l.qty - (l.unit === 'kg' ? 0.1 : 1))}>
+            <button className="qty-btn" onClick={() => { setQty(l.key, l.qty - (l.unit === 'kg' ? 0.1 : 1)); scanRef.current?.focus(); }}>
               −
             </button>
             <button className="qty-num" onClick={() => setQtyEdit(l)}>
               {l.qty}
             </button>
-            <button className="qty-btn" onClick={() => setQty(l.key, l.qty + (l.unit === 'kg' ? 0.1 : 1))}>
+            <button className="qty-btn" onClick={() => { setQty(l.key, l.qty + (l.unit === 'kg' ? 0.1 : 1)); scanRef.current?.focus(); }}>
               +
             </button>
           </div>
