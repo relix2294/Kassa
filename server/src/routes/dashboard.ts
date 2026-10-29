@@ -638,7 +638,35 @@ dashboardRouter.get('/supplier-stats', async (req, res) => {
       ORDER BY paid DESC`,
     [lo, hi],
   );
+  // Журнал: каждый платёж за период отдельной строкой — кому, сколько, откуда
+  // деньги и кто внёс. Платежи неизменяемы, список только для чтения.
+  const journal = await query(
+    `SELECT sp.id, sp.created_at, sp.amount, sp.source, sp.note,
+            s.id AS supplier_id, s.name AS supplier_name,
+            si.total AS invoice_total, si.created_at AS invoice_at,
+            COALESCE(u.full_name, u.username) AS by_user
+       FROM supplier_payments sp
+       JOIN supplier_invoices si ON si.id = sp.invoice_id
+       JOIN suppliers s          ON s.id = si.supplier_id
+       LEFT JOIN users u         ON u.id = sp.user_id
+      WHERE sp.created_at >= $1 AND sp.created_at < $2
+      ORDER BY sp.created_at DESC
+      LIMIT 500`,
+    [lo, hi],
+  );
   res.json({
+    payments_list: journal.map((r: any) => ({
+      id: r.id,
+      created_at: r.created_at,
+      amount: Number(r.amount),
+      source: r.source,
+      note: r.note,
+      supplier_id: r.supplier_id,
+      supplier_name: r.supplier_name,
+      invoice_total: Number(r.invoice_total),
+      invoice_at: r.invoice_at,
+      by_user: r.by_user,
+    })),
     paid: Number(pay.paid),
     paid_cash: Number(pay.paid_cash),
     paid_wallet: Number(pay.paid_wallet),

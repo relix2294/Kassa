@@ -300,6 +300,11 @@ export const api = {
     req<{
       paid: number; paid_cash: number; paid_wallet: number; paid_hand: number; paid_external: number;
       payments: number; purchased: number; invoices: number;
+      payments_list: {
+        id: string; created_at: string; amount: number; source: string; note: string | null;
+        supplier_id: string; supplier_name: string; invoice_total: number; invoice_at: string;
+        by_user: string | null;
+      }[];
       by_supplier: {
         id: string; name: string; paid: number; payments: number;
         paid_cash: number; paid_wallet: number; paid_hand: number; paid_external: number;

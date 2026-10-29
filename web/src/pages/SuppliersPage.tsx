@@ -5,6 +5,10 @@ import { onRealtimeEvent } from '../sync';
 import RangeControl, { money } from '../components/RangeControl';
 import { SourcePicker, useMoneyPlaces, tillSub, type MoneyPlaces, type SourceOption } from '../components/MoneySource';
 
+const SOURCE_LABEL: Record<string, string> = {
+  cash: 'из кассы (нал)', wallet: 'из кассы (безнал)', hand: 'с рук (подотчёт)', external: 'со стороны',
+};
+
 // Поставщики и долги (постоплата): кому и сколько должны, история платежей.
 export default function SuppliersPage() {
   const [suppliers, setSuppliers] = useState<any[]>([]);
@@ -17,8 +21,8 @@ export default function SuppliersPage() {
     paid: number; paid_cash: number; paid_wallet: number; paid_hand: number; paid_external: number;
     payments: number; purchased: number; invoices: number;
     by_supplier: { id: string; name: string; paid: number; payments: number; paid_hand: number; paid_external: number }[];
+    payments_list: Awaited<ReturnType<typeof api.supplierStats>>['payments_list'];
   } | null>(null);
-  const [showPaid, setShowPaid] = useState(false); // разбивка «кому оплачено за период»
 
   const load = useCallback(() => {
     api.listSuppliers().then((r) => { setSuppliers(r.suppliers); setTotalDebt(r.total_debt); }).catch(() => {});
@@ -58,34 +62,54 @@ export default function SuppliersPage() {
         <Kpi label="Закуплено (накладные)" value={money(stats?.purchased ?? 0)} hint={stats ? `платежей: ${stats.payments} · накладных: ${stats.invoices}` : undefined} />
       </div>
 
-      {/* Кому именно оплачено за период — чтобы не открывать каждого поставщика. */}
+      {/* Кому и сколько заплатили за выбранный период — сводка по поставщикам. */}
       {stats && stats.by_supplier.length > 0 && (
-        <div className="paid-by">
-          <button className="btn btn--ghost paid-by__toggle" onClick={() => setShowPaid((v) => !v)}>
-            {showPaid ? 'Скрыть разбивку' : `Кому оплачено за период · ${stats.by_supplier.length}`}
-          </button>
-          {showPaid && (
-            <div className="list">
-              {stats.by_supplier.map((r) => {
-                const extra = [
-                  r.paid_hand > 0 ? `с рук ${money(r.paid_hand)}` : '',
-                  r.paid_external > 0 ? `со стороны ${money(r.paid_external)}` : '',
-                ].filter(Boolean).join(' · ');
-                return (
-                  <button key={r.id} className="list-item" onClick={() => setOpenId(r.id)}>
-                    <div className="list-item__main">
-                      <div className="list-item__name">{r.name}</div>
-                      <div className="muted">платежей: {r.payments}{extra ? ` · из них ${extra}` : ''}</div>
-                    </div>
-                    <div className="stock">{money(r.paid)}</div>
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      )}
+        <>
+          <h2 className="sect">Кому заплатили · {stats.by_supplier.length}</h2>
+          <div className="list">
+            {stats.by_supplier.map((r) => {
+              const extra = [
+                r.paid_hand > 0 ? `с рук ${money(r.paid_hand)}` : '',
+                r.paid_external > 0 ? `со стороны ${money(r.paid_external)}` : '',
+              ].filter(Boolean).join(' · ');
+              return (
+                <button key={r.id} className="list-item" onClick={() => setOpenId(r.id)}>
+                  <div className="list-item__main">
+                    <div className="list-item__name">{r.name}</div>
+                    <div className="muted">платежей: {r.payments}{extra ? ` · из них ${extra}` : ''}</div>
+                  </div>
+                  <div className="stock">{money(r.paid)}</div>
+                </button>
+              );
+            })}
+          </div>
 
+          {/* Журнал: каждый платёж отдельной строкой — когда, кому, откуда деньги, кто внёс. */}
+          <h2 className="sect">Журнал платежей · {stats.payments_list.length}</h2>
+          <div className="list">
+            {stats.payments_list.map((p) => (
+              <button key={p.id} className="list-item" onClick={() => setOpenId(p.supplier_id)}>
+                <div className="list-item__main">
+                  <div className="list-item__name">{p.supplier_name}</div>
+                  <div className="muted">
+                    {new Date(p.created_at).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                    {' · '}{SOURCE_LABEL[p.source] ?? p.source}
+                    {p.by_user ? ` · внёс ${p.by_user}` : ''}
+                  </div>
+                  <div className="muted">
+                    накладная от {new Date(p.invoice_at).toLocaleDateString('ru-RU')} на {money(p.invoice_total)}
+                    {p.note ? ` · ${p.note}` : ''}
+                  </div>
+                </div>
+                <div className="stock">{money(p.amount)}</div>
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+      {stats && stats.by_supplier.length === 0 && <p className="hint">За этот период платежей поставщикам не было.</p>}
+
+      <h2 className="sect">Поставщики и долги</h2>
       {suppliers.length === 0 && <p className="hint">Пока нет поставщиков. Заведите первого кнопкой «+ Поставщик».</p>}
 
       <div className="list">
