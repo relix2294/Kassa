@@ -33,7 +33,7 @@ const DATA_TABLES = [
   'return_items', 'returns', 'return_requests', 'sale_items', 'sales',
   'cash_withdrawals', 'shift_requests', 'shifts', 'stock_receipts',
   'inventory_items', 'inventories', 'write_offs', 'activity_log',
-  'supplier_payments', 'supplier_invoices', 'suppliers', 'products', 'users',
+  'supplier_return_items', 'supplier_returns', 'supplier_payments', 'supplier_invoices', 'suppliers', 'products', 'users',
 ];
 
 export async function resetDb() {

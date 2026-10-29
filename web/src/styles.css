@@ -165,8 +165,21 @@ input:focus, .search:focus { outline: none; border-color: var(--primary); }
 .list-more { display: flex; flex-direction: column; align-items: center; gap: 8px; margin: 16px 0 8px; }
 .list-more .btn--big { width: 100%; max-width: 420px; }
 .top-more { display: flex; justify-content: center; margin-top: 10px; }
-.paid-by { margin: 8px 0 4px; display: flex; flex-direction: column; gap: 8px; }
-.paid-by__toggle { width: 100%; }
+/* Экран «Долги»: поставщики слева, журнал справа (на узком экране — друг под другом). */
+.debts-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0 24px; align-items: start; }
+@media (min-width: 1000px) { .debts-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+.journal-day { font-size: 13px; font-weight: 700; color: var(--muted); margin: 10px 2px 6px; text-transform: uppercase; letter-spacing: 0.4px; }
+.journal-item-wrap .list-item { width: 100%; }
+.journal-ret { border-left: 3px solid var(--ok); }
+.journal-ret__sum { color: var(--ok); }
+.kpi--danger .kpi__value { color: var(--danger); }
+.inv-actions { display: flex; gap: 4px; justify-content: flex-end; }
+.inv-history { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); }
+.inv-history__row { display: flex; justify-content: space-between; gap: 12px; }
+.inv-history__row b { color: var(--text); }
+.ret-line { display: flex; align-items: center; gap: 8px; margin: 6px 0; }
+.ret-line__name { flex: 1; min-width: 0; font-weight: 600; }
+.ret-line .field, .ret-line input { max-width: 110px; }
 .list-item {
   display: flex;
   justify-content: space-between;

@@ -187,7 +187,7 @@ async function main() {
     }))
     .filter((h) => h.on_hand !== 0);
   const supplierDebt = num(
-    (await query<any>(`SELECT COALESCE(SUM(total - paid),0) AS d FROM supplier_invoices`))[0].d,
+    (await query<any>(`SELECT COALESCE(SUM(total - paid - returned),0) AS d FROM supplier_invoices`))[0].d,
   );
   const handsTotal = Number(handsRows.reduce((s, h) => s + h.on_hand, 0).toFixed(2));
   const tillTotal = Number((num(till.cash) + num(till.wallet)).toFixed(2));
@@ -214,9 +214,9 @@ async function main() {
 
   // 12. Долги по поставщикам (текущие).
   const suppliersDebt = await query<any>(
-    `SELECT s.name, COALESCE(SUM(i.total - i.paid),0) AS debt
+    `SELECT s.name, COALESCE(SUM(i.total - i.paid - i.returned),0) AS debt
        FROM suppliers s LEFT JOIN supplier_invoices i ON i.supplier_id = s.id
-      GROUP BY s.name HAVING COALESCE(SUM(i.total - i.paid),0) > 0
+      GROUP BY s.name HAVING COALESCE(SUM(i.total - i.paid - i.returned),0) > 0
       ORDER BY debt DESC`,
   );
 

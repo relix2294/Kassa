@@ -135,7 +135,7 @@ export async function buildLedger(): Promise<Ledger> {
         WHERE e.status = 'approved'
        UNION ALL
        SELECT p.id, p.created_at, 'supplier',
-              'Оплата поставщику: ' || COALESCE(s.name, '—'), p.note,
+              CASE WHEN p.amount < 0 THEN 'Возврат от поставщика: ' ELSE 'Оплата поставщику: ' END || COALESCE(s.name, '—'), p.note,
               COALESCE(u.full_name, u.username), (u.id IS NOT NULL),
               p.amount, p.source
          FROM supplier_payments p

@@ -265,10 +265,22 @@ export const api = {
   getSupplier: (id: string) =>
     req<{
       supplier: { id: string; name: string; phone: string | null };
-      invoices: { id: string; total: number; paid: number; remaining: number; note: string | null; created_at: string;
-        payments: { id: string; amount: number; note: string | null; created_at: string }[] }[];
+      invoices: { id: string; total: number; paid: number; returned: number; remaining: number; note: string | null; created_at: string;
+        payments: { id: string; amount: number; note: string | null; source: string; created_at: string }[] }[];
+      returns: {
+        id: string; invoice_id: string; amount: number; refund_amount: number; refund_source: string | null;
+        note: string | null; created_at: string; by_user: string | null;
+        items: { name: string; qty: number; unit_cost: number }[];
+      }[];
       debt: number;
     }>(`/suppliers/${id}`),
+  returnToSupplier: (
+    invoiceId: string,
+    payload: {
+      items: { product_id: string; qty: number }[]; amount: number; note?: string;
+      refund_source?: 'cash' | 'wallet' | 'hand' | 'external';
+    },
+  ) => req<any>(`/suppliers/invoices/${invoiceId}/returns`, { method: 'POST', body: JSON.stringify(payload) }),
   addInvoice: (id: string, payload: { total: number; paid?: number; note?: string; source?: 'cash' | 'wallet' | 'external' | 'hand' }) =>
     req<any>(`/suppliers/${id}/invoices`, { method: 'POST', body: JSON.stringify(payload) }),
   payInvoice: (invoiceId: string, payload: { amount: number; note?: string; source?: 'cash' | 'wallet' | 'external' | 'hand' }) =>
@@ -300,8 +312,14 @@ export const api = {
     req<{
       paid: number; paid_cash: number; paid_wallet: number; paid_hand: number; paid_external: number;
       payments: number; purchased: number; invoices: number;
+      refunded: number; returned: number; returns: number;
+      returns_list: {
+        id: string; created_at: string; amount: number; refund_amount: number; refund_source: string | null;
+        note: string | null; supplier_id: string; supplier_name: string; by_user: string | null;
+        items: { name: string; qty: number }[];
+      }[];
       payments_list: {
-        id: string; created_at: string; amount: number; source: string; note: string | null;
+        id: string; created_at: string; amount: number; source: string; note: string | null; return_id: string | null;
         supplier_id: string; supplier_name: string; invoice_total: number; invoice_at: string;
         by_user: string | null;
       }[];

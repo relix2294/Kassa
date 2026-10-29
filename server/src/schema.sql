@@ -373,3 +373,40 @@ CREATE TABLE IF NOT EXISTS accountable_adjustments (
   created_at  timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_acc_adj_user ON accountable_adjustments(user_id);
+
+-- Возврат товара поставщику (когда поставка не пошла и мы её возвращаем).
+-- Это НОВАЯ запись, а не правка накладной: сама накладная и её платежи не
+-- меняются, возврат только добавляется. Долг по накладной = total − paid − returned.
+--   amount        — на какую сумму поставщик нам это засчитал;
+--   refund_amount — сколько из неё уже было оплачено, т.е. поставщик возвращает
+--                   нам деньги (остальное просто гасит долг);
+--   refund_source — куда пришли эти деньги: cash/wallet (в кассу), hand (на руки),
+--                   external (мимо кассы). Деньги пишутся отрицательным платежом
+--                   в supplier_payments (return_id) — все расчёты кассы/подотчёта
+--                   подхватывают его сами, как внесение в кассу (минус-изъятие).
+CREATE TABLE IF NOT EXISTS supplier_returns (
+  id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  invoice_id    uuid NOT NULL REFERENCES supplier_invoices(id) ON DELETE CASCADE,
+  supplier_id   uuid NOT NULL REFERENCES suppliers(id) ON DELETE CASCADE,
+  amount        numeric(12,2) NOT NULL,
+  refund_amount numeric(12,2) NOT NULL DEFAULT 0,
+  refund_source text,
+  note          text,
+  user_id       uuid REFERENCES users(id),
+  created_at    timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_sup_ret_invoice ON supplier_returns(invoice_id);
+CREATE INDEX IF NOT EXISTS idx_sup_ret_created ON supplier_returns(created_at);
+
+CREATE TABLE IF NOT EXISTS supplier_return_items (
+  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  return_id   uuid NOT NULL REFERENCES supplier_returns(id) ON DELETE CASCADE,
+  product_id  uuid NOT NULL REFERENCES products(id),
+  name        text NOT NULL,
+  qty         numeric(12,3) NOT NULL,
+  unit_cost   numeric(12,2) NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_sup_ret_items_return ON supplier_return_items(return_id);
+
+ALTER TABLE supplier_invoices ADD COLUMN IF NOT EXISTS returned numeric(12,2) NOT NULL DEFAULT 0;
+ALTER TABLE supplier_payments ADD COLUMN IF NOT EXISTS return_id uuid REFERENCES supplier_returns(id) ON DELETE SET NULL;

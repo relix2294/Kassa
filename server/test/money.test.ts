@@ -551,6 +551,115 @@ if (!haveDb) {
     assert.equal(b.hands_total, 140, 'на руках 180 − 40 «оплатили сразу» с рук');
   });
 
+  // ---------- Возврат товара поставщику ----------
+
+  async function supplierWithInvoice(o: string, total: number, paid: number, source?: string) {
+    const sup = await api(o, '/suppliers', 'POST', { name: 'Оптбаза' });
+    const inv = await api(o, `/suppliers/${sup.body.id}/invoices`, 'POST', { total, paid, ...(source ? { source } : {}) });
+    assert.equal(inv.status, 201);
+    return { supId: sup.body.id as string, invId: inv.body.id as string };
+  }
+
+  test('возврат поставщику, долг не оплачен: долг уменьшается, товар уходит со склада, касса не меняется', async () => {
+    const o = await login('owner', '1234');
+    const p = await addProduct('Сок', 20, 50, 10, 'R1');
+    await openShift(o);
+    const { supId, invId } = await supplierWithInvoice(o, 500, 0);
+
+    const r = await api(o, `/suppliers/invoices/${invId}/returns`, 'POST', {
+      items: [{ product_id: p.id, qty: 5 }], amount: 250, note: 'не пошёл',
+    });
+    assert.equal(r.status, 201, JSON.stringify(r.body));
+
+    const det = await api(o, `/suppliers/${supId}`);
+    assert.equal(Number(det.body.debt), 250, 'долг 500 − 250');
+    assert.equal(Number(det.body.invoices[0].returned), 250);
+    assert.equal(det.body.returns.length, 1);
+    assert.equal(det.body.returns[0].items[0].qty, 5);
+
+    const st = await db().query(`SELECT stock FROM products WHERE id = $1`, [p.id]);
+    assert.equal(Number(st.rows[0].stock), 5, 'остаток 10 − 5');
+    const cur = await api(o, '/shifts/current');
+    assert.equal(cur.body.expected_cash, 0, 'денег не было — касса не меняется');
+    // это не списание/потеря
+    const wo = await db().query(`SELECT COUNT(*)::int AS n FROM write_offs`);
+    assert.equal(wo.rows[0].n, 0);
+  });
+
+  test('возврат оплаченной накладной: поставщик возвращает деньги — в кассу или на руки', async () => {
+    const o = await login('owner', '1234');
+    const p = await addProduct('Чай', 30, 40, 20, 'R2');
+    await openShift(o);
+    // накладная 400, оплачена полностью со стороны
+    const { supId, invId } = await supplierWithInvoice(o, 400, 400, 'external');
+
+    // без указания, куда пришли деньги — отказ, и ничего не изменилось
+    const bad = await api(o, `/suppliers/invoices/${invId}/returns`, 'POST', { items: [{ product_id: p.id, qty: 5 }], amount: 200 });
+    assert.equal(bad.status, 400, 'нужно явно выбрать, куда вернулись деньги');
+    assert.equal(Number((await db().query(`SELECT stock FROM products WHERE id=$1`, [p.id])).rows[0].stock), 20);
+
+    // 200 вернули В КАССУ
+    const ok = await api(o, `/suppliers/invoices/${invId}/returns`, 'POST', {
+      items: [{ product_id: p.id, qty: 5 }], amount: 200, refund_source: 'cash',
+    });
+    assert.equal(ok.status, 201, JSON.stringify(ok.body));
+    const cur = await api(o, '/shifts/current');
+    assert.equal(cur.body.expected_cash, 200, 'деньги от поставщика пришли в кассу');
+
+    const det = await api(o, `/suppliers/${supId}`);
+    assert.equal(Number(det.body.debt), 0, 'долга нет, в минус не уходит');
+    assert.equal(Number(det.body.invoices[0].paid), 200, 'оплачено 400 − 200 вернули');
+    assert.equal(Number(det.body.invoices[0].returned), 200);
+
+    // ещё 100 вернули НА РУКИ
+    const ok2 = await api(o, `/suppliers/invoices/${invId}/returns`, 'POST', {
+      items: [{ product_id: p.id, qty: 3 }], amount: 100, refund_source: 'hand',
+    });
+    assert.equal(ok2.status, 201, JSON.stringify(ok2.body));
+    const b = (await api(o, '/dashboard/balance')).body;
+    assert.equal(b.hands_total, 100, 'на руках +100');
+    assert.equal((await api(o, '/shifts/current')).body.expected_cash, 200, 'касса не изменилась от «на руки»');
+
+    // нельзя вернуть больше, чем накладная за вычетом уже возвращённого (400 − 300 = 100)
+    const over = await api(o, `/suppliers/invoices/${invId}/returns`, 'POST', {
+      items: [{ product_id: p.id, qty: 1 }], amount: 150, refund_source: 'external',
+    });
+    assert.equal(over.status, 400);
+  });
+
+  test('возврат: часть долга гасится, часть возвращается деньгами; нехватка товара — всё откатывается', async () => {
+    const o = await login('owner', '1234');
+    const p = await addProduct('Вода', 10, 20, 4, 'R3');
+    await openShift(o);
+    // накладная 500, оплачено 400 → долг 100
+    const { supId, invId } = await supplierWithInvoice(o, 500, 400, 'external');
+
+    // товара на складе 4 — вернуть 6 нельзя, всё откатывается
+    const bad = await api(o, `/suppliers/invoices/${invId}/returns`, 'POST', {
+      items: [{ product_id: p.id, qty: 6 }], amount: 300, refund_source: 'cash',
+    });
+    assert.equal(bad.status, 400);
+    const det0 = await api(o, `/suppliers/${supId}`);
+    assert.equal(Number(det0.body.debt), 100, 'после отказа накладная не тронута');
+    assert.equal(det0.body.returns.length, 0);
+    assert.equal((await api(o, '/shifts/current')).body.expected_cash, 0);
+
+    // вернули на 300: 100 гасит долг, 200 — деньги в кассу
+    const ok = await api(o, `/suppliers/invoices/${invId}/returns`, 'POST', {
+      items: [{ product_id: p.id, qty: 4 }], amount: 300, refund_source: 'cash',
+    });
+    assert.equal(ok.status, 201, JSON.stringify(ok.body));
+    assert.equal(Number(ok.body.return.refund_amount), 200);
+    const det = await api(o, `/suppliers/${supId}`);
+    assert.equal(Number(det.body.debt), 0);
+    assert.equal(Number(det.body.invoices[0].paid), 200, '400 − 200');
+    assert.equal((await api(o, '/shifts/current')).body.expected_cash, 200);
+
+    // и платёж по накладной больше не нужен: долг 0 — платить нечего
+    const pay = await api(o, `/suppliers/invoices/${invId}/payments`, 'POST', { amount: 10, source: 'external' });
+    assert.equal(pay.status, 400);
+  });
+
   test('утро: размен с рук в закрытую кассу — Эрач принимает без «излишка», на руках меньше', async () => {
     const o = await login('owner', '1234');
     const c = await login('kassir', '5678');

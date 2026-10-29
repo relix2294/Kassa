@@ -61,7 +61,7 @@ dashboardRouter.get('/balance', async (_req, res) => {
 
   // Долг поставщикам (всего не оплачено).
   const debtRow = (
-    await query<{ debt: number }>(`SELECT COALESCE(SUM(total - paid),0) AS debt FROM supplier_invoices`)
+    await query<{ debt: number }>(`SELECT COALESCE(SUM(total - paid - returned),0) AS debt FROM supplier_invoices`)
   )[0];
   const supplierDebt = Number(debtRow.debt);
 
@@ -607,7 +607,8 @@ dashboardRouter.get('/supplier-stats', async (req, res) => {
               COALESCE(SUM(amount) FILTER (WHERE source='wallet'),0)   AS paid_wallet,
               COALESCE(SUM(amount) FILTER (WHERE source='hand'),0)     AS paid_hand,
               COALESCE(SUM(amount) FILTER (WHERE source='external'),0) AS paid_external,
-              COUNT(*)                                                 AS payments
+              COALESCE(-SUM(amount) FILTER (WHERE amount < 0),0)       AS refunded,
+              COUNT(*) FILTER (WHERE amount > 0)                       AS payments
          FROM supplier_payments
         WHERE created_at >= $1 AND created_at < $2`,
       [lo, hi],
@@ -621,11 +622,19 @@ dashboardRouter.get('/supplier-stats', async (req, res) => {
       [lo, hi],
     )
   )[0];
+  // Возвраты товара поставщикам за период (на какую сумму нам засчитали).
+  const rets = (
+    await query(
+      `SELECT COALESCE(SUM(amount),0) AS amount, COUNT(*) AS n FROM supplier_returns
+        WHERE created_at >= $1 AND created_at < $2`,
+      [lo, hi],
+    )
+  )[0];
   // Кому именно оплачено за период — чтобы видеть это сразу, не открывая каждого.
   const bySupplier = await query(
     `SELECT s.id, s.name,
             COALESCE(SUM(sp.amount),0)                                  AS paid,
-            COUNT(*)                                                    AS payments,
+            COUNT(*) FILTER (WHERE sp.amount > 0)                       AS payments,
             COALESCE(SUM(sp.amount) FILTER (WHERE sp.source='cash'),0)     AS paid_cash,
             COALESCE(SUM(sp.amount) FILTER (WHERE sp.source='wallet'),0)   AS paid_wallet,
             COALESCE(SUM(sp.amount) FILTER (WHERE sp.source='hand'),0)     AS paid_hand,
@@ -641,7 +650,7 @@ dashboardRouter.get('/supplier-stats', async (req, res) => {
   // Журнал: каждый платёж за период отдельной строкой — кому, сколько, откуда
   // деньги и кто внёс. Платежи неизменяемы, список только для чтения.
   const journal = await query(
-    `SELECT sp.id, sp.created_at, sp.amount, sp.source, sp.note,
+    `SELECT sp.id, sp.created_at, sp.amount, sp.source, sp.note, sp.return_id,
             s.id AS supplier_id, s.name AS supplier_name,
             si.total AS invoice_total, si.created_at AS invoice_at,
             COALESCE(u.full_name, u.username) AS by_user
@@ -654,13 +663,45 @@ dashboardRouter.get('/supplier-stats', async (req, res) => {
       LIMIT 500`,
     [lo, hi],
   );
+  // Возвраты товара поставщикам за период — тоже строки журнала (с составом).
+  const retList = await query(
+    `SELECT r.id, r.created_at, r.amount, r.refund_amount, r.refund_source, r.note,
+            s.id AS supplier_id, s.name AS supplier_name,
+            COALESCE(u.full_name, u.username) AS by_user,
+            COALESCE(
+              json_agg(json_build_object('name', ri.name, 'qty', ri.qty) ORDER BY ri.name)
+                FILTER (WHERE ri.id IS NOT NULL), '[]'
+            ) AS items
+       FROM supplier_returns r
+       JOIN suppliers s ON s.id = r.supplier_id
+       LEFT JOIN users u ON u.id = r.user_id
+       LEFT JOIN supplier_return_items ri ON ri.return_id = r.id
+      WHERE r.created_at >= $1 AND r.created_at < $2
+      GROUP BY r.id, s.id, s.name, u.full_name, u.username
+      ORDER BY r.created_at DESC
+      LIMIT 200`,
+    [lo, hi],
+  );
   res.json({
+    returns_list: retList.map((r: any) => ({
+      id: r.id,
+      created_at: r.created_at,
+      amount: Number(r.amount),
+      refund_amount: Number(r.refund_amount),
+      refund_source: r.refund_source,
+      note: r.note,
+      supplier_id: r.supplier_id,
+      supplier_name: r.supplier_name,
+      by_user: r.by_user,
+      items: (r.items ?? []).map((i: any) => ({ name: i.name, qty: Number(i.qty) })),
+    })),
     payments_list: journal.map((r: any) => ({
       id: r.id,
       created_at: r.created_at,
       amount: Number(r.amount),
       source: r.source,
       note: r.note,
+      return_id: r.return_id,
       supplier_id: r.supplier_id,
       supplier_name: r.supplier_name,
       invoice_total: Number(r.invoice_total),
@@ -673,6 +714,9 @@ dashboardRouter.get('/supplier-stats', async (req, res) => {
     paid_hand: Number(pay.paid_hand),
     paid_external: Number(pay.paid_external),
     payments: Number(pay.payments),
+    refunded: Number(pay.refunded),
+    returned: Number(rets.amount),
+    returns: Number(rets.n),
     purchased: Number(inv.purchased),
     invoices: Number(inv.invoices),
     by_supplier: bySupplier.map((r: any) => ({

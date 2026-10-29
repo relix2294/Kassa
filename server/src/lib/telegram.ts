@@ -358,7 +358,7 @@ async function buildDayReport(): Promise<string> {
   const handsTotal = Number(Number(handsAgg.total).toFixed(2));
   const tillTotal = Number((Number(till.cash) + Number(till.wallet)).toFixed(2));
   const totalCash = Number((tillTotal + handsTotal).toFixed(2));
-  const debt = Number((await query<any>(`SELECT COALESCE(SUM(total - paid),0) AS d FROM supplier_invoices`))[0].d);
+  const debt = Number((await query<any>(`SELECT COALESCE(SUM(total - paid - returned),0) AS d FROM supplier_invoices`))[0].d);
 
   // Низкий остаток. ГРУППИРУЕМ ПО НАЗВАНИЮ: в каталоге бывают дубли карточек
   // одного товара (напр. «Колбаса …» ×156), и без группировки список в Telegram
