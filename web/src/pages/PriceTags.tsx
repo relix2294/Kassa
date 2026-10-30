@@ -135,7 +135,20 @@ export default function PriceTags() {
   );
 }
 
+// Цена на ценнике: сомони крупно, дирамы — мельче сверху справа (если они есть),
+// валюта кириллицей мелко. Целые цены без «,00», чтобы цифры были крупнее.
+function splitPrice(v: number | string): { whole: string; frac: string | null } {
+  const n = Math.round((Number(v) || 0) * 100) / 100;
+  const whole = Math.floor(n);
+  const cents = Math.round((n - whole) * 100);
+  return {
+    whole: whole.toLocaleString('ru-RU'),
+    frac: cents > 0 ? String(cents).padStart(2, '0') : null,
+  };
+}
+
 function Tag({ product }: { product: Product }) {
+  const price = splitPrice(product.sale_price);
   const ref = useRef<SVGSVGElement>(null);
   useEffect(() => {
     if (!ref.current || !product.barcode) return;
@@ -156,9 +169,10 @@ function Tag({ product }: { product: Product }) {
   return (
     <div className="tag">
       <div className="tag__name">{product.name}</div>
-      <div className="tag__price">
-        <span className="tag__price-val">{product.sale_price}</span>
-        <span className="tag__cur">TJS</span>
+      <div className={`tag__price ${price.whole.length > 5 ? 'tag__price--long' : ''}`}>
+        <span className="tag__price-val">{price.whole}</span>
+        {price.frac && <span className="tag__price-frac">,{price.frac}</span>}
+        <span className="tag__cur">смн</span>
       </div>
       <div className="tag__per">{product.unit === 'kg' ? 'Цена за кг' : 'Цена за шт.'}</div>
       <svg ref={ref} className="tag__barcode" />
