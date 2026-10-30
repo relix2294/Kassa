@@ -1270,13 +1270,15 @@ kbd {
 .tag__name { font-size: 13px; font-weight: 700; min-height: 32px; line-height: 1.2; }
 /* Цена — своей строкой, крупно, справа. Не делит строку со штрих-кодом,
    поэтому длинное название или большая цена ни на что не налезают. */
-.tag__price { display: flex; align-items: flex-start; justify-content: flex-end; gap: 2px; margin-top: 2px; }
-.tag__price-val { font-size: 54px; font-weight: 800; line-height: 0.95; letter-spacing: -2px; font-variant-numeric: tabular-nums; }
-/* Дирамы — вдвое мельче и вровень с верхом цифр; валюта — совсем мелко, внизу. */
-.tag__price-frac { font-size: 24px; font-weight: 800; line-height: 1; margin-top: 3px; font-variant-numeric: tabular-nums; }
-.tag__cur { align-self: flex-end; font-size: 13px; font-weight: 700; color: #333; margin: 0 0 4px 4px; }
-.tag__price--long .tag__price-val { font-size: 36px; letter-spacing: -1.5px; }
-.tag__price--long .tag__price-frac { font-size: 17px; margin-top: 2px; }
+.tag__price { display: flex; align-items: baseline; justify-content: flex-end; gap: 2px; margin-top: 2px; }
+.tag__price-val { font-size: 62px; font-weight: 800; line-height: 1; letter-spacing: -2px; font-variant-numeric: tabular-nums; }
+/* Дирамы — мельче и на одной линии с низом цифр (не вверху); валюта — совсем мелко. */
+.tag__price-frac { font-size: 26px; font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; }
+.tag__cur { font-size: 13px; font-weight: 700; color: #333; margin-left: 4px; }
+.tag__price--mid .tag__price-val { font-size: 50px; letter-spacing: -1.5px; }
+.tag__price--mid .tag__price-frac { font-size: 22px; }
+.tag__price--long .tag__price-val { font-size: 38px; letter-spacing: -1.5px; }
+.tag__price--long .tag__price-frac { font-size: 18px; }
 .tag__per { text-align: right; font-size: 10px; color: #555; }
 .tag__barcode { height: 34px; width: auto; max-width: 100%; align-self: flex-start; margin-top: 4px; }
 

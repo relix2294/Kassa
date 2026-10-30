@@ -169,7 +169,7 @@ function Tag({ product }: { product: Product }) {
   return (
     <div className="tag">
       <div className="tag__name">{product.name}</div>
-      <div className={`tag__price ${price.whole.length > 5 ? 'tag__price--long' : ''}`}>
+      <div className={`tag__price ${price.whole.length > 5 ? 'tag__price--long' : price.whole.length > 3 ? 'tag__price--mid' : ''}`}>
         <span className="tag__price-val">{price.whole}</span>
         {price.frac && <span className="tag__price-frac">,{price.frac}</span>}
         <span className="tag__cur">смн</span>
