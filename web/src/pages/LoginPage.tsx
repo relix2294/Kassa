@@ -29,7 +29,7 @@ export default function LoginPage() {
 
   return (
     <div className="login">
-      <div className="login__brand">Kassa</div>
+      <div className="login__brand">LabLabu</div>
       <div className="card login__card">
         <label className="field">
           <span>Логин</span>

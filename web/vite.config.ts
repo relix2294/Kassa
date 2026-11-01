@@ -13,8 +13,8 @@ export default defineConfig({
         globIgnores: ['**/exceljs*.js'],
       },
       manifest: {
-        name: 'Kassa',
-        short_name: 'Kassa',
+        name: 'LabLabu',
+        short_name: 'LabLabu',
         description: 'Учёт для магазина',
         theme_color: '#0b0d1a',
         background_color: '#0b0d1a',

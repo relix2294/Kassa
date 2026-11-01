@@ -47,7 +47,7 @@ export default function CustomerDisplay() {
   if (lines.length === 0) {
     return (
       <div className="cust cust--idle">
-        <div className="cust__logo">Kassa</div>
+        <div className="cust__logo">LabLabu</div>
         <div className="cust__welcome">Добро пожаловать!</div>
       </div>
     );

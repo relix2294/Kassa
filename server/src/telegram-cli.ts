@@ -39,7 +39,7 @@ async function chatid() {
 async function test() {
   const { sendTelegram, telegramEnabled } = await import('./lib/telegram.js');
   need(telegramEnabled(), 'Нужны TELEGRAM_BOT_TOKEN и TELEGRAM_CHAT_ID в server/.env');
-  const ok = await sendTelegram('✅ <b>Kassa</b> подключена к этой группе. Уведомления будут приходить сюда.');
+  const ok = await sendTelegram('✅ <b>LabLabu</b> подключена к этой группе. Уведомления будут приходить сюда.');
   console.log(ok ? 'Отправлено ✓ — проверьте группу.' : 'Не удалось отправить. Проверьте токен и chat id.');
   process.exit(ok ? 0 : 1);
 }

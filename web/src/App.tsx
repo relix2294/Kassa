@@ -108,7 +108,7 @@ export default function App() {
   return (
     <div className="app">
       <header className="topbar">
-        <div className="brand">Kassa{mirror ? ' · витрина' : ''}</div>
+        <div className="brand">LabLabu{mirror ? ' · витрина' : ''}</div>
         <div className="topbar__right">
           {!mirror && <QueueBadge onOpen={() => navigate('/queue')} />}
           <OnlineBadge />

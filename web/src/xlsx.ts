@@ -14,7 +14,7 @@ export async function exportXlsx(filename: string, title: string, sections: Xlsx
   // (владельцем), не попадает в основной бандл кассы.
   const ExcelJS = (await import('exceljs')).default;
   const wb = new ExcelJS.Workbook();
-  wb.creator = 'Kassa';
+  wb.creator = 'LabLabu';
   wb.created = new Date();
   const ws = wb.addWorksheet('Отчёт');
 
