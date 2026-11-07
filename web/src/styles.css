@@ -1,49 +1,29 @@
-/* Палитра бренда LabLabu — зелёная. Тёмная тема — по умолчанию (вечер/ночь). */
+/* Палитра бренда LabLabu — бело-зелёная, ярко-зелёный акцент. Тема одна:
+   тёмную владелец убрал (некрасиво), поэтому data-theme на вид не влияет. */
 :root,
+:root[data-theme='light'],
 :root[data-theme='dark'] {
-  color-scheme: dark;
-  --bg: #08110c;
-  --surface: #111c16;
-  --surface-2: #1b2a21;
-  --border: #26392d;
-  --text: #ecf6ef;
-  --muted: #97ab9e;
+  color-scheme: light;
+  --bg: #f4fbf6;
+  --surface: #ffffff;
+  --surface-2: #eaf7ee;
+  --border: #d4ecdb;
+  --text: #0f1f15;
+  --muted: #5b6f62;
   --primary: #22c55e;
-  --primary-2: #4ade80;
-  --primary-ink: #04210f;
-  --ok: #34d399;
-  --off: #f0a33a;
+  --primary-2: #16a34a;
+  --primary-ink: #ffffff;
+  --ok: #16a34a;
+  --off: #d97706;
   /* Цвета графиков: --primary — основная серия (выручка, безнал), --c2 — её
      пара (маржа, наличные, прибыль), --c3 — третья (смешанная, расходы).
      Предупреждения остаются на --off (низкий остаток, бейджи). */
-  --c2: #fbbf24;
-  --c3: #f472b6;
-  --danger: #ff6b81;
-  --radius: 14px;
-  --shadow: 0 10px 30px rgba(0, 0, 0, 0.38);
-  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.26);
-  --overlay: rgba(2, 8, 5, 0.66);
-}
-
-/* Светлая тема — день. */
-:root[data-theme='light'] {
-  color-scheme: light;
-  --bg: #f2f7f3;
-  --surface: #ffffff;
-  --surface-2: #e9f3ec;
-  --border: #d9e8de;
-  --text: #0f1c14;
-  --muted: #55695c;
-  --primary: #15803d;
-  --primary-2: #16a34a;
-  --primary-ink: #ffffff;
-  --ok: #059669;
-  --off: #c2740a;
-  --c2: #d97706;
-  --c3: #db2777;
+  --c2: #f59e0b;
+  --c3: #ec4899;
   --danger: #e11d48;
-  --shadow: 0 10px 26px rgba(20, 70, 40, 0.12);
-  --shadow-sm: 0 1px 3px rgba(20, 70, 40, 0.08);
+  --radius: 14px;
+  --shadow: 0 10px 26px rgba(22, 120, 60, 0.10);
+  --shadow-sm: 0 1px 3px rgba(22, 120, 60, 0.08);
   --overlay: rgba(10, 30, 18, 0.4);
 }
 

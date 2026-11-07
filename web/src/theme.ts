@@ -19,8 +19,11 @@ export function getMode(): ThemeMode {
   return v === 'light' || v === 'dark' ? v : 'auto';
 }
 
-export function resolveTheme(mode: ThemeMode = getMode()): Resolved {
-  return mode === 'auto' ? byClock() : mode;
+// Тема одна — светлая (бело-зелёная): тёмную владелец убрал. Режимы оставлены,
+// чтобы ничего не ломать, но на вид всегда светлая.
+export function resolveTheme(_mode: ThemeMode = getMode()): Resolved {
+  void byClock;
+  return 'light';
 }
 
 let listeners = new Set<() => void>();

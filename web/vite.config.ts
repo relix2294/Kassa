@@ -16,8 +16,8 @@ export default defineConfig({
         name: 'LabLabu',
         short_name: 'LabLabu',
         description: 'Учёт для магазина',
-        theme_color: '#08110c',
-        background_color: '#08110c',
+        theme_color: '#ffffff',
+        background_color: '#ffffff',
         display: 'standalone',
         start_url: '/',
         icons: [
