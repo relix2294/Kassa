@@ -111,17 +111,17 @@ export default function DashboardPage() {
 
   // Данные для трёх колец структуры.
   const PAY_META: Record<string, [string, string]> = {
-    cash: ['Наличные', 'var(--ok)'], card: ['Безнал', 'var(--primary)'], mixed: ['Смешанная', 'var(--c3)'],
+    cash: ['Наличные', 'var(--c2)'], card: ['Безнал', 'var(--primary)'], mixed: ['Смешанная', 'var(--c3)'],
   };
   const payData = pay.map((p: any) => ({
     label: PAY_META[p.method]?.[0] ?? p.method, value: Number(p.total), color: PAY_META[p.method]?.[1] ?? 'var(--muted)',
   }));
   const revData = summary ? [
-    { label: 'Маржа', value: Number(summary.margin), color: 'var(--ok)' },
+    { label: 'Маржа', value: Number(summary.margin), color: 'var(--c2)' },
     { label: 'Себестоимость', value: Math.max(0, Number(summary.revenue) - Number(summary.margin)), color: 'var(--primary)' },
   ] : [];
   const profitData = summary ? [
-    { label: 'Чистая прибыль', value: Math.max(0, Number(summary.net_profit)), color: 'var(--ok)' },
+    { label: 'Чистая прибыль', value: Math.max(0, Number(summary.net_profit)), color: 'var(--c2)' },
     { label: 'Расходы', value: Number(summary.expenses), color: 'var(--c3)' },
   ] : [];
 

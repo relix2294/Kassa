@@ -100,7 +100,7 @@ function MetricsTab() {
     return { label: WEEKDAYS[dow], value: w ? Number(w.revenue) : 0, sub: w ? `маржа ${money(w.margin)} · ${w.receipts} чек.` : 'нет продаж' };
   });
   const PAY_META: Record<string, [string, string]> = {
-    cash: ['Наличные', 'var(--ok)'], card: ['Безнал', 'var(--primary)'], mixed: ['Смешанная', 'var(--c3)'],
+    cash: ['Наличные', 'var(--c2)'], card: ['Безнал', 'var(--primary)'], mixed: ['Смешанная', 'var(--c3)'],
   };
   const payData = pay.map((p: any) => ({
     label: PAY_META[p.method]?.[0] ?? p.method, value: Number(p.total), color: PAY_META[p.method]?.[1] ?? 'var(--muted)',

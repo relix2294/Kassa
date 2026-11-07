@@ -6,7 +6,7 @@
 export interface XlsxCol { header: string; num?: boolean; pct?: boolean; }
 export interface XlsxSection { caption?: string; columns: XlsxCol[]; rows: (string | number)[][]; }
 
-const ACCENT = 'FF6D6CFF';      // индиго — как в приложении
+const ACCENT = 'FF15803D';      // зелёный бренда — как в приложении
 const HEADER_TEXT = 'FFFFFFFF';
 
 export async function exportXlsx(filename: string, title: string, sections: XlsxSection[]) {
