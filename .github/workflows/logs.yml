@@ -62,7 +62,7 @@ jobs:
           sshpass -e ssh -o StrictHostKeyChecking=accept-new "${VPS_USER}@${VPS_HOST}" 'bash -s' <<'EOS'
           cd /opt/kassa/deploy || exit 1
           sec() { echo; echo "===== $1 ====="; }
-          psqlq() { docker compose exec -T db psql -U kassa -d kassa -X -A -F ' | ' -P footer=off -c "$1" 2>&1; }
+          psqlq() { docker compose exec -T db psql -U kassa -d kassa -X -A -F ' | ' -P footer=off -c "$1" </dev/null 2>&1; }
 
           sec "Сервер: ОС, ядра, нагрузка, аптайм"
           (. /etc/os-release 2>/dev/null; echo "$PRETTY_NAME"); echo "CPU ядер: $(nproc)"; uptime
@@ -98,6 +98,13 @@ jobs:
           psqlq "SELECT pg_size_pretty(pg_database_size('kassa')) AS размер_базы"
           sec "База: таблицы (размер, строки, мёртвые строки, автоочистка)"
           psqlq "SELECT relname AS таблица, pg_size_pretty(pg_total_relation_size(relid)) AS размер, n_live_tup AS строк, n_dead_tup AS мёртвых, seq_scan, idx_scan, to_char(GREATEST(last_autovacuum,last_vacuum),'YYYY-MM-DD HH24:MI') AS очистка FROM pg_stat_user_tables ORDER BY pg_total_relation_size(relid) DESC LIMIT 25"
+          sec "База: сколько строк в журналах"
+          psqlq "SELECT (SELECT count(*) FROM activity_log) AS activity_log, (SELECT count(*) FROM sales) AS чеков, (SELECT count(*) FROM sale_items) AS строк_чеков, (SELECT count(*) FROM products) AS товаров"
+          psqlq "SELECT type, count(*) AS n, pg_size_pretty(sum(pg_column_size(details))::bigint) AS details FROM activity_log GROUP BY type ORDER BY n DESC LIMIT 15"
+          sec "База: время типичных запросов кабинета"
+          psqlq "EXPLAIN (ANALYZE, BUFFERS OFF, TIMING OFF, SUMMARY ON) SELECT COALESCE(SUM(total),0) FROM sales WHERE created_at >= now() - interval '30 days'" | tail -2
+          psqlq "EXPLAIN (ANALYZE, BUFFERS OFF, TIMING OFF, SUMMARY ON) SELECT si.product_id, SUM(si.line_total) FROM sale_items si JOIN sales s ON s.id = si.sale_id WHERE s.created_at >= now() - interval '30 days' GROUP BY si.product_id" | tail -2
+          psqlq "EXPLAIN (ANALYZE, BUFFERS OFF, TIMING OFF, SUMMARY ON) SELECT * FROM activity_log ORDER BY created_at DESC LIMIT 100" | tail -2
           sec "База: настройки Postgres"
           psqlq "SELECT name, setting, unit FROM pg_settings WHERE name IN ('shared_buffers','work_mem','effective_cache_size','max_connections','maintenance_work_mem','autovacuum','random_page_cost')"
           sec "База: подключения"
@@ -110,7 +117,7 @@ jobs:
           psqlq "SELECT tablename, indexname FROM pg_indexes WHERE schemaname='public' ORDER BY tablename"
 
           sec "Ошибки/предупреждения в логах app (последние 2000 строк)"
-          docker compose logs app --tail=2000 2>&1 | grep -iE 'error|ошибк|timeout|ECONN|killed|heap|memory|slow' | tail -40 || echo '(нет)'
+          docker compose logs app --tail=2000 </dev/null 2>&1 | grep -iE 'error|ошибк|timeout|ECONN|killed|heap|memory|slow' | tail -40 || echo '(нет)'
           sec "Логи db (последние 2000 строк): ошибки"
-          docker compose logs db --tail=2000 2>&1 | grep -iE 'error|fatal|panic|checkpoints are occurring|out of memory|no space' | tail -20 || echo '(нет)'
+          docker compose logs db --tail=2000 </dev/null 2>&1 | grep -iE 'error|fatal|panic|checkpoints are occurring|out of memory|no space' | tail -20 || echo '(нет)'
           EOS
