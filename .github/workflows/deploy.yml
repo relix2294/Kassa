@@ -140,6 +140,21 @@ jobs:
             test "$code" = "200"
           '
 
+      - name: Почистить старый кэш сборок (чтобы диск не забивался)
+        # Каждая пересборка оставляет кэш Docker; за месяц он вырос до ~19 ГБ.
+        # Удаляем кэш старше 7 дней — только кэш, образы/контейнеры/данные не
+        # трогаем. Ошибка здесь деплой не валит.
+        continue-on-error: true
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          SSHPASS: ${{ secrets.VPS_PASSWORD }}
+        run: |
+          sshpass -e ssh -o StrictHostKeyChecking=accept-new "${VPS_USER}@${VPS_HOST}" '
+            docker builder prune -f --filter until=168h 2>&1 | tail -1
+            df -h / | tail -1
+          '
+
       - name: Логи Telegram-слушателя (диагностика)
         env:
           VPS_HOST: ${{ secrets.VPS_HOST }}

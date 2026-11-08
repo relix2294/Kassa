@@ -6,6 +6,9 @@ name: Kassa logs (чтение без перезапуска)
 #   mode=health — проверка «здоровья»: нагрузка, память, диск, контейнеры и их
 #                 лимиты, размер базы и таблиц, настройки Postgres, бэкапы,
 #                 ошибки в логах. Секреты (.env) не выводятся.
+#   mode=cleanup — освободить диск: удалить кэш сборок Docker (только кэш —
+#                 образы, контейнеры, тома, база и бэкапы НЕ трогаются) и ужать
+#                 системные журналы до 500 МБ. Контейнеры не перезапускаются.
 # Запуск: Actions → этот workflow → Run workflow.
 
 on:
@@ -16,7 +19,7 @@ on:
         required: false
         default: '300'
       mode:
-        description: 'logs — логи Telegram; health — проверка сервера и базы'
+        description: 'logs — логи Telegram; health — проверка сервера и базы; cleanup — освободить диск'
         required: false
         default: 'logs'
 
@@ -32,7 +35,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y sshpass
 
       - name: Логи приложения Kassa
-        if: ${{ inputs.mode != 'health' }}
+        if: ${{ inputs.mode != 'health' && inputs.mode != 'cleanup' }}
         env:
           VPS_HOST: ${{ secrets.VPS_HOST }}
           VPS_USER: ${{ secrets.VPS_USER }}
@@ -145,4 +148,28 @@ jobs:
           docker compose logs app --tail=2000 </dev/null 2>&1 | grep -iE 'error|ошибк|timeout|ECONN|killed|heap|memory|slow' | tail -40 || echo '(нет)'
           sec "Логи db (последние 2000 строк): ошибки"
           docker compose logs db --tail=2000 </dev/null 2>&1 | grep -iE 'error|fatal|panic|checkpoints are occurring|out of memory|no space' | tail -20 || echo '(нет)'
+          EOS
+
+      - name: Освободить диск (кэш сборок и журналы; данные не трогаем)
+        if: ${{ inputs.mode == 'cleanup' }}
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          SSHPASS: ${{ secrets.VPS_PASSWORD }}
+        run: |
+          export SSHPASS="$(printf '%s' "$SSHPASS" | tr -d '\r\n')"
+          VPS_HOST="$(printf '%s' "$VPS_HOST" | tr -d '[:space:]')"
+          VPS_USER="$(printf '%s' "$VPS_USER" | tr -d '[:space:]')"
+          sshpass -e ssh -o StrictHostKeyChecking=accept-new "${VPS_USER}@${VPS_HOST}" 'bash -s' <<'EOS'
+          SUDO=""; [ "$(id -u)" = "0" ] || SUDO="sudo -n"
+          echo "===== ДО ====="; df -h / | tail -1; docker system df </dev/null; $SUDO journalctl --disk-usage
+          echo; echo "===== Удаляю кэш сборок Docker ====="
+          docker builder prune -af </dev/null 2>&1 | tail -3
+          echo; echo "===== Ужимаю системные журналы до 500 МБ ====="
+          $SUDO journalctl --vacuum-size=500M 2>&1 | tail -3
+          echo; echo "===== ПОСЛЕ ====="; df -h / | tail -1; docker system df </dev/null; $SUDO journalctl --disk-usage
+          echo; echo "===== Все контейнеры на месте? ====="
+          docker ps --format '{{.Names}}\t{{.Status}}' </dev/null
+          PORT=$(grep -E '^HOST_PORT=' /opt/kassa/deploy/.env 2>/dev/null | cut -d= -f2); PORT=${PORT:-8080}
+          curl -s -o /dev/null -w "kassa health: HTTP %{http_code}\n" "http://127.0.0.1:$PORT/api/health"
           EOS
