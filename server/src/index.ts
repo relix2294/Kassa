@@ -1,6 +1,7 @@
 import express from 'express';
 import 'express-async-errors';
 import cors from 'cors';
+import compression from 'compression';
 import { createServer } from 'node:http';
 import { existsSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
@@ -45,6 +46,9 @@ if (!jwtSecret || jwtSecret === 'dev-secret-change-me') {
 }
 
 const app = express();
+// Сжатие ответов (gzip): каталог, отчёты и сам интерфейс уходят в 3–8 раз
+// меньше — заметно быстрее на мобильном интернете.
+app.use(compression());
 app.use(cors());
 app.use(express.json());
 

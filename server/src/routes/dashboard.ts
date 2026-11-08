@@ -187,7 +187,12 @@ const PRESETS: Record<string, { lo: string; hi: string }> = {
   '30d': { lo: `(${TODAY} - interval '29 days')`, hi: TOMORROW },
   '90d': { lo: `(${TODAY} - interval '89 days')`, hi: TOMORROW },
   year: { lo: `(${TODAY} - interval '364 days')`, hi: TOMORROW },
-  all: { lo: `timestamptz 'epoch'`, hi: TOMORROW },
+  // «Всё время» — с первого дня работы (первого чека), а не с 1970 года:
+  // иначе график строился на ~20 000 пустых дней (1,5 МБ) и тормозил Кабинет.
+  all: {
+    lo: `COALESCE((SELECT date_trunc('day', MIN(created_at) AT TIME ZONE '${TZ}') AT TIME ZONE '${TZ}' FROM sales), ${TODAY})`,
+    hi: TOMORROW,
+  },
 };
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
