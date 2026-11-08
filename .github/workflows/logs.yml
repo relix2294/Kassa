@@ -94,6 +94,31 @@ jobs:
           for i in 1 2 3; do curl -s -o /dev/null -w "health: HTTP %{http_code}  %{time_total}s\n" "http://127.0.0.1:$PORT/api/health"; done
           curl -s -o /dev/null -w "главная: HTTP %{http_code}  %{time_total}s  %{size_download} байт\n" "http://127.0.0.1:$PORT/"
 
+          sec "Скорость реальных запросов Кабинета/Аналитики (внутри сервера, мс)"
+          # Временный токен владельца на 5 минут подписывается ВНУТРИ контейнера
+          # приложения его же секретом; ни секрет, ни токен не печатаются. Только GET.
+          docker compose exec -T -w /app/server app node -e '
+            const jwt = require("jsonwebtoken"); const { Client } = require("pg");
+            (async () => {
+              const c = new Client({ connectionString: process.env.DATABASE_URL }); await c.connect();
+              const u = (await c.query("SELECT id, username, role, full_name FROM users WHERE role=$1 AND NOT is_blocked LIMIT 1", ["owner"])).rows[0]; await c.end();
+              const t = jwt.sign({ id: u.id, username: u.username, role: u.role, full_name: u.full_name }, process.env.JWT_SECRET, { expiresIn: "5m" });
+              const P = "period=30d";
+              const urls = ["/dashboard/summary?"+P, "/dashboard/timeseries?"+P, "/dashboard/top-products?"+P+"&sort=revenue&limit=10",
+                "/dashboard/by-category?"+P, "/dashboard/by-cashier?"+P, "/dashboard/by-hour?"+P, "/dashboard/by-weekday?"+P,
+                "/dashboard/payment-split?"+P, "/dashboard/expenses?"+P, "/dashboard/recent-sales?limit=20", "/dashboard/balance",
+                "/dashboard/supplier-stats?"+P, "/dashboard/ledger", "/dashboard/abc?"+P, "/dashboard/turnover?"+P,
+                "/dashboard/product-trend?"+P, "/dashboard/losses?"+P, "/dashboard/returns-stats?"+P,
+                "/dashboard/summary?period=all", "/dashboard/timeseries?period=all", "/dashboard/abc?period=all",
+                "/products", "/suppliers", "/logs?limit=100"];
+              for (const path of urls) {
+                const t0 = Date.now(); const r = await fetch("http://127.0.0.1:4000/api" + path, { headers: { Authorization: "Bearer " + t } });
+                const b = await r.arrayBuffer(); const ms = Date.now() - t0;
+                console.log(String(ms).padStart(6) + " ms  " + String(r.status) + "  " + String(Math.round(b.byteLength/1024)).padStart(6) + " KB  " + path);
+              }
+            })().catch((e) => console.log("ошибка замера: " + e.message));
+          ' </dev/null 2>&1
+
           sec "База: общий размер"
           psqlq "SELECT pg_size_pretty(pg_database_size('kassa')) AS размер_базы"
           sec "База: таблицы (размер, строки, мёртвые строки, автоочистка)"
